@@ -35,13 +35,6 @@ CHECK_IN_PATTERN = re.compile(
     r"^\(?\s*\"?(?P<column>\w+)\"?\s+IN\s+\((?P<values>[^)]*)\)\s*\)?$",
     re.IGNORECASE,
 )
-FK_PATTERN = re.compile(
-    r"FOREIGN KEY\s*\((?P<local>[^)]*)\)\s*REFERENCES\s+"
-    r"\"?(?P<table>\w+)\"?\s*\((?P<remote>[^)]*)\)",
-    re.IGNORECASE,
-)
-
-
 def _machine(manifest_id: str, confidence: float = 1.0) -> Provenance:
     return Provenance(
         source="machine",
@@ -136,8 +129,9 @@ class DictionaryGenerator:
         foreign_keys: dict[tuple[str, str], str] = {}
         check_enums: dict[tuple[str, str], tuple[list[str], str]] = {}
         rows = self._run(
-            "SELECT table_name, constraint_type, constraint_text, "
-            "expression, constraint_column_names "
+            "SELECT table_name, constraint_type, expression, "
+            "constraint_column_names, referenced_table, "
+            "referenced_column_names "
             "FROM duckdb_constraints() ORDER BY table_name, constraint_index"
         )
         for row in rows:
@@ -147,13 +141,15 @@ class DictionaryGenerator:
                     row["constraint_column_names"]
                 )
             elif row["constraint_type"] == "FOREIGN KEY":
-                match = FK_PATTERN.search(row["constraint_text"] or "")
-                if not match:
-                    continue
-                locals_ = [c.strip(' "') for c in match.group("local").split(",")]
-                remotes = [c.strip(' "') for c in match.group("remote").split(",")]
-                for local, remote in zip(locals_, remotes):
-                    foreign_keys[(table, local)] = f"{match.group('table')}.{remote}"
+                # Structured columns, not constraint_text: DuckDB leaves
+                # the text empty for self-referencing FKs.
+                for local, remote in zip(
+                    row["constraint_column_names"],
+                    row["referenced_column_names"],
+                ):
+                    foreign_keys[(table, local)] = (
+                        f"{row['referenced_table']}.{remote}"
+                    )
             elif row["constraint_type"] == "CHECK":
                 match = CHECK_IN_PATTERN.match((row["expression"] or "").strip())
                 if not match:

@@ -1,0 +1,15 @@
+# The components the vendored snapshot's modules belong to — a subset
+# of the full InvoiceGuard pack's 18, matching the vendored files.
+components:
+  - id: ig.spine.rules-engine
+    name: Rules engine
+    description: Applies the audit rules to every invoice line and writes findings.
+  - id: ig.spine.queue
+    name: Queue surfacing
+    description: Turns the scored backlog into per-auditor work queues; GetNext and direct claims.
+  - id: ig.spine.lapse-lifecycle
+    name: Lapse lifecycle
+    description: The daily stale sweep that lapses invoices left unworked past the cutoff.
+  - id: ig.platform.api
+    name: API layer
+    description: Flask blueprints for invoices, findings, users, configs, and team dashboards.

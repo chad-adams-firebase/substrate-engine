@@ -40,6 +40,34 @@ def write_rows(path: Path, rows: Sequence[BaseModel], sort_key: SortKey) -> None
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
+# The documented natural-key order per substrate file (Phase 2 plan);
+# a single registry so the CLI, tests, and fixture tooling can never
+# disagree about row order.
+SUBSTRATE_SORT_KEYS: dict[str, SortKey] = {
+    "dictionary": lambda r: (r.table_name, r.column_name),
+    "univariate_stats": lambda r: (r.table_name, r.column_name),
+    "ckg_nodes": lambda r: (r.qualified_name, r.kind),
+    "ckg_edges": lambda r: (
+        r.source_id,
+        r.kind,
+        r.target_table or "",
+        r.target_node_id or "",
+        r.line,
+    ),
+    "ckg_conditionals": lambda r: (r.node_id, r.line),
+    "component_memberships": lambda r: (r.component_id, r.node_qualified_name),
+}
+
+
+def write_substrate(
+    directory: Path, substrate: str, rows: Sequence[BaseModel]
+) -> Path:
+    """Write one substrate file under its canonical name and order."""
+    path = directory / f"{substrate}.jsonl"
+    write_rows(path, rows, SUBSTRATE_SORT_KEYS[substrate])
+    return path
+
+
 def read_rows(path: Path, model: type[M]) -> list[M]:
     """Read a substrate file back into validated models. Blank lines
     are rejected, not skipped: a blank line in a generated file means

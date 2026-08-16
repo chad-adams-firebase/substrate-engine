@@ -74,6 +74,15 @@ VALID_CONFIG: dict = {
 }
 
 
+@pytest.fixture(scope="session")
+def snapshot_outputs(snapshot_duckdb) -> dict:
+    """All generator outputs for the snapshot, produced exactly the way
+    the checked-in expected files were (tests/fixture_generation.py)."""
+    from tests.fixture_generation import generate_all
+
+    return generate_all(snapshot_duckdb)
+
+
 @pytest.fixture
 def make_pack(tmp_path: Path):
     """Write a pack directory from a config dict and return its path."""
