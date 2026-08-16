@@ -1,7 +1,9 @@
 """ExecutionLogPort — did the target app's components actually run?
 
 Pluggable substrate; a pack may not enable it. Local adapter (Phase 3):
-fake log fixtures. Real adapter (later phase): Splunk REST search jobs.
+structured log files emitted by real target-app runs (the reference
+app's simulation writes them). Real adapter (later phase): Splunk REST
+search jobs.
 
 Narrow by design: the port exposes intent-shaped methods only. SPL
 templates live in pack config, and the LLM never generates SPL —

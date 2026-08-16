@@ -1,7 +1,8 @@
 """SourceCodePort — the target app's source, addressed by CKG location refs.
 
-Local adapter: a local directory (fixture codebase). Real adapter
-(later phase): local git clone of the target repo.
+Local adapter: a local clone of the external target repo (for the
+reference pack, chad-adams-firebase/invoice-guard) at a pinned commit
+SHA. Real adapter (later phase): local git clone of the target repo.
 
 Paths are relative to the target repo root, at a pinned commit: the
 CKG and the source snapshot must share one commit SHA or the CKG's
