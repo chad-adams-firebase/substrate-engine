@@ -69,6 +69,37 @@ class AdapterSelection(BaseModel):
     settings: dict[str, Any] = {}
 
 
+class GenerationConfig(BaseModel):
+    """Settings for the substrate generators (Brief §13).
+
+    Everything a generator run could need to tune lives here, never in
+    generator code — the work machine tunes by editing the pack. The
+    source repo path and pinned SHA are NOT duplicated here: they live
+    in adapters.source_code.settings, the single source of truth.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # The target app's SQLite database (input to `engine convert`),
+    # pack-relative or absolute.
+    source_sqlite: str
+    # The seed its simulation ran with. Trusted config — the database
+    # cannot prove its own seed — recorded into every manifest as half
+    # of the (commit SHA, seed) pinning pair.
+    simulation_seed: int
+    # Component ids look like "<prefix>.<group>.<slug>".
+    component_id_prefix: str
+    # Which files the CKG extraction covers, relative to the source
+    # repo root.
+    source_globs: list[str]
+    exclude_globs: list[str] = []
+    # Enum data-scan heuristic: a VARCHAR column with at most this many
+    # distinct values (all matching an enum-shaped pattern) becomes an
+    # enum candidate. Threshold is config because it will be tuned at
+    # work against real schemas.
+    enum_scan_max_distinct: int = 12
+
+
 class PackConfig(BaseModel):
     """The validated shape of a pack's config.yaml."""
 
@@ -79,3 +110,4 @@ class PackConfig(BaseModel):
     substrates: list[SubstrateName]
     tools: list[ToolName]
     adapters: dict[PortName, AdapterSelection]
+    generation: GenerationConfig | None = None
