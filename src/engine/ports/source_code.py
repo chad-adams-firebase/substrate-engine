@@ -20,5 +20,13 @@ class SourceCodePort(Protocol):
         end_line: int | None = None,
     ) -> str: ...
 
+    def list_files(self) -> list[str]:
+        """All regular files under the repo root, as sorted repo-root-
+        relative paths. Sorted at the adapter because the CKG
+        generator's output must not depend on filesystem walk order.
+        (Added in Phase 2 for the repo walk; the git adapter will use
+        `git ls-tree` for the same contract.)"""
+        ...
+
     @property
     def commit_sha(self) -> str: ...

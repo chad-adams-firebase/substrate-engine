@@ -53,6 +53,20 @@ def test_missing_file_is_legible(adapter):
         adapter.read("scoring/absent.py")
 
 
+def test_list_files_is_sorted_and_skips_environment_dirs(tmp_path):
+    root = tmp_path / "codebase"
+    (root / "scoring" / "__pycache__").mkdir(parents=True)
+    (root / ".git").mkdir()
+    (root / "scoring" / "rules.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "app.py").write_text("y = 2\n", encoding="utf-8")
+    (root / "scoring" / "__pycache__" / "rules.pyc").write_bytes(b"\x00")
+    (root / ".git" / "HEAD").write_text("ref\n", encoding="utf-8")
+    adapter = LocalDirectorySource(
+        LocalSourceSettings(root=str(root), commit_sha="abc1234")
+    )
+    assert adapter.list_files() == ["app.py", "scoring/rules.py"]
+
+
 def test_missing_root_fails_at_construction(tmp_path):
     with pytest.raises(FileNotFoundError, match="root does not exist"):
         LocalDirectorySource(

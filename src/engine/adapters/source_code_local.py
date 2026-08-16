@@ -42,6 +42,20 @@ class LocalDirectorySource:
     def commit_sha(self) -> str:
         return self._settings.commit_sha
 
+    def list_files(self) -> list[str]:
+        # Sorted so downstream extraction never depends on walk order;
+        # VCS and environment directories are not source.
+        skipped = {".git", ".venv", "__pycache__", ".pytest_cache"}
+        found: list[str] = []
+        for path in self._root.rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(self._root)
+            if any(part in skipped for part in relative.parts):
+                continue
+            found.append(relative.as_posix())
+        return sorted(found)
+
     def read(
         self,
         file_path: str,
