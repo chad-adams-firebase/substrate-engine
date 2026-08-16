@@ -1,0 +1,24 @@
+{
+  "extracted_at": "2026-08-16T17:32:04.644128Z",
+  "generator": "stats",
+  "generator_version": "1.0.0",
+  "manifest_id": "13a9fe6305a057be",
+  "simulation_seed": 42,
+  "source_commit_sha": "761a18e9b9253870d930f1b13b3a852ce516d603",
+  "source_tables": [
+    "compliance_reports",
+    "compliance_rules",
+    "config",
+    "contracts",
+    "finding_feedback",
+    "findings",
+    "invoice_history",
+    "invoice_lines",
+    "invoices",
+    "review_report_lines",
+    "review_reports",
+    "scheduled_tasks",
+    "suppliers",
+    "users"
+  ]
+}

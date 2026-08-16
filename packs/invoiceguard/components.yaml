@@ -1,0 +1,59 @@
+# The 18 L1 components of InvoiceGuard, per its functional spec
+# (docs/functional-spec.md in the invoice-guard repo). Ids are stable,
+# human-meaningful addresses; module structure maps to them 1:1 for
+# the spine, and by package for the platform.
+components:
+  - id: ig.spine.intake
+    name: Intake poller
+    description: Scans the drop directory and routes files by filename pattern; nothing enters except through this router.
+  - id: ig.spine.invoice-parse
+    name: Invoice parser
+    description: Parses invoice XML, dedupes redelivered revisions, and creates the invoice row — born RECEIVED (network supplier) or LAPSED (non-network).
+  - id: ig.spine.line-mapping
+    name: Line mapping
+    description: Flattens the parsed payload into queryable columns and lines, links the revision chain, and holds when the prior revision is mid-review.
+  - id: ig.spine.rules-engine
+    name: Rules engine
+    description: Applies the twelve audit rules to every line and invoice, writing dollar-bearing findings.
+  - id: ig.spine.prior-audit-compliance
+    name: Prior-audit compliance
+    description: Compares a revision against the auditor's prior review report; ignored corrections become CORRECTION_IGNORED findings.
+  - id: ig.spine.creepback
+    name: Price creep-back detection
+    description: Walks the revision chain for prices quietly raised after an accepted correction; runs on the slow path via a scheduled task.
+  - id: ig.spine.compliance-intake
+    name: Compliance-report intake
+    description: Stores the external contract-compliance report, denormalizes the score onto the invoice, and converts report rules into findings.
+  - id: ig.spine.benchmark-scoring
+    name: Benchmark scoring
+    description: Asks the peer-comparison service for service-hours and alt-sourcing deltas; the convergence point of all findings branches, with a graceful fallback when the service is down.
+  - id: ig.spine.rollup
+    name: Roll-up
+    description: Reduces findings and benchmark signals to opportunity and weight; flips RECEIVED to READY; re-runs on feedback, late reports, and the nightly recalc.
+  - id: ig.spine.queue
+    name: Queue surfacing
+    description: Filters and orders the scored backlog per team and auditor; GetNext claims the top eligible invoice, and direct claims may reactivate a LAPSED one.
+  - id: ig.spine.feedback
+    name: Finding feedback
+    description: Records auditor judgments — valid exceptions, rule misfires, notes — that zero a finding's contribution on the next recalc and carry forward to later revisions.
+  - id: ig.spine.lapse-lifecycle
+    name: Lapse lifecycle
+    description: The daily stale sweep that lapses invoices left unworked past the cutoff, protecting compliance-critical and in-flight work.
+  - id: ig.platform.config
+    name: Config & thresholds
+    description: The versioned config table of tunable thresholds, weight factors, and the team-to-categories mapping; retire-on-write, any change schedules a recalc.
+  - id: ig.platform.users
+    name: Users & roles
+    description: Auditor records and the header-based role stub gating endpoints; no real auth by design.
+  - id: ig.platform.scheduler
+    name: Scheduler
+    description: The scheduled_tasks table and its tick executor — all delayed behavior flows through it, exactly once, in due-at order.
+  - id: ig.platform.file-lifecycle
+    name: File lifecycle
+    description: Relocates processed and failed drop files to processed/ or error/ so the drop directory holds only unprocessed work.
+  - id: ig.platform.api
+    name: API layer
+    description: Flask blueprints for invoices, findings, feedback, users, configs, and team dashboards, with shared filter/sort/pagination helpers.
+  - id: ig.platform.bootstrap
+    name: App bootstrap
+    description: The application factory wiring SQLAlchemy, logging, and the clock provider, plus thin entry points for the API server, poller, and CLI.

@@ -1,0 +1,59 @@
+# InvoiceGuard reference pack — a private engineering fixture, not a
+# public demo (Brief §14). The application lives in its own repo;
+# this directory holds only config, generated substrates, the primer,
+# and pointers to the pinned clone.
+name: invoiceguard
+description: Supplier-invoice audit reference application (external repo, pinned clone).
+
+substrates:
+  - data_dictionary
+  - univariate_statistics
+  - code_knowledge_graph
+  - ckg_components
+  - primer
+  - source_code
+  - application_database
+
+tools:
+  - query_univariate_stats
+  - lookup_data_dictionary
+  - traverse_code_knowledge_graph
+  - run_sql
+  - read_source
+  - app_primer
+
+adapters:
+  llm:
+    adapter: openrouter
+    settings:
+      model: openrouter/auto
+  sql:
+    adapter: duckdb
+    settings:
+      database: app.duckdb            # produced by `engine convert`
+  work_store:
+    adapter: sqlite
+    settings:
+      database: work.db
+  identity:
+    adapter: fake_user
+    settings:
+      username: dev
+      display_name: Dev User
+  source_code:
+    adapter: local_directory
+    settings:
+      root: ../../../invoice-guard    # sibling clone of chad-adams-firebase/invoice-guard
+      commit_sha: "761a18e9b9253870d930f1b13b3a852ce516d603"
+
+generation:
+  source_sqlite: ../../../invoice-guard/simout/invoiceguard.db
+  simulation_seed: 42
+  component_id_prefix: ig
+  source_globs:
+    - src/invoiceguard/**/*.py
+  exclude_globs:
+    # The simulation driver is world-building tooling, not the app the
+    # analyst asks about; the real target repo has no analog of it.
+    - src/invoiceguard/simulation/**
+  enum_scan_max_distinct: 12
