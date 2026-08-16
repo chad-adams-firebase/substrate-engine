@@ -18,6 +18,8 @@ Build: the three generators (dictionary via SqlPort introspection, univariate st
 
 **Done looks like:** running the generators against the pinned invoice-guard clone + its simulated database produces the pack's machine-derived substrates from scratch; regenerating is idempotent (content-addressed IDs stable across runs); fixture tests (vendored snapshot) catch a deliberately introduced extractor bug; the validator passes on InvoiceGuard and produces a legible report; human-overlay rows survive a regeneration untouched.
 
+Note: every manifest records the (source commit SHA, simulation seed) pinning pair — the Phase 4b eval harness depends on that pair to recompute ground truth against exactly the world the substrates were extracted from.
+
 ## Phase 3 — Substrates + tools
 
 Build: SubstrateStore local adapter over the generated substrates; the full tool registry (§6): stats, dictionary, CKG traversal, read_source, run_sql with the execute–check–repair loop (§7), primer, business-docs search, check_execution against structured log files from InvoiceGuard simulation runs, answer_from_known_items (stub against empty library).
@@ -29,6 +31,12 @@ Build: SubstrateStore local adapter over the generated substrates; the full tool
 Build: the LangGraph graph (router with altitude classification, tool nodes, verifier node, fail-closed exits, checkpointer via WorkStore); status-event emission; the Verifier per §9 — claim extraction, mechanical matching, LLM fuzzy judge, verdict ladder (retry → unverified → refuse), per-substrate checks, plausibility vs stats.
 
 **Done looks like:** end-to-end ask→answer against InvoiceGuard through real OpenRouter; "what is this app" routes to primer, never CKG; verifier tests pass — a deliberately corrupted draft (wrong number) is caught, retried, then labeled unverified; a deliberately wrong SQL result trips the plausibility check; every turn's provenance row is complete.
+
+## Phase 4b — Answer-verification eval harness
+
+Build: a question bank — planted-story questions plus a majority of non-planted questions — with gold answers computed by direct SQL/code inspection and stored outside any engine-readable path; a runner that executes the bank through the real ask→answer path and emits per-question reports (drafted answer, evidence bundle, verifier verdict) from turn provenance; grading happens externally against recomputed ground truth. Refusals are acceptable outcomes; **wrong-but-verified is the critical failure class**.
+
+**Done looks like:** the runner exists; the bank has ≥15 questions; a report generates end-to-end.
 
 ## Phase 5 — Chat UI
 
