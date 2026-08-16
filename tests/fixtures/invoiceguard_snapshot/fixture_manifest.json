@@ -1,0 +1,74 @@
+{
+  "carved_at": "2026-08-16T17:14:13.661958+00:00",
+  "commit_sha": "761a18e9b9253870d930f1b13b3a852ce516d603",
+  "db_slice": {
+    "data_row_counts": {
+      "config": 1,
+      "finding_feedback": 23,
+      "findings": 149,
+      "invoice_history": 235,
+      "invoice_lines": 237,
+      "invoices": 50,
+      "suppliers": 40,
+      "users": 10
+    },
+    "data_sha256": "4082845ca117ba5e008f5dbfa8e518e4e01ec615777c4092682ec2936cf8018b",
+    "schema_sha256": "744c6755f63bf10ab8ef8ba85e793504adc1987bdda9957d3c62a3686d435c85"
+  },
+  "simulation_seed": 42,
+  "source_files": [
+    {
+      "path": "src/invoiceguard/models/__init__.py",
+      "sha256": "88afddc48836dbd5362025a6fa18f08ab60f9e258daaf80ec2b5d768122071df"
+    },
+    {
+      "path": "src/invoiceguard/models/base.py",
+      "sha256": "d8dc14b133e986c7c02948cb5a0dc158f13ac7df84ffd462052eb567b6913f95"
+    },
+    {
+      "path": "src/invoiceguard/models/config.py",
+      "sha256": "377a0557697f938f8e1958c6014ef68084831126b2de4bd63f59c27a42bf7617"
+    },
+    {
+      "path": "src/invoiceguard/models/finding.py",
+      "sha256": "6f5567c758e5c5e660f240582f02a13db0fc09e4f5f4233e5fd60aada9fef6cd"
+    },
+    {
+      "path": "src/invoiceguard/models/invoice.py",
+      "sha256": "f3389e9e718eeb5fafa278fac189d05ae4393ce571321e41d3efd41a45062f87"
+    },
+    {
+      "path": "src/invoiceguard/models/report.py",
+      "sha256": "b43a997905eb3e58797ef7a4b6e2cd62d02fd08ca80727979425665c0b848db7"
+    },
+    {
+      "path": "src/invoiceguard/models/scheduled_task.py",
+      "sha256": "aaf44cfc904e1a45186015918e4542cf54110aca96ef53176aa25d7c0362f626"
+    },
+    {
+      "path": "src/invoiceguard/models/supplier.py",
+      "sha256": "bbdc26b3fa770470a91958135660505d05c5c454a27808cb3c612aa568f77036"
+    },
+    {
+      "path": "src/invoiceguard/models/user.py",
+      "sha256": "1b13403e1c7d3e0592835e6d26a0595c727a023d2e91d891e00af0d177df0314"
+    },
+    {
+      "path": "src/invoiceguard/spine/lapse_lifecycle.py",
+      "sha256": "6735e8287b600fcb8c05e6f8d5a00d9988f617051168a3d65cb788c49f39c21d"
+    },
+    {
+      "path": "src/invoiceguard/spine/queue.py",
+      "sha256": "a308dc6fa2e7ab684dfcd70c71dba4ae6f2aca84868e319961a3885ca66feeea"
+    },
+    {
+      "path": "src/invoiceguard/spine/rules_engine.py",
+      "sha256": "2e17d55e532c9ed7383e7f73a10257587652b72daf1d4c4e4291b4e29ef408f7"
+    },
+    {
+      "path": "src/invoiceguard/platform/api/teams.py",
+      "sha256": "8a59dcc3ed41be1e1759d3864ea8707aeb59b0af7d80b356606facba22817f7f"
+    }
+  ],
+  "source_repo": "chad-adams-firebase/invoice-guard"
+}
