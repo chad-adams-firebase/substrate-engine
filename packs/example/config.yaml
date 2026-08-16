@@ -1,0 +1,37 @@
+# Minimal example pack: config only, no substrate data.
+# Exists to exercise the pack loader, DI container, and `engine info`.
+# The InvoiceGuard reference pack (Phase 2) is the real fixture.
+name: example
+description: Minimal pack exercising the loader and adapter wiring.
+
+substrates:
+  - data_dictionary
+  - application_database
+
+tools:
+  - lookup_data_dictionary
+  - run_sql
+
+adapters:
+  llm:
+    adapter: openrouter
+    settings:
+      model: openrouter/auto
+  sql:
+    adapter: duckdb
+    settings:
+      database: app.duckdb        # relative to this pack directory; seeded in Phase 2
+  work_store:
+    adapter: sqlite
+    settings:
+      database: work.db           # relative to this pack directory; created on first use
+  identity:
+    adapter: fake_user
+    settings:
+      username: dev
+      display_name: Dev User
+  source_code:
+    adapter: local_directory
+    settings:
+      root: .                     # placeholder until a fixture codebase exists (Phase 2)
+      commit_sha: "0000000"

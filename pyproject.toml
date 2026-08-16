@@ -1,0 +1,27 @@
+[project]
+name = "engine"
+version = "0.1.0"
+description = "Configurable crowdsourced knowledge engine (see docs/technical-build-brief-v2.md)"
+readme = "README.md"
+authors = [
+    { name = "Chad Adams", email = "chad.adams.firebase@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "duckdb>=1.5.5",
+    "openai>=3.0.0",
+    "pydantic>=2.13.4",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+engine = "engine.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

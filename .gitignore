@@ -1,0 +1,18 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+
+# Test artifacts
+.pytest_cache/
+
+# Local databases (engine work stores and pack-seeded databases are
+# regenerated, never committed; checked-in fixtures live under tests/)
+*.duckdb
+*.db
+*.sqlite3
+
+# OS noise
+.DS_Store
