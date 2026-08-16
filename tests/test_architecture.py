@@ -50,6 +50,33 @@ def test_core_never_imports_adapters():
     )
 
 
+def test_generators_and_validator_touch_no_storage_engines():
+    """Generators and the validator are core: they consume ports, so
+    they may not import adapters OR concrete storage modules (duckdb,
+    sqlite3). engine.packtools is the sanctioned exception — it
+    manufactures the artifact the DuckDB adapter serves, and is
+    adapter-category code by design (its docstring says so)."""
+    violations = []
+    for package in ("generators", "validate"):
+        for path in (SRC_ENGINE / package).rglob("*.py"):
+            offending = {
+                module
+                for module in _imports_of(path)
+                if module in {"duckdb", "sqlite3"}
+                or module == "engine.packtools"
+                or module.startswith("engine.packtools.")
+            }
+            if offending:
+                relative = path.relative_to(SRC_ENGINE)
+                violations.append(
+                    f"src/engine/{relative}: imports {sorted(offending)}"
+                )
+    assert not violations, (
+        "Generators/validator must reach data only through ports:\n"
+        + "\n".join(violations)
+    )
+
+
 def test_ports_import_only_ports_and_stdlib():
     """Stricter still for the ports package: a port interface may import
     other ports modules, pydantic, and stdlib — never config, runtime,
