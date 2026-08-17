@@ -77,16 +77,26 @@ def test_generators_and_validator_touch_no_storage_engines():
     )
 
 
+# Substrate contract models are shared types, like pydantic itself:
+# the typed SubstrateStorePort (Phase 3 refinement) speaks in §4
+# models by design. Contracts only — loaders, indexes, and everything
+# with behavior stay out of ports. Deliberately amended in Phase 3.
+PORT_ALLOWED_CONTRACT_MODULES = {"engine.substrates.models"}
+
+
 def test_ports_import_only_ports_and_stdlib():
     """Stricter still for the ports package: a port interface may import
-    other ports modules, pydantic, and stdlib — never config, runtime,
-    adapters, or anything else in the engine."""
+    other ports modules, substrate contract models, pydantic, and
+    stdlib — never config, runtime, adapters, or anything else in the
+    engine."""
     violations = []
     for path in (SRC_ENGINE / "ports").rglob("*.py"):
         offending = {
             module
             for module in _imports_of(path)
-            if module.startswith("engine.") and not module.startswith("engine.ports")
+            if module.startswith("engine.")
+            and not module.startswith("engine.ports")
+            and module not in PORT_ALLOWED_CONTRACT_MODULES
         }
         if offending:
             relative = path.relative_to(SRC_ENGINE)

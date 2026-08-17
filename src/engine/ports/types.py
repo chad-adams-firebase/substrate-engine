@@ -48,9 +48,15 @@ class User(BaseModel):
 
 
 class RunStatus(BaseModel):
-    """Whether a target-app component ran, per the execution log."""
+    """Whether a target-app component ran, per the execution log.
+
+    count is the number of matching run events in the window — a
+    number the Verifier can mechanically reconcile (§9.2); the prose
+    detail alone cannot be matched against a claim like "ran 3 times".
+    """
 
     ran: bool
+    count: int = 0
     detail: str
 
 
@@ -68,3 +74,15 @@ class Workspace(BaseModel):
     owner: str
     name: str
     created_at: datetime
+
+
+class UnitSummary(BaseModel):
+    """A published Unit of Work, as answer_from_known_items surfaces
+    it: enough to suggest ("this looks answered already"), never the
+    full Unit — the library UI (Phase 6) owns reading."""
+
+    id: int
+    title: str
+    state: str  # "published" | "canonical"
+    author: str
+    snippet: str = ""

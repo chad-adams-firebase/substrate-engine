@@ -231,3 +231,129 @@ class ComponentMembership(BaseModel):
     ckg_node_id: str
     node_qualified_name: str
     provenance: Provenance
+
+
+class DocProvenance(BaseModel):
+    """Document-level provenance for authored (not generated) artifacts
+    — the primer's front-matter pattern, as a model.
+
+    The Dictionary Map and business docs are authored files, so the
+    per-row Provenance contract does not fit: its validator demands a
+    manifest_id for machine rows, and no generator run produced these.
+    A document vouched for as a whole gets one provenance block.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: Literal["machine", "human"]
+    confidence: float
+    needs_validation: bool
+    note: str = ""
+
+
+class Concept(BaseModel):
+    """One business concept, mapped to where it lives in the schema
+    (Brief §4.2). Joins to the dictionary by table/column names."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    definition: str
+    tables: list[str] = []
+    synonyms: list[str] = []
+
+
+class CanonicalMetric(BaseModel):
+    """One canonical metric: the exact SQL ingredients, so run_sql
+    grounds on a vetted definition instead of improvising one."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str
+    tables: list[str]
+    # SQL fragments, not full statements: the WHERE condition that
+    # scopes the metric and the aggregate expression that computes it.
+    filter_sql: str = ""
+    aggregation_sql: str
+    notes: str = ""
+
+
+class JoinStep(BaseModel):
+    """One hop of a canonical join path."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    from_table: str
+    from_column: str
+    to_table: str
+    to_column: str
+
+
+class JoinPath(BaseModel):
+    """A vetted way to join tables — the routes that are correct, as
+    opposed to the ones that merely typecheck."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    steps: list[JoinStep]
+    notes: str = ""
+
+
+class Gotcha(BaseModel):
+    """A place where the obvious query is wrong. Rendered verbatim
+    into run_sql grounding — this is the artifact's reason to exist."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    summary: str
+    detail: str
+    tables: list[str] = []
+
+
+class WhereToLookExample(BaseModel):
+    """A question paired with where its answer lives — routing
+    examples for grounding, not answers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    question: str
+    guidance: str
+
+
+class DictionaryMap(BaseModel):
+    """The Data Dictionary Map substrate (Brief §4.2): the semantic /
+    routing layer over the dictionary. This whole artifact IS the
+    grounding payload for run_sql (Brief §7)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provenance: DocProvenance
+    concepts: list[Concept] = []
+    metrics: list[CanonicalMetric] = []
+    join_paths: list[JoinPath] = []
+    gotchas: list[Gotcha] = []
+    examples: list[WhereToLookExample] = []
+
+
+class BusinessDoc(BaseModel):
+    """One business-context document (Brief §4.10): a curated markdown
+    memo snapshotted into the pack, with front-matter provenance naming
+    exactly where and when the snapshot was taken."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    slug: str
+    title: str
+    author: str = ""
+    # The memo's own front-matter date, kept as authored text. (Named
+    # doc_date because a field named `date` would shadow the type.)
+    doc_date: str = ""
+    status: str = ""
+    source_repo: str
+    source_path: str
+    source_commit_sha: str
+    copied_date: date
+    body: str
