@@ -110,6 +110,9 @@ class RunSqlSettings(BaseModel):
     # Result rows kept in the output table; the pre-truncation count
     # is always preserved (Table.total_row_count).
     max_result_rows: int = 200
+    # Named in the grounding prompt so generated SQL targets the
+    # dialect the pack's SqlPort adapter actually speaks.
+    dialect: str = "duckdb"
 
 
 class SearchBusinessDocsSettings(BaseModel):

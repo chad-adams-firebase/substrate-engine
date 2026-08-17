@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict
 from engine.ports.substrate_store import SubstrateStoreError
 from engine.substrates import pack_data
 from engine.substrates.jsonl import read_rows
+from engine.substrates.manifest import load_manifest
 from engine.substrates.models import (
     BusinessDoc,
     CkgConditional,
@@ -33,6 +34,7 @@ from engine.substrates.models import (
     ComponentMembership,
     DictionaryMap,
     DictionaryRow,
+    Manifest,
     StatsRow,
 )
 
@@ -118,3 +120,11 @@ class PackFilesSubstrateStore:
             except pack_data.PackDataError as exc:
                 raise SubstrateStoreError(str(exc)) from exc
         return self._cache["business_docs"]
+
+    def manifests(self) -> list[Manifest]:
+        if "manifests" not in self._cache:
+            directory = self._root / "substrates" / "manifests"
+            self._cache["manifests"] = [
+                load_manifest(path) for path in sorted(directory.glob("*.json"))
+            ]
+        return self._cache["manifests"]

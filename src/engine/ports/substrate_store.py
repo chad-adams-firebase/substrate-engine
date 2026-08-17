@@ -23,6 +23,7 @@ from engine.substrates.models import (
     ComponentMembership,
     DictionaryMap,
     DictionaryRow,
+    Manifest,
     StatsRow,
 )
 
@@ -53,3 +54,8 @@ class SubstrateStorePort(Protocol):
     def dictionary_map(self) -> DictionaryMap: ...
 
     def business_docs(self) -> list[BusinessDoc]: ...
+
+    def manifests(self) -> list[Manifest]: ...
+    # Consumer: read_source cross-checks the CKG manifest's
+    # source_commit_sha against SourceCodePort's — divergent SHAs make
+    # line references invalid (Brief §5).

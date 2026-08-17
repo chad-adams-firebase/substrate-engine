@@ -1,0 +1,132 @@
+"""The run_sql grounding prompt — a pure, deterministic rendering of
+Dictionary + Dictionary Map + Univariate Stats (Brief §7: never raw
+schema alone; the map IS the grounding payload, rendered, not
+duplicated).
+
+Pinned by a golden fixture: changing this rendering changes generated
+SQL everywhere, so it changes fixtures deliberately or not at all.
+"""
+
+from engine.substrates.models import DictionaryMap, DictionaryRow, StatsRow
+
+# Top values are shown only for genuinely enum-ish columns.
+_TOP_VALUES_MAX_DISTINCT = 12
+
+
+def render_grounding(
+    dictionary: list[DictionaryRow],
+    dictionary_map: DictionaryMap,
+    stats: list[StatsRow],
+    *,
+    dialect: str,
+) -> str:
+    # Renders the full dictionary and map verbatim — right at this
+    # reference pack's size; an enterprise-scale pack may need
+    # selection here instead of full inclusion.
+    lines: list[str] = [
+        f"You write SQL for the application database ({dialect} dialect).",
+        "Use only the tables, columns, joins, and definitions below.",
+        "Reply with exactly one read-only SELECT (or WITH) statement in",
+        "a ```sql fence and nothing else.",
+        "",
+        "## Tables and columns",
+    ]
+
+    stats_by_column = {(row.table_name, row.column_name): row for row in stats}
+    row_counts = {row.table_name: row.row_count for row in stats}
+    by_table: dict[str, list[DictionaryRow]] = {}
+    for row in dictionary:
+        by_table.setdefault(row.table_name, []).append(row)
+
+    for table in sorted(by_table):
+        rows = by_table[table]
+        table_row = next((r for r in rows if r.column_name == ""), None)
+        count = row_counts.get(table)
+        suffix = f" — {count} rows" if count is not None else ""
+        lines.append(f"\n### {table}{suffix}")
+        if table_row is not None and table_row.description:
+            lines.append(table_row.description)
+        for row in rows:
+            if row.column_name == "":
+                continue
+            parts = [f"- {row.column_name} {row.data_type}"]
+            if row.is_primary_key:
+                parts.append("PK")
+            if row.fk_target:
+                parts.append(f"-> {row.fk_target}")
+            if row.nullable is False:
+                parts.append("NOT NULL")
+            if row.enum_values:
+                parts.append("values: " + ", ".join(row.enum_values))
+            if row.description:
+                parts.append(f"— {row.description}")
+            column_stats = stats_by_column.get((table, row.column_name))
+            if column_stats is not None:
+                facts = []
+                if column_stats.null_rate > 0:
+                    facts.append(f"null_rate={column_stats.null_rate}")
+                if (
+                    column_stats.min_value is not None
+                    and column_stats.max_value is not None
+                ):
+                    facts.append(
+                        f"range [{column_stats.min_value} .. "
+                        f"{column_stats.max_value}]"
+                    )
+                if (
+                    column_stats.top_values
+                    and column_stats.distinct_count <= _TOP_VALUES_MAX_DISTINCT
+                ):
+                    facts.append(
+                        "top: "
+                        + ", ".join(
+                            f"{value.value}({value.count})"
+                            for value in column_stats.top_values
+                        )
+                    )
+                if facts:
+                    parts.append("[" + "; ".join(facts) + "]")
+            lines.append(" ".join(parts))
+
+    if dictionary_map.concepts:
+        lines.append("\n## Business concepts")
+        for concept in dictionary_map.concepts:
+            names = concept.name
+            if concept.synonyms:
+                names += f" (aka {', '.join(concept.synonyms)})"
+            lines.append(f"- {names}: {concept.definition}")
+
+    if dictionary_map.metrics:
+        lines.append("\n## Canonical metrics (use these definitions)")
+        for metric in dictionary_map.metrics:
+            lines.append(f"- {metric.name}: {metric.description}")
+            lines.append(f"  tables: {', '.join(metric.tables)}")
+            if metric.filter_sql:
+                lines.append(f"  filter: {metric.filter_sql}")
+            lines.append(f"  aggregation: {metric.aggregation_sql}")
+            if metric.notes:
+                lines.append(f"  notes: {metric.notes}")
+
+    if dictionary_map.join_paths:
+        lines.append("\n## Canonical join paths")
+        for join_path in dictionary_map.join_paths:
+            steps = "; ".join(
+                f"{s.from_table}.{s.from_column} = {s.to_table}.{s.to_column}"
+                for s in join_path.steps
+            )
+            note = f" ({join_path.notes})" if join_path.notes else ""
+            lines.append(f"- {join_path.name}: {steps}{note}")
+
+    if dictionary_map.gotchas:
+        lines.append("\n## Gotchas (read before writing SQL)")
+        for gotcha in dictionary_map.gotchas:
+            lines.append(f"- {gotcha.name}: {gotcha.summary}")
+            lines.append(f"  {gotcha.detail}")
+
+    if dictionary_map.examples:
+        lines.append("\n## Where to look")
+        for example in dictionary_map.examples:
+            lines.append(f"- Q: {example.question}")
+            lines.append(f"  {example.guidance}")
+
+    return "\n".join(lines) + "\n"
