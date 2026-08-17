@@ -14,6 +14,10 @@ The documented pack-build flow (Phase 2):
 argparse over a CLI framework: four subcommands still do not justify
 a dependency (CLAUDE.md: clear beats clever, and every dep must clear
 the wheel rule).
+
+Path convention: flag values (--pack, --sqlite, --source, --out)
+resolve against the invoker's current directory, like any Unix tool;
+paths inside a pack's config.yaml resolve against the pack directory.
 """
 
 import argparse
@@ -48,7 +52,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     convert.add_argument("--pack", required=True)
     convert.add_argument(
-        "--sqlite", help="Override generation.source_sqlite from config."
+        "--sqlite",
+        type=_cwd_path,
+        help="Override generation.source_sqlite from config. Resolved "
+        "relative to the current directory (config values stay "
+        "pack-relative).",
     )
     convert.add_argument(
         "--seed", type=int, help="Override generation.simulation_seed."
@@ -60,7 +68,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     generate.add_argument("--pack", required=True)
     generate.add_argument(
-        "--source", help="Override the source_code adapter's repo root."
+        "--source",
+        type=_cwd_path,
+        help="Override the source_code adapter's repo root. Resolved "
+        "relative to the current directory (config values stay "
+        "pack-relative).",
     )
     generate.add_argument(
         "--only",
@@ -98,6 +110,14 @@ def main(argv: list[str] | None = None) -> int:
 class CliError(Exception):
     """A subcommand cannot proceed; the message tells the pack author
     what to fix."""
+
+
+def _cwd_path(value: str) -> str:
+    """CLI path flags resolve against the invoker's cwd (standard
+    tool behavior); paths inside config.yaml stay pack-relative.
+    Resolving here, at the argparse boundary, keeps the two origins
+    from ever mixing."""
+    return str(Path(value).resolve())
 
 
 def _pack_path(pack_root: Path, value: str) -> Path:
