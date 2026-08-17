@@ -16,7 +16,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from engine.ports.types import Workspace
+from engine.ports.types import UnitSummary, Workspace
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS workspace (
@@ -117,6 +117,31 @@ class SqliteWorkStore:
         return Workspace(
             id=cursor.lastrowid, owner=owner, name=name, created_at=created_at
         )
+
+    def search_published_units(self, text: str) -> list[UnitSummary]:
+        # LIKE over title+narrative is deliberately all there is —
+        # Phase 6 owns anything smarter. ensure_schema first: this is
+        # the one read that legitimately runs against a store nothing
+        # has written to yet (the library is empty until Phase 6), and
+        # it must return [], not "no such table".
+        self.ensure_schema()
+        like = f"%{text}%"
+        rows = self._connection.execute(
+            "SELECT id, title, narrative, state, author FROM unit_of_work "
+            "WHERE state IN ('published', 'canonical') "
+            "AND (title LIKE ? OR narrative LIKE ?) ORDER BY id",
+            (like, like),
+        ).fetchall()
+        return [
+            UnitSummary(
+                id=row["id"],
+                title=row["title"],
+                state=row["state"],
+                author=row["author"],
+                snippet=row["narrative"][:200],
+            )
+            for row in rows
+        ]
 
     def list_workspaces(self, owner: str) -> list[Workspace]:
         rows = self._connection.execute(

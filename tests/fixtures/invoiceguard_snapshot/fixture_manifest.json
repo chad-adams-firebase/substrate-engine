@@ -1,5 +1,5 @@
 {
-  "carved_at": "2026-08-16T17:14:13.661958+00:00",
+  "carved_at": "2026-08-17T18:44:11.607699+00:00",
   "commit_sha": "761a18e9b9253870d930f1b13b3a852ce516d603",
   "db_slice": {
     "data_row_counts": {
@@ -14,6 +14,16 @@
     },
     "data_sha256": "4082845ca117ba5e008f5dbfa8e518e4e01ec615777c4092682ec2936cf8018b",
     "schema_sha256": "744c6755f63bf10ab8ef8ba85e793504adc1987bdda9957d3c62a3686d435c85"
+  },
+  "log_slice": {
+    "criteria": "lines whose ts= date is in date_range, from simout/logs/invoiceguard.log (planted benchmark-outage day plus the following normal day)",
+    "date_range": [
+      "2026-03-11",
+      "2026-03-12"
+    ],
+    "line_count": 914,
+    "path": "logs/invoiceguard.log",
+    "sha256": "38b6bcdc81c1f0097ec64aef5395af6600ef0c9984519ba9ec9f3284279febfb"
   },
   "simulation_seed": 42,
   "source_files": [

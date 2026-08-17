@@ -1,0 +1,41 @@
+# Minimal Dictionary Map for offline contract/loader/grounding tests.
+# Synthetic — mirrors the real pack's shape at a fraction of its size.
+provenance:
+  source: machine
+  confidence: 0.5
+  needs_validation: true
+  note: Test fixture, not authored from any target application.
+
+concepts:
+  - name: invoice
+    definition: One supplier bill, scored for audit priority.
+    tables: [invoices, invoice_lines]
+    synonyms: [bill]
+
+metrics:
+  - name: flag_rate
+    description: Share of invoices with at least one finding.
+    tables: [invoices, findings]
+    aggregation_sql: >-
+      COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices)
+    notes: Join findings f on f.invoice_id = invoices.id.
+
+join_paths:
+  - name: invoices_to_findings
+    steps:
+      - {from_table: invoices, from_column: id, to_table: findings, to_column: invoice_id}
+
+gotchas:
+  - name: adjustment_totals
+    summary: invoice_total may legitimately differ from the sum of lines.
+    detail: >-
+      When adjustment_flag = 1, invoices.invoice_total is deliberately
+      below SUM(invoice_lines.extended_price); do not treat the
+      difference as an error.
+    tables: [invoices, invoice_lines]
+
+examples:
+  - question: How many invoices had findings last week?
+    guidance: >-
+      Join invoices to findings on invoice_id; window on
+      invoices.received_at; COUNT(DISTINCT invoices.id).

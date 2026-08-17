@@ -40,3 +40,11 @@ def test_db_slice_matches_its_hashes():
             hashlib.sha256(data.encode()).hexdigest()
             == manifest["db_slice"][key]
         ), name
+
+
+def test_log_slice_matches_its_hash_and_count():
+    manifest = load_manifest()
+    record = manifest["log_slice"]
+    text = (SNAPSHOT / record["path"]).read_text(encoding="utf-8")
+    assert hashlib.sha256(text.encode()).hexdigest() == record["sha256"]
+    assert len(text.splitlines()) == record["line_count"]

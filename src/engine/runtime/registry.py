@@ -20,10 +20,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from engine.adapters.execution_log_logfmt import LogfmtExecutionLog, LogfmtSettings
 from engine.adapters.identity_fake import FakeUserIdentity, FakeUserSettings
 from engine.adapters.llm_openrouter import OpenRouterLLM, OpenRouterSettings
 from engine.adapters.source_code_local import LocalDirectorySource, LocalSourceSettings
 from engine.adapters.sql_duckdb import DuckDbSettings, DuckDbSql
+from engine.adapters.substrate_store_pack import (
+    PackFilesSettings,
+    PackFilesSubstrateStore,
+)
 from engine.adapters.work_store_sqlite import SqliteWorkStore, SqliteWorkStoreSettings
 from engine.config.models import PortName
 
@@ -98,6 +103,24 @@ def _make_local_source(
     return LocalDirectorySource(resolved)
 
 
+def _make_pack_files_substrate_store(
+    settings: dict[str, Any], pack_root: Path
+) -> PackFilesSubstrateStore:
+    return PackFilesSubstrateStore(
+        PackFilesSettings.model_validate(settings), pack_root
+    )
+
+
+def _make_logfmt_execution_log(
+    settings: dict[str, Any], pack_root: Path
+) -> LogfmtExecutionLog:
+    validated = LogfmtSettings.model_validate(settings)
+    resolved = validated.model_copy(
+        update={"path": _pack_path(validated.path, pack_root)}
+    )
+    return LogfmtExecutionLog(resolved)
+
+
 def default_registry() -> AdapterRegistry:
     """The Phase 1 local adapters. Real adapters (Databricks FM,
     databricks-sql-connector, Delta, Splunk, git clone) register here
@@ -108,4 +131,10 @@ def default_registry() -> AdapterRegistry:
     registry.register(PortName.WORK_STORE, "sqlite", _make_sqlite_work_store)
     registry.register(PortName.IDENTITY, "fake_user", _make_fake_user)
     registry.register(PortName.SOURCE_CODE, "local_directory", _make_local_source)
+    registry.register(
+        PortName.SUBSTRATE_STORE, "pack_files", _make_pack_files_substrate_store
+    )
+    registry.register(
+        PortName.EXECUTION_LOG, "logfmt_file", _make_logfmt_execution_log
+    )
     return registry

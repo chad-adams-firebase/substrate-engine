@@ -53,11 +53,29 @@ class RunStatus(BaseModel):
     count is the number of matching run events in the window — a
     number the Verifier can mechanically reconcile (§9.2); the prose
     detail alone cannot be matched against a claim like "ran 3 times".
+    matched_lines are the raw log lines behind the answer (capped by
+    adapter settings; count keeps the true total) — receipts for the
+    evidence bundle, moved out of LLM-visible output by the tool.
     """
 
     ran: bool
     count: int = 0
     detail: str
+    matched_lines: list[str] = []
+
+
+class LogEvent(BaseModel):
+    """One structured log event crossing the ExecutionLogPort boundary
+    (a contract model, not a naked dict — CLAUDE.md). raw is the
+    verbatim line for the evidence bundle; fields are the event's
+    remaining key=value pairs, name-keyed."""
+
+    ts: datetime
+    level: str
+    logger: str
+    event: str
+    fields: dict[str, str] = {}
+    raw: str
 
 
 class TimeWindow(BaseModel):

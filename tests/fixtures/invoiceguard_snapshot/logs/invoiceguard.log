@@ -1,0 +1,914 @@
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=review_report_stored correction_count=1 disposition=CORRECTIONS_REQUESTED file=000406_RVX01_INV-00211_r1_review.json invoice_id=216
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000406_RVX01_INV-00211_r1_review.json
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=219 invoice_number=INV-00214 revision=1 status=RECEIVED supplier_code=RVX01
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=219 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=3 invoice_id=219
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=219 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=219
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=219 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000407_RVX01_INV-00214_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=220 invoice_number=INV-00215 revision=1 status=RECEIVED supplier_code=LARKSPUR2
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=220 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=220
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=220 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=220
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=220 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000408_LARKSPUR2_INV-00215_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=221 invoice_number=INV-00216 revision=1 status=RECEIVED supplier_code=ALDERGATE1
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=221 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=221
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=221 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=221
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=221 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000409_ALDERGATE1_INV-00216_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=222 invoice_number=INV-00217 revision=1 status=RECEIVED supplier_code=CALDERA8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=222 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=222
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=222 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=222
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=222 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000410_CALDERA8_INV-00217_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=223 invoice_number=INV-00218 revision=1 status=RECEIVED supplier_code=IRONVALE1
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=223 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=223
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=223 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=223
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=223 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000411_IRONVALE1_INV-00218_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=224 invoice_number=INV-00219 revision=1 status=RECEIVED supplier_code=BRINDLE4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=224 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=224
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=224 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=224
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=224 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000412_BRINDLE4_INV-00219_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=225 invoice_number=INV-00220 revision=1 status=RECEIVED supplier_code=BRINDLE4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=225 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=225
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=225 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=225
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=225 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000413_BRINDLE4_INV-00220_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=226 invoice_number=INV-00221 revision=1 status=RECEIVED supplier_code=YARROW4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=226 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=226
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=226 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=226
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=226 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000414_YARROW4_INV-00221_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=227 invoice_number=INV-00222 revision=1 status=RECEIVED supplier_code=QUILL8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=227 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=227
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=227 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=227
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=227 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000415_QUILL8_INV-00222_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=228 invoice_number=INV-00223 revision=1 status=RECEIVED supplier_code=CRP01
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=228 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=228
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=228 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=228
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=228 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000416_CRP01_INV-00223_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=229 invoice_number=INV-00224 revision=1 status=RECEIVED supplier_code=ALDERGATE1
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=229 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=229
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=229 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=229
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=229 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000417_ALDERGATE1_INV-00224_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=230 invoice_number=INV-00225 revision=1 status=RECEIVED supplier_code=CALDERA8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=230 line_count=7
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=230
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=230 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=230
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=230 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000418_CALDERA8_INV-00225_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=231 invoice_number=INV-00226 revision=1 status=RECEIVED supplier_code=XANTHIC6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=231 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=231
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=231 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=231
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=231 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000419_XANTHIC6_INV-00226_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=232 invoice_number=INV-00227 revision=1 status=RECEIVED supplier_code=SABLEOAK2
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=232 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=232
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=232 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=232
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=232 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000420_SABLEOAK2_INV-00227_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=233 invoice_number=INV-00228 revision=1 status=RECEIVED supplier_code=BRINDLE4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=233 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=233
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=233 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=233
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=233 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000421_BRINDLE4_INV-00228_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=234 invoice_number=INV-00229 revision=1 status=RECEIVED supplier_code=EMBERLY6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=234 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=234
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=234 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=234
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=234 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000422_EMBERLY6_INV-00229_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=235 invoice_number=INV-00230 revision=1 status=RECEIVED supplier_code=HALCYON9
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=235 line_count=3
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=235
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=235 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=235
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=235 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000423_HALCYON9_INV-00230_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=236 invoice_number=INV-00231 revision=1 status=RECEIVED supplier_code=WILLOWMERE2
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=236 line_count=7
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=236
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=236 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=236
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=236 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000424_WILLOWMERE2_INV-00231_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=237 invoice_number=INV-00232 revision=1 status=RECEIVED supplier_code=ZINNIA3
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=237 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=237
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=237 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=237
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=237 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000425_ZINNIA3_INV-00232_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=238 invoice_number=INV-00233 revision=1 status=RECEIVED supplier_code=QUILL8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=238 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=238
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=238 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=238
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=238 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000426_QUILL8_INV-00233_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=239 invoice_number=INV-00234 revision=1 status=RECEIVED supplier_code=JUNIPER7
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=239 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=239
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=239 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=239
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=239 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000427_JUNIPER7_INV-00234_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=240 invoice_number=INV-00235 revision=1 status=RECEIVED supplier_code=QUILL8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=240 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=4 invoice_id=240
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=240 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=240
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=240 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000428_QUILL8_INV-00235_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=241 invoice_number=INV-00236 revision=1 status=RECEIVED supplier_code=ZEALAND1
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=241 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=241
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=241 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=241
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=241 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000429_ZEALAND1_INV-00236_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=242 invoice_number=INV-00237 revision=1 status=RECEIVED supplier_code=QUILL8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=242 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=242
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=242 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=242
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=242 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000430_QUILL8_INV-00237_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=243 invoice_number=INV-00238 revision=1 status=RECEIVED supplier_code=GREYLINE5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=243 line_count=4
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=243
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=243 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=243
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=243 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000431_GREYLINE5_INV-00238_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=244 invoice_number=INV-00239 revision=1 status=RECEIVED supplier_code=SABLEOAK2
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=244 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=244
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=244 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=244
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=244 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000432_SABLEOAK2_INV-00239_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=245 invoice_number=INV-00240 revision=1 status=RECEIVED supplier_code=STRATA9
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=245 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=245
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=245 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=245
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=245 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000433_STRATA9_INV-00240_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=246 invoice_number=INV-00241 revision=1 status=RECEIVED supplier_code=ZEALAND1
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=246 line_count=5
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=246
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=246 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=246
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=246 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000434_ZEALAND1_INV-00241_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=247 invoice_number=INV-00242 revision=1 status=RECEIVED supplier_code=QUILL8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=247 line_count=6
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=247
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=247 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=247
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=247 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000435_QUILL8_INV-00242_r1_invoice.xml
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=248 invoice_number=INV-00243 revision=1 status=RECEIVED supplier_code=YONDER8
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=248 line_count=7
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=248
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=248 reason=no_prior
+ts=2026-03-11T08:00:00+00:00 level=WARNING logger=invoiceguard.benchmark_scoring event=benchmark_fallback attempts=3 error="URLError: <urlopen error [Errno 61] Connection refused>" invoice_id=248
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=248 wait_minutes=60
+ts=2026-03-11T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000436_YONDER8_INV-00243_r1_invoice.xml
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000437_RVX01_INV-00214_r1_compliance.json invoice_id=219 rule_count=1 total_score=231.5
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=219 opportunity=2198.04 weight=0.2649862807597903
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000437_RVX01_INV-00214_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000438_ALDERGATE1_INV-00216_r1_compliance.json invoice_id=221 rule_count=3 total_score=1838.7
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=221 opportunity=0.0 weight=1.0074082282585564
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000438_ALDERGATE1_INV-00216_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000439_IRONVALE1_INV-00218_r1_compliance.json invoice_id=223 rule_count=2 total_score=415.4
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=223 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000439_IRONVALE1_INV-00218_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000440_BRINDLE4_INV-00219_r1_compliance.json invoice_id=224 rule_count=2 total_score=964.1
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=224 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000440_BRINDLE4_INV-00219_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000441_QUILL8_INV-00222_r1_compliance.json invoice_id=227 rule_count=1 total_score=378.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=227 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000441_QUILL8_INV-00222_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000442_CRP01_INV-00223_r1_compliance.json invoice_id=228 rule_count=2 total_score=493.5
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=228 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000442_CRP01_INV-00223_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000443_ALDERGATE1_INV-00224_r1_compliance.json invoice_id=229 rule_count=2 total_score=630.5
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=229 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000443_ALDERGATE1_INV-00224_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000444_CALDERA8_INV-00225_r1_compliance.json invoice_id=230 rule_count=3 total_score=1570.4
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=230 opportunity=1202.4 weight=0.9434440053106146
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000444_CALDERA8_INV-00225_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000445_XANTHIC6_INV-00226_r1_compliance.json invoice_id=231 rule_count=3 total_score=907.8
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=231 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000445_XANTHIC6_INV-00226_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000446_SABLEOAK2_INV-00227_r1_compliance.json invoice_id=232 rule_count=3 total_score=1726.4
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=232 opportunity=0.0 weight=0.4056087579043007
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000446_SABLEOAK2_INV-00227_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000447_BRINDLE4_INV-00228_r1_compliance.json invoice_id=233 rule_count=3 total_score=821.8
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=233 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000447_BRINDLE4_INV-00228_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000448_EMBERLY6_INV-00229_r1_compliance.json invoice_id=234 rule_count=1 total_score=185.4
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=234 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000448_EMBERLY6_INV-00229_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000449_HALCYON9_INV-00230_r1_compliance.json invoice_id=235 rule_count=3 total_score=3043.3
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=235 opportunity=0.0 weight=2.5630674791590575
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000449_HALCYON9_INV-00230_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000450_WILLOWMERE2_INV-00231_r1_compliance.json invoice_id=236 rule_count=1 total_score=459.2
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=236 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000450_WILLOWMERE2_INV-00231_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000451_ZINNIA3_INV-00232_r1_compliance.json invoice_id=237 rule_count=4 total_score=1722.4
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=237 opportunity=0.0 weight=1.16132047945116
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000451_ZINNIA3_INV-00232_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000452_QUILL8_INV-00233_r1_compliance.json invoice_id=238 rule_count=2 total_score=1043.3
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=238 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000452_QUILL8_INV-00233_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000453_QUILL8_INV-00235_r1_compliance.json invoice_id=240 rule_count=1 total_score=138.7
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=240 opportunity=1004.7949999999998 weight=0.14646303422540957
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000453_QUILL8_INV-00235_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000454_ZEALAND1_INV-00236_r1_compliance.json invoice_id=241 rule_count=3 total_score=1879.3
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=241 opportunity=0.0 weight=0.6942070160032072
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000454_ZEALAND1_INV-00236_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000455_QUILL8_INV-00237_r1_compliance.json invoice_id=242 rule_count=4 total_score=1339.9
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=242 opportunity=2160.7200000000003 weight=0.19859650090303724
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000455_QUILL8_INV-00237_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000456_GREYLINE5_INV-00238_r1_compliance.json invoice_id=243 rule_count=3 total_score=1235.7
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=243 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000456_GREYLINE5_INV-00238_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000457_SABLEOAK2_INV-00239_r1_compliance.json invoice_id=244 rule_count=3 total_score=1380.7
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=244 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000457_SABLEOAK2_INV-00239_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000458_STRATA9_INV-00240_r1_compliance.json invoice_id=245 rule_count=2 total_score=895.3
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=245 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000458_STRATA9_INV-00240_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000459_ZEALAND1_INV-00241_r1_compliance.json invoice_id=246 rule_count=3 total_score=950.2
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=246 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000459_ZEALAND1_INV-00241_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000460_QUILL8_INV-00242_r1_compliance.json invoice_id=247 rule_count=2 total_score=615.9
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=247 opportunity=44.00500000000011 weight=0.005561052789878026
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000460_QUILL8_INV-00242_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000461_YONDER8_INV-00243_r1_compliance.json invoice_id=248 rule_count=2 total_score=619.2
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=248 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000461_YONDER8_INV-00243_r1_compliance.json
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=219 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=239 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=WARNING logger=invoiceguard.rollup event=skip_compliance_finalized invoice_id=220
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=220 opportunity=1452.972972972973 weight=0.20667296885950426
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=240 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=221 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=241 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=WARNING logger=invoiceguard.rollup event=skip_compliance_finalized invoice_id=222
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=222 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=242 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=223 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=243 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=224 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=244 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=WARNING logger=invoiceguard.rollup event=skip_compliance_finalized invoice_id=225
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=225 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=245 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=WARNING logger=invoiceguard.rollup event=skip_compliance_finalized invoice_id=226
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=226 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=246 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=227 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=247 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=228 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=248 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=229 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=249 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=230 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=250 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=231 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=251 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=232 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=252 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=233 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=253 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=234 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=254 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=235 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=255 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=236 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=256 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=237 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=257 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=238 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=258 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=WARNING logger=invoiceguard.rollup event=skip_compliance_finalized invoice_id=239
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=239 opportunity=0.0 weight=0.0
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=259 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=240 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=260 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=241 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=261 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=242 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=262 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=243 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=263 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=244 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=264 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=245 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=265 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=246 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=266 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=247 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=267 task_name=skip_compliance
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=248 status=READY
+ts=2026-03-11T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=268 task_name=skip_compliance
+ts=2026-03-11T11:01:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=ava invoice_id=230 weight=0.9434440053106146
+ts=2026-03-11T11:04:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=ava finding_id=635 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T11:06:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=ava invoice_id=219 weight=0.2649862807597903
+ts=2026-03-11T11:10:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=finch invoice_id=240 weight=0.14646303422540957
+ts=2026-03-11T11:13:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=finch finding_id=640 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T11:14:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=finch finding_id=686 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T11:16:00+00:00 level=INFO logger=invoiceguard.queue event=queue_empty auditor=finch
+ts=2026-03-11T11:17:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=bo invoice_id=220 weight=0.20667296885950426
+ts=2026-03-11T11:20:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=bo finding_id=628 replaced=False rule_misfire=True valid_exception=False
+ts=2026-03-11T11:22:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=bo invoice_id=242 weight=0.19859650090303724
+ts=2026-03-11T11:28:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=juno invoice_id=247 weight=0.005561052789878026
+ts=2026-03-11T11:31:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=juno finding_id=706 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T11:33:00+00:00 level=INFO logger=invoiceguard.queue event=queue_empty auditor=juno
+ts=2026-03-11T11:34:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=mira invoice_id=235 weight=2.5630674791590575
+ts=2026-03-11T11:37:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=mira finding_id=677 replaced=False rule_misfire=True valid_exception=False
+ts=2026-03-11T11:39:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=mira invoice_id=237 weight=1.16132047945116
+ts=2026-03-11T11:42:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=mira finding_id=681 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T11:43:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=mira finding_id=682 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T11:45:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=221 weight=1.0074082282585564
+ts=2026-03-11T11:49:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=241 weight=0.6942070160032072
+ts=2026-03-11T11:53:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=232 weight=0.4056087579043007
+ts=2026-03-11T11:57:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=82 weight=0.0
+ts=2026-03-11T12:01:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=84 weight=0.0
+ts=2026-03-11T12:05:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=85 weight=0.0
+ts=2026-03-11T12:08:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=nova finding_id=265 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T12:09:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=nova finding_id=267 replaced=False rule_misfire=True valid_exception=False
+ts=2026-03-11T12:11:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=tass invoice_id=88 weight=0.0
+ts=2026-03-11T12:14:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=tass finding_id=273 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T12:15:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=tass finding_id=274 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T12:17:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=tass invoice_id=89 weight=0.0
+ts=2026-03-11T12:20:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=tass finding_id=277 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-11T12:22:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=orin invoice_id=90 weight=0.0
+ts=2026-03-11T12:26:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=orin invoice_id=94 weight=0.0
+ts=2026-03-11T18:00:00+00:00 level=INFO logger=invoiceguard.lapse_lifecycle event=stale_sweep_completed candidates=2 cutoff=2026-03-04T18:00:00 lapsed=2
+ts=2026-03-11T18:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=269 task_name=stale_sweep
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=97 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=99 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=102 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=104 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=105 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=108 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=111 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=113 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=114 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=116 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=117 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=118 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=119 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=121 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=123 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=128 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=131 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=133 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=134 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=135 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=136 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=137 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=139 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=140 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=141 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=142 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=144 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=148 opportunity=1337.4511779041427 weight=0.24143897064791817
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=150 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=152 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=157 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=158 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=159 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=161 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=162 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=167 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=168 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=169 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=170 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=175 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=176 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=178 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=181 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=182 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=183 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=184 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=185 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=187 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=191 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=194 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=196 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=199 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=200 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=202 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=203 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=204 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=205 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=206 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=208 opportunity=834.7380049026565 weight=0.07547830786031466
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=211 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=212 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=214 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=218 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=222 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=223 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=224 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=225 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=226 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=227 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=228 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=229 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=231 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=233 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=234 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=236 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=238 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=239 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=243 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=244 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=245 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=246 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=248 opportunity=0.0 weight=0.0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=nightly_recalc_completed recalculated=82 skipped=0
+ts=2026-03-11T22:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=270 task_name=nightly_recalc
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=249 invoice_number=INV-00244 revision=1 status=RECEIVED supplier_code=RVX01
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=249 line_count=7
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=4 invoice_id=249
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=249 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=249 service_hours_delta=-12.159649415161628
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=249 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000462_RVX01_INV-00244_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=250 invoice_number=INV-00245 revision=1 status=RECEIVED supplier_code=ORCHARD8
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=250 line_count=8
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=4 invoice_id=250
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=250 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.12 invoice_id=250 service_hours_delta=-0.8189875394906778
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=250 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000463_ORCHARD8_INV-00245_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=251 invoice_number=INV-00246 revision=1 status=RECEIVED supplier_code=RVX01
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=251 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=4 invoice_id=251
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=251 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=251 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=251 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000464_RVX01_INV-00246_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=252 invoice_number=INV-00247 revision=1 status=RECEIVED supplier_code=RVX01
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=252 line_count=4
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=3 invoice_id=252
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=252 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=252 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=252 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000465_RVX01_INV-00247_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=253 invoice_number=INV-00248 revision=1 status=RECEIVED supplier_code=THORNBURY1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=253 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=253
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=253 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=253 service_hours_delta=11.254721958966215
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=253 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000466_THORNBURY1_INV-00248_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=254 invoice_number=INV-00249 revision=1 status=RECEIVED supplier_code=ALDERGATE1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=254 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=254
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=254 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.2 invoice_id=254 service_hours_delta=-6.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=254 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000467_ALDERGATE1_INV-00249_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=255 invoice_number=INV-00250 revision=1 status=RECEIVED supplier_code=STRATA9
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=255 line_count=4
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=255
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=255 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=255 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=255 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000468_STRATA9_INV-00250_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=256 invoice_number=INV-00251 revision=1 status=RECEIVED supplier_code=ZEALAND1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=256 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=256
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=256 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=256 service_hours_delta=-9.18024948665154
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=256 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000469_ZEALAND1_INV-00251_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=257 invoice_number=INV-00252 revision=1 status=RECEIVED supplier_code=QUILL8
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=257 line_count=3
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=257
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=257 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.12 invoice_id=257 service_hours_delta=-10.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=257 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000470_QUILL8_INV-00252_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=258 invoice_number=INV-00253 revision=1 status=RECEIVED supplier_code=XANTHIC6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=258 line_count=3
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=258
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=258 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=258 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=258 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000471_XANTHIC6_INV-00253_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=259 invoice_number=INV-00254 revision=1 status=RECEIVED supplier_code=BRINDLE4
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=259 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=259
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=259 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.2 invoice_id=259 service_hours_delta=-6.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=259 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000472_BRINDLE4_INV-00254_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=260 invoice_number=INV-00255 revision=1 status=RECEIVED supplier_code=VESSEL7
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=260 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=260
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=260 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=-0.09609595337893635 invoice_id=260 service_hours_delta=-10.149358234919779
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=260 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000473_VESSEL7_INV-00255_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=261 invoice_number=INV-00256 revision=1 status=RECEIVED supplier_code=YARROW4
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=261 line_count=3
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=261
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=261 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=261 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=261 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000474_YARROW4_INV-00256_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=262 invoice_number=INV-00257 revision=1 status=RECEIVED supplier_code=UPLAND3
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=262 line_count=7
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=262
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=262 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=262 service_hours_delta=-2.9385866440391553
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=262 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000475_UPLAND3_INV-00257_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=263 invoice_number=INV-00258 revision=1 status=RECEIVED supplier_code=VERV5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=263 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=263
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=263 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=263 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=263 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000476_VERV5_INV-00258_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=264 invoice_number=INV-00259 revision=1 status=RECEIVED supplier_code=VERV5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=264 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=3 invoice_id=264
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=264 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=264 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=264 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000477_VERV5_INV-00259_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=265 invoice_number=INV-00260 revision=1 status=RECEIVED supplier_code=HALCYON9
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=265 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=265
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=265 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.2 invoice_id=265 service_hours_delta=-0.9344057612468637
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=265 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000478_HALCYON9_INV-00260_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=266 invoice_number=INV-00261 revision=1 status=RECEIVED supplier_code=ZEALAND1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=266 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=266
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=266 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=266 service_hours_delta=4.7361866798195
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=266 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000479_ZEALAND1_INV-00261_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=267 invoice_number=INV-00262 revision=1 status=RECEIVED supplier_code=IRONVALE1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=267 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=267
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=267 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.12 invoice_id=267 service_hours_delta=-10.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=267 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000480_IRONVALE1_INV-00262_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=268 invoice_number=INV-00263 revision=1 status=RECEIVED supplier_code=FERROW3
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=268 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=268
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=268 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.2 invoice_id=268 service_hours_delta=-6.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=268 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000481_FERROW3_INV-00263_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=269 invoice_number=INV-00264 revision=1 status=RECEIVED supplier_code=BRINDLE4
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=269 line_count=5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=269
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=269 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.2 invoice_id=269 service_hours_delta=-0.3377959465281286
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=269 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000482_BRINDLE4_INV-00264_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=270 invoice_number=INV-00265 revision=1 status=RECEIVED supplier_code=ZEALAND1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=270 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=270
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=270 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=270 service_hours_delta=6.107315424072084
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=270 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000483_ZEALAND1_INV-00265_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=271 invoice_number=INV-00266 revision=1 status=RECEIVED supplier_code=VERV5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=271 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=271
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=271 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=271 service_hours_delta=-3.0078576076511254
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=271 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000484_VERV5_INV-00266_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=272 invoice_number=INV-00267 revision=1 status=RECEIVED supplier_code=MERIDIAN6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=272 line_count=4
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=0 invoice_id=272
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=272 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.12 invoice_id=272 service_hours_delta=-2.197192406511153
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=272 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000485_MERIDIAN6_INV-00267_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=273 invoice_number=INV-00268 revision=1 status=RECEIVED supplier_code=THORNBURY1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=273 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=2 invoice_id=273
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=273 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=273 service_hours_delta=-14.251600307199764
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=273 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000486_THORNBURY1_INV-00268_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=274 invoice_number=INV-00269 revision=1 status=RECEIVED supplier_code=VERV5
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=274 line_count=4
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=274
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=274 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.05 invoice_id=274 service_hours_delta=-16.0
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=274 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000487_VERV5_INV-00269_r1_invoice.xml
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.invoice_parse event=invoice_parsed invoice_id=275 invoice_number=INV-00270 revision=1 status=RECEIVED supplier_code=ALDERGATE1
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.line_mapping event=mapping_completed invoice_id=275 line_count=6
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rules_engine event=rules_completed finding_count=1 invoice_id=275
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.prior_audit_compliance event=prior_audit_short_circuit invoice_id=275 reason=no_prior
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.benchmark_scoring event=benchmark_scored alt_source_pct_delta=0.2 invoice_id=275 service_hours_delta=13.435786414149861
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_deferred invoice_id=275 wait_minutes=60
+ts=2026-03-12T08:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000488_ALDERGATE1_INV-00270_r1_invoice.xml
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000489_RVX01_INV-00244_r1_compliance.json invoice_id=249 rule_count=2 total_score=484.3
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=249 opportunity=658.4919999999996 weight=0.07102431574224273
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000489_RVX01_INV-00244_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000490_ORCHARD8_INV-00245_r1_compliance.json invoice_id=250 rule_count=4 total_score=1740.9
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=250 opportunity=1126.4260204081634 weight=0.8826783210752741
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000490_ORCHARD8_INV-00245_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000491_RVX01_INV-00246_r1_compliance.json invoice_id=251 rule_count=1 total_score=625.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=251 opportunity=762.165 weight=0.16660655264676563
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000491_RVX01_INV-00246_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000492_RVX01_INV-00247_r1_compliance.json invoice_id=252 rule_count=1 total_score=111.1
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=252 opportunity=1243.1000000000004 weight=0.2377155139443451
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000492_RVX01_INV-00247_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000493_THORNBURY1_INV-00248_r1_compliance.json invoice_id=253 rule_count=4 total_score=1494.9
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=253 opportunity=956.6513665121282 weight=0.09801504741293801
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000493_THORNBURY1_INV-00248_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000494_ALDERGATE1_INV-00249_r1_compliance.json invoice_id=254 rule_count=1 total_score=349.5
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=254 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000494_ALDERGATE1_INV-00249_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000495_STRATA9_INV-00250_r1_compliance.json invoice_id=255 rule_count=4 total_score=997.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=255 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000495_STRATA9_INV-00250_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000496_ZEALAND1_INV-00251_r1_compliance.json invoice_id=256 rule_count=2 total_score=594.6
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=256 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000496_ZEALAND1_INV-00251_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000497_QUILL8_INV-00252_r1_compliance.json invoice_id=257 rule_count=4 total_score=1198.4
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=257 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000497_QUILL8_INV-00252_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000498_XANTHIC6_INV-00253_r1_compliance.json invoice_id=258 rule_count=2 total_score=367.1
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=258 opportunity=80.309 weight=0.027192786423415
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000498_XANTHIC6_INV-00253_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000499_BRINDLE4_INV-00254_r1_compliance.json invoice_id=259 rule_count=4 total_score=1034.2
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=259 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000499_BRINDLE4_INV-00254_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000500_VESSEL7_INV-00255_r1_compliance.json invoice_id=260 rule_count=1 total_score=394.7
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=260 opportunity=937.6 weight=0.1346880669762845
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000500_VESSEL7_INV-00255_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000501_YARROW4_INV-00256_r1_compliance.json invoice_id=261 rule_count=4 total_score=1328.5
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=261 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000501_YARROW4_INV-00256_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000502_UPLAND3_INV-00257_r1_compliance.json invoice_id=262 rule_count=3 total_score=1447.3
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=262 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000502_UPLAND3_INV-00257_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000503_VERV5_INV-00258_r1_compliance.json invoice_id=263 rule_count=4 total_score=1310.2
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=263 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000503_VERV5_INV-00258_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000504_VERV5_INV-00259_r1_compliance.json invoice_id=264 rule_count=3 total_score=739.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=264 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000504_VERV5_INV-00259_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000505_HALCYON9_INV-00260_r1_compliance.json invoice_id=265 rule_count=2 total_score=579.5
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=265 opportunity=7566.836 weight=0.5169871573698742
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000505_HALCYON9_INV-00260_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000506_ZEALAND1_INV-00261_r1_compliance.json invoice_id=266 rule_count=1 total_score=130.2
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=266 opportunity=5280.48 weight=0.32273833251128103
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000506_ZEALAND1_INV-00261_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000507_IRONVALE1_INV-00262_r1_compliance.json invoice_id=267 rule_count=4 total_score=1375.1
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=267 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000507_IRONVALE1_INV-00262_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000508_FERROW3_INV-00263_r1_compliance.json invoice_id=268 rule_count=3 total_score=1043.9
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=268 opportunity=130.67999999999984 weight=0.011476093666984263
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000508_FERROW3_INV-00263_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000509_BRINDLE4_INV-00264_r1_compliance.json invoice_id=269 rule_count=1 total_score=452.7
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=269 opportunity=724.283999999999 weight=0.07676069697666595
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000509_BRINDLE4_INV-00264_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000510_ZEALAND1_INV-00265_r1_compliance.json invoice_id=270 rule_count=2 total_score=641.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=270 opportunity=556.8118110461277 weight=0.04290577274186019
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000510_ZEALAND1_INV-00265_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000511_VERV5_INV-00266_r1_compliance.json invoice_id=271 rule_count=1 total_score=181.4
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=271 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000511_VERV5_INV-00266_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000512_MERIDIAN6_INV-00267_r1_compliance.json invoice_id=272 rule_count=3 total_score=1381.4
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=272 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000512_MERIDIAN6_INV-00267_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000513_THORNBURY1_INV-00268_r1_compliance.json invoice_id=273 rule_count=3 total_score=1318.3
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=273 opportunity=2877.9114285714286 weight=0.33286660735931134
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000513_THORNBURY1_INV-00268_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000514_VERV5_INV-00269_r1_compliance.json invoice_id=274 rule_count=3 total_score=848.4
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=274 opportunity=0.0 weight=0.0
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000514_VERV5_INV-00269_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.compliance_intake event=compliance_report_stored file=000515_ALDERGATE1_INV-00270_r1_compliance.json invoice_id=275 rule_count=1 total_score=214.3
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=True invoice_id=275 opportunity=1263.7918452027382 weight=0.16196126453152782
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.intake event=file_processed file=000515_ALDERGATE1_INV-00270_r1_compliance.json
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=249 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=271 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=250 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=272 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=251 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=273 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=252 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=274 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=253 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=275 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=254 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=276 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=255 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=277 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=256 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=278 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=257 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=279 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=258 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=280 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=259 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=281 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=260 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=282 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=261 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=283 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=262 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=284 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=263 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=285 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=264 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=286 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=265 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=287 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=266 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=288 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=267 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=289 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=268 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=290 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=269 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=291 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=270 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=292 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=271 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=293 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=272 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=294 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=273 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=295 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=274 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=296 task_name=skip_compliance
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.rollup event=skip_compliance_noop invoice_id=275 status=READY
+ts=2026-03-12T09:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=297 task_name=skip_compliance
+ts=2026-03-12T11:01:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=ava invoice_id=265 weight=0.5169871573698742
+ts=2026-03-12T11:05:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=ava invoice_id=273 weight=0.33286660735931134
+ts=2026-03-12T11:09:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=finch invoice_id=252 weight=0.2377155139443451
+ts=2026-03-12T11:12:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=finch finding_id=722 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:13:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=finch finding_id=753 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:15:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=finch invoice_id=251 weight=0.16660655264676563
+ts=2026-03-12T11:18:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=finch finding_id=717 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:20:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=bo invoice_id=250 weight=0.8826783210752741
+ts=2026-03-12T11:23:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=bo finding_id=716 replaced=False rule_misfire=True valid_exception=False
+ts=2026-03-12T11:25:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=bo invoice_id=266 weight=0.32273833251128103
+ts=2026-03-12T11:29:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=juno invoice_id=270 weight=0.04290577274186019
+ts=2026-03-12T11:32:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=juno finding_id=802 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:33:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=juno invoice_id=258 weight=0.027192786423415
+ts=2026-03-12T11:36:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=juno finding_id=770 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:38:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=mira invoice_id=275 weight=0.16196126453152782
+ts=2026-03-12T11:41:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=mira finding_id=745 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:43:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=mira invoice_id=253 weight=0.09801504741293801
+ts=2026-03-12T11:46:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=mira finding_id=754 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:47:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=mira finding_id=755 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:48:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=mira finding_id=756 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:50:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=269 weight=0.07676069697666595
+ts=2026-03-12T11:53:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=nova finding_id=738 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T11:55:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=249 weight=0.07102431574224273
+ts=2026-03-12T11:59:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=268 weight=0.011476093666984263
+ts=2026-03-12T12:03:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=97 weight=0.0
+ts=2026-03-12T12:06:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=nova finding_id=325 replaced=False rule_misfire=True valid_exception=False
+ts=2026-03-12T12:08:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=99 weight=0.0
+ts=2026-03-12T12:12:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=nova invoice_id=102 weight=0.0
+ts=2026-03-12T12:16:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=tass invoice_id=104 weight=0.0
+ts=2026-03-12T12:19:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=tass finding_id=342 replaced=False rule_misfire=True valid_exception=False
+ts=2026-03-12T12:21:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=tass invoice_id=105 weight=0.0
+ts=2026-03-12T12:24:00+00:00 level=INFO logger=invoiceguard.feedback event=feedback_recorded auditor=tass finding_id=344 replaced=False rule_misfire=False valid_exception=True
+ts=2026-03-12T12:26:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=orin invoice_id=108 weight=0.0
+ts=2026-03-12T12:30:00+00:00 level=INFO logger=invoiceguard.queue event=queue_next_assigned auditor=orin invoice_id=113 weight=0.0
+ts=2026-03-12T18:00:00+00:00 level=INFO logger=invoiceguard.lapse_lifecycle event=stale_sweep_completed candidates=8 cutoff=2026-03-05T18:00:00 lapsed=8
+ts=2026-03-12T18:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=298 task_name=stale_sweep
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=128 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=131 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=133 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=134 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=135 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=136 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=137 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=139 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=140 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=141 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=142 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=144 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=148 opportunity=1337.4511779041427 weight=0.24143897064791817
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=150 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=152 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=157 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=158 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=159 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=161 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=162 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=167 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=168 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=169 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=170 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=175 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=176 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=178 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=181 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=182 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=183 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=184 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=185 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=187 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=191 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=194 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=196 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=199 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=200 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=202 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=203 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=204 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=205 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=206 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=208 opportunity=834.7380049026565 weight=0.07547830786031466
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=211 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=212 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=214 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=218 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=222 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=223 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=224 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=225 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=226 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=227 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=228 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=229 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=231 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=233 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=234 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=236 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=238 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=239 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=243 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=244 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=245 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=246 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=248 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=254 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=255 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=256 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=257 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=259 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=260 opportunity=937.6 weight=0.1346880669762845
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=261 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=262 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=263 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=264 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=267 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=271 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=272 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=rollup_completed finalized=False invoice_id=274 opportunity=0.0 weight=0.0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.rollup event=nightly_recalc_completed recalculated=81 skipped=0
+ts=2026-03-12T22:00:00+00:00 level=INFO logger=invoiceguard.scheduler event=scheduled_task_executed task_id=299 task_name=nightly_recalc

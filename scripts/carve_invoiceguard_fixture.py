@@ -51,6 +51,12 @@ VENDORED_FILES = [
 
 MAX_INVOICE_ID = 50
 
+# Log-slice days (seed-42 world): the planted benchmark-outage day
+# (all 30 benchmark_fallback WARNINGs) plus the following normal day —
+# so did_run true/false and recent_errors full/empty are all
+# exercisable offline across many loggers.
+LOG_SLICE_DATES = ("2026-03-11", "2026-03-12")
+
 # (table, WHERE clause or None for all rows, ORDER BY column). Tables
 # absent from this list ship schema-only; the dictionary still covers
 # them and stats record row_count=0 — deliberately exercised.
@@ -162,6 +168,23 @@ def main() -> int:
     (db_dir / "schema.sql").write_text(schema_sql, encoding="utf-8", newline="\n")
     (db_dir / "data.sql").write_text(data_sql, encoding="utf-8", newline="\n")
 
+    log_path = db_path.parent / "logs" / "invoiceguard.log"
+    if not log_path.is_file():
+        print(f"error: simulation log not found: {log_path}", file=sys.stderr)
+        return 1
+    prefixes = tuple(f"ts={day}T" for day in LOG_SLICE_DATES)
+    log_lines = [
+        line
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line.startswith(prefixes)
+    ]
+    log_text = "".join(line + "\n" for line in log_lines)
+    log_dir = FIXTURE_ROOT / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    (log_dir / "invoiceguard.log").write_text(
+        log_text, encoding="utf-8", newline="\n"
+    )
+
     manifest = {
         "source_repo": "chad-adams-firebase/invoice-guard",
         "commit_sha": commit_sha,
@@ -171,6 +194,17 @@ def main() -> int:
             "schema_sha256": hashlib.sha256(schema_sql.encode()).hexdigest(),
             "data_sha256": hashlib.sha256(data_sql.encode()).hexdigest(),
             "data_row_counts": counts,
+        },
+        "log_slice": {
+            "path": "logs/invoiceguard.log",
+            "criteria": (
+                "lines whose ts= date is in date_range, from "
+                "simout/logs/invoiceguard.log (planted benchmark-outage "
+                "day plus the following normal day)"
+            ),
+            "date_range": list(LOG_SLICE_DATES),
+            "line_count": len(log_lines),
+            "sha256": hashlib.sha256(log_text.encode()).hexdigest(),
         },
         "carved_at": datetime.now(UTC).isoformat(),
     }
