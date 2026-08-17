@@ -7,12 +7,15 @@ description: Supplier-invoice audit reference application (external repo, pinned
 
 substrates:
   - data_dictionary
+  - data_dictionary_map
   - univariate_statistics
   - code_knowledge_graph
   - ckg_components
   - primer
   - source_code
   - application_database
+  - application_logs
+  - business_context_docs
 
 tools:
   - query_univariate_stats
@@ -21,6 +24,9 @@ tools:
   - run_sql
   - read_source
   - app_primer
+  - search_business_docs
+  - check_execution
+  - answer_from_known_items
 
 adapters:
   llm:
@@ -45,6 +51,54 @@ adapters:
     settings:
       root: ../../../invoice-guard    # sibling clone of chad-adams-firebase/invoice-guard
       commit_sha: "761a18e9b9253870d930f1b13b3a852ce516d603"
+  substrate_store:
+    adapter: pack_files
+    settings: {}
+  execution_log:
+    adapter: logfmt_file
+    settings:
+      path: ../../../invoice-guard/simout/logs/invoiceguard.log
+      max_evidence_lines: 50
+      # Component→logger/event templates: the SPL-template analog
+      # (Brief §3). Queries are configuration; the LLM never writes
+      # one. key_field names the log field a keyed did_run matches.
+      components:
+        stale_sweep:
+          logger: invoiceguard.lapse_lifecycle
+          ran_event: stale_sweep_completed
+        nightly_recalc:
+          logger: invoiceguard.rollup
+          ran_event: nightly_recalc_completed
+        creepback_scan:
+          logger: invoiceguard.creepback
+          ran_event: creepback_scan_completed
+        benchmark_scoring:
+          logger: invoiceguard.benchmark_scoring
+          ran_event: benchmark_scored
+          key_field: invoice_id
+          # The benchmark client logs benchmark_fallback at WARNING
+          # when the peer service is unreachable — the planted outage.
+          error_levels: [WARNING, ERROR]
+        rules_engine:
+          logger: invoiceguard.rules_engine
+          ran_event: rules_completed
+          key_field: invoice_id
+        intake:
+          logger: invoiceguard.intake
+          ran_event: file_processed
+          key_field: file
+        scheduler:
+          logger: invoiceguard.scheduler
+          ran_event: scheduled_task_executed
+
+tool_settings:
+  run_sql:
+    max_repair_attempts: 2
+    max_result_rows: 200
+  search_business_docs:
+    top_k: 5
+  check_execution:
+    max_errors: 50
 
 generation:
   source_sqlite: ../../../invoice-guard/simout/invoiceguard.db

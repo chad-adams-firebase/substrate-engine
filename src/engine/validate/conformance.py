@@ -27,7 +27,13 @@ from engine.substrates.models import (
     Manifest,
     StatsRow,
 )
-from engine.substrates.pack_data import load_components, load_primer
+from engine.substrates.pack_data import (
+    PackDataError,
+    load_business_docs,
+    load_components,
+    load_dictionary_map,
+    load_primer,
+)
 
 Status = Literal["PASS", "WARN", "FAIL"]
 
@@ -84,6 +90,10 @@ class ConformanceValidator:
         checks.append(self._check_manifest_links(loaded, manifests))
         checks.append(self._check_pinned_sha(manifests))
         checks.append(self._check_primer(pack_root))
+        checks.append(
+            self._check_dictionary_map(pack_root, loaded["dictionary"])
+        )
+        checks.append(self._check_business_docs(pack_root))
         return ValidationReport(pack_name=pack_name, checks=checks)
 
     def _load_substrates(self, substrates: Path) -> tuple[dict, CheckResult]:
@@ -251,6 +261,80 @@ class ConformanceValidator:
             name="manifests share the source's pinned commit",
             status="FAIL" if details else "PASS",
             details=details,
+        )
+
+    def _check_dictionary_map(
+        self, pack_root: Path, dictionary: list[DictionaryRow]
+    ) -> CheckResult:
+        """The map joins to the dictionary by table/column names
+        (Brief §4.2) — a reference to a table or column the dictionary
+        does not know is a broken route run_sql would ground on."""
+        name = "dictionary map references resolve against the dictionary"
+        path = pack_root / "dictionary_map.yaml"
+        if not path.is_file():
+            return CheckResult(
+                name=name, status="WARN", details=["no dictionary_map.yaml in the pack"]
+            )
+        try:
+            dictionary_map = load_dictionary_map(path)
+        except PackDataError as exc:
+            return CheckResult(name=name, status="FAIL", details=[str(exc)])
+
+        known_tables = {row.table_name for row in dictionary if row.column_name == ""}
+        known_columns = {
+            (row.table_name, row.column_name)
+            for row in dictionary
+            if row.column_name != ""
+        }
+        details: list[str] = []
+
+        def check_tables(kind: str, entry_name: str, tables: list[str]) -> None:
+            for table in tables:
+                if table not in known_tables:
+                    details.append(
+                        f"{kind} {entry_name!r}: unknown table {table}"
+                    )
+
+        for concept in dictionary_map.concepts:
+            check_tables("concept", concept.name, concept.tables)
+        for metric in dictionary_map.metrics:
+            check_tables("metric", metric.name, metric.tables)
+        for gotcha in dictionary_map.gotchas:
+            check_tables("gotcha", gotcha.name, gotcha.tables)
+        for join_path in dictionary_map.join_paths:
+            for step in join_path.steps:
+                for table, column in (
+                    (step.from_table, step.from_column),
+                    (step.to_table, step.to_column),
+                ):
+                    if (table, column) not in known_columns:
+                        details.append(
+                            f"join path {join_path.name!r}: unknown column "
+                            f"{table}.{column}"
+                        )
+        return CheckResult(
+            name=name, status="FAIL" if details else "PASS", details=details
+        )
+
+    def _check_business_docs(self, pack_root: Path) -> CheckResult:
+        name = "business docs carry valid snapshot front matter"
+        directory = pack_root / "business_docs"
+        if not directory.is_dir():
+            return CheckResult(
+                name=name, status="WARN", details=["no business_docs/ in the pack"]
+            )
+        try:
+            docs = load_business_docs(directory)
+        except PackDataError as exc:
+            return CheckResult(name=name, status="FAIL", details=[str(exc)])
+        if not docs:
+            return CheckResult(
+                name=name, status="WARN", details=["business_docs/ holds no .md files"]
+            )
+        return CheckResult(
+            name=name,
+            status="PASS",
+            details=[f"{len(docs)} doc(s) snapshotted"],
         )
 
     def _check_primer(self, pack_root: Path) -> CheckResult:

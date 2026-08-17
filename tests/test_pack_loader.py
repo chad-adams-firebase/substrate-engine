@@ -78,3 +78,22 @@ def test_extra_top_level_key_rejected(make_pack):
     config["substrate"] = ["data_dictionary"]  # singular typo
     with pytest.raises(PackLoadError, match="substrate"):
         load_pack(make_pack(config))
+
+
+def test_tool_settings_default_and_override(make_pack):
+    config = copy.deepcopy(VALID_CONFIG)
+    pack = load_pack(make_pack(config))
+    assert pack.config.tool_settings.run_sql.max_repair_attempts == 2
+
+    config["tool_settings"] = {"run_sql": {"max_repair_attempts": 5}}
+    pack = load_pack(make_pack(config, name="pack2"))
+    assert pack.config.tool_settings.run_sql.max_repair_attempts == 5
+    # Unspecified blocks keep their defaults.
+    assert pack.config.tool_settings.search_business_docs.top_k == 5
+
+
+def test_tool_settings_typo_rejected(make_pack):
+    config = copy.deepcopy(VALID_CONFIG)
+    config["tool_settings"] = {"run_sql": {"max_repair_attemps": 5}}  # typo
+    with pytest.raises(PackLoadError, match="max_repair_attemps"):
+        load_pack(make_pack(config))

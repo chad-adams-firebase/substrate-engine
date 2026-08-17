@@ -100,6 +100,45 @@ class GenerationConfig(BaseModel):
     enum_scan_max_distinct: int = 12
 
 
+class RunSqlSettings(BaseModel):
+    """Knobs for the run_sql tool's execute–check–repair loop (§7)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Repair retries after the first failed execution.
+    max_repair_attempts: int = 2
+    # Result rows kept in the output table; the pre-truncation count
+    # is always preserved (Table.total_row_count).
+    max_result_rows: int = 200
+
+
+class SearchBusinessDocsSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    top_k: int = 5
+
+
+class CheckExecutionSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Error events kept in the tool's output/evidence; the port
+    # returns everything, the tool truncates visibly.
+    max_errors: int = 50
+
+
+class ToolSettings(BaseModel):
+    """Per-tool behavior knobs. Unlike adapter settings (an open
+    registry, validated by each adapter), the tool surface is a
+    closed enum — so tool settings are typed centrally, and only
+    tools with knobs get a block."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run_sql: RunSqlSettings = RunSqlSettings()
+    search_business_docs: SearchBusinessDocsSettings = SearchBusinessDocsSettings()
+    check_execution: CheckExecutionSettings = CheckExecutionSettings()
+
+
 class PackConfig(BaseModel):
     """The validated shape of a pack's config.yaml."""
 
@@ -110,4 +149,5 @@ class PackConfig(BaseModel):
     substrates: list[SubstrateName]
     tools: list[ToolName]
     adapters: dict[PortName, AdapterSelection]
+    tool_settings: ToolSettings = ToolSettings()
     generation: GenerationConfig | None = None

@@ -1,0 +1,323 @@
+# Data Dictionary Map — the semantic/routing layer over the dictionary
+# (Brief §4.2). This whole artifact is run_sql's grounding payload
+# (Brief §7). Authored from invoice-guard docs/functional-spec.md and
+# docs/planted-stories.md at commit 761a18e9; validated through use.
+#
+# Note on metric names: InvoiceGuard itself defines no "flag rate" or
+# "audit yield". Its spec metrics are queue health, auditor
+# performance, and the production rollup. flag_rate and
+# recovered_opportunity below are engine-side canonical definitions
+# (the audit-yield analog is recovered_opportunity), authored here and
+# flagged needs_validation until humans confirm them through use.
+provenance:
+  source: machine
+  confidence: 0.5
+  needs_validation: true
+  note: >-
+    Authored from invoice-guard docs/functional-spec.md and
+    docs/planted-stories.md at commit 761a18e9; to be human-validated
+    through use.
+
+concepts:
+  - name: invoice lifecycle
+    definition: >-
+      An invoice moves RECEIVED -> READY -> CLAIMED -> IN_REVIEW ->
+      CLOSED or NO_REVIEW_NEEDED; unworked invoices past the lapse
+      window become LAPSED. Every transition is a row in
+      invoice_history (from_status, to_status, actor, at); the
+      invoices table stores only the current status.
+    tables: [invoices, invoice_history]
+    synonyms: [status, queue state]
+  - name: finding
+    definition: >-
+      One rule hit on an invoice (or one of its lines). rule_name is
+      the rule that fired (rate_variance, total_mismatch, ...;
+      compliance findings are named compliance_<rule code>); category
+      routes it to a team (MATERIAL/SERVICE/FEE/COMPLIANCE/CORRECTION/
+      CREEPBACK/NOTE); amount is the dollar impact, NULL for flat
+      flag-style findings.
+    tables: [findings, finding_feedback]
+    synonyms: [flag, rule hit]
+  - name: opportunity
+    definition: >-
+      The recovery dollars an audit of this invoice might yield —
+      the sum of effective finding amounts plus (when larger than the
+      service findings) the benchmark service-hours delta priced at
+      the contract labor rate. Stored on invoices.opportunity by the
+      roll-up.
+    tables: [invoices]
+    synonyms: [recovery opportunity, dollars on the table]
+  - name: weight
+    definition: >-
+      Queue priority: opportunity-derived, multiplied for creep-back
+      (x2) and ignored corrections (x5), boosted flat for critical
+      compliance, then divided by invoice total — density of
+      opportunity per review hour, not raw dollars. Stored on
+      invoices.weight.
+    tables: [invoices]
+    synonyms: [priority, score]
+  - name: revision chain
+    definition: >-
+      A resubmitted invoice arrives as a new row with the same
+      (supplier_id, invoice_number) and revision + 1, linked by
+      prior_revision_id. supplier_acceptance records whether the
+      supplier ACCEPTED or REJECTED the prior review's requested
+      changes.
+    tables: [invoices]
+    synonyms: [resubmission]
+  - name: creep-back
+    definition: >-
+      A supplier accepts a corrected rate on one revision, then
+      quietly drifts the price back up on a later one. Detected by
+      the creepback scan; lands as CREEPBACK findings and doubles the
+      invoice's weight multiplier.
+    tables: [findings, invoices]
+  - name: lapse
+    definition: >-
+      Invoices still RECEIVED/READY past the lapse window
+      (lapse_after_days, default 6, plus one fixed grace day) are
+      swept to LAPSED by the daily stale sweep — unless protected by
+      a critical compliance score (invoices.compliance_score >= 1500).
+    tables: [invoices, invoice_history]
+    synonyms: [stale, expiry]
+  - name: network supplier
+    definition: >-
+      suppliers.network = 1 means in-network: their invoices enter the
+      audit pipeline. Out-of-network suppliers' invoices are born
+      LAPSED (out of audit scope), not scored.
+    tables: [suppliers, invoices]
+
+metrics:
+  - name: flag_rate
+    description: >-
+      Share of invoices with at least one finding. Engine-defined:
+      InvoiceGuard stores findings but names no such rate.
+    tables: [invoices, findings]
+    filter_sql: ""
+    aggregation_sql: >-
+      COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices)
+    notes: >-
+      Join findings f ON f.invoice_id = invoices.id. For a
+      "substantive" variant exclude bookkeeping rows with
+      f.category NOT IN ('NOTE'). Window on invoices.received_at.
+  - name: item_flag_rate
+    description: >-
+      Share of a given item code's lines flagged by a given rule —
+      the shape behind "is item X usually flagged?".
+    tables: [invoice_lines, findings]
+    filter_sql: "l.item_code = :item_code"
+    aggregation_sql: >-
+      AVG(CASE WHEN f.id IS NOT NULL THEN 1.0 ELSE 0.0 END)
+    notes: >-
+      LEFT JOIN findings f ON f.invoice_id = l.invoice_id AND
+      f.line_number = l.line_number AND f.rule_name = :rule_name.
+      Line-level findings join on BOTH invoice_id and line_number.
+  - name: recovered_opportunity
+    description: >-
+      Opportunity dollars on completed reviews, per team per day —
+      the audit-yield analog, matching the app's production-rollup
+      dashboard exactly.
+    tables: [invoice_history, users, invoices]
+    filter_sql: "invoice_history.to_status IN ('CLOSED', 'NO_REVIEW_NEEDED')"
+    aggregation_sql: "SUM(COALESCE(invoices.opportunity, 0))"
+    notes: >-
+      JOIN users ON users.short_name = invoice_history.actor JOIN
+      invoices ON invoices.id = invoice_history.invoice_id; GROUP BY
+      users.team, DATE(invoice_history.at). This mirrors the app's
+      PRODUCTION_ROLLUP_SQL (platform/api/teams.py).
+  - name: queue_backlog
+    description: >-
+      The READY backlog awaiting audit: count, total opportunity,
+      total weight (the app's queue-health dashboard).
+    tables: [invoices]
+    filter_sql: "invoices.status = 'READY'"
+    aggregation_sql: >-
+      COUNT(*), SUM(COALESCE(invoices.opportunity, 0)),
+      SUM(COALESCE(invoices.weight, 0))
+    notes: >-
+      The app splits this per team by mapping finding categories to
+      teams via config.values_json team_to_categories — a JSON config
+      lookup, not a column; per-team splits need that mapping.
+  - name: auditor_throughput
+    description: >-
+      Claims and completed reviews per auditor over a half-open
+      [start, end) window (the app's auditor-performance dashboard).
+    tables: [invoice_history, users]
+    filter_sql: "invoice_history.at >= :start AND invoice_history.at < :end"
+    aggregation_sql: >-
+      SUM(CASE WHEN invoice_history.to_status = 'CLAIMED' THEN 1 ELSE 0 END),
+      SUM(CASE WHEN invoice_history.to_status IN ('CLOSED', 'NO_REVIEW_NEEDED')
+          THEN 1 ELSE 0 END)
+    notes: >-
+      JOIN users ON users.short_name = invoice_history.actor; GROUP BY
+      invoice_history.actor. System actors (system.rollup,
+      system.stale-sweep, system.line-mapping) are not auditors —
+      filter users.role = 'auditor'.
+
+join_paths:
+  - name: invoices_to_lines
+    steps:
+      - {from_table: invoices, from_column: id, to_table: invoice_lines, to_column: invoice_id}
+  - name: invoices_to_findings
+    steps:
+      - {from_table: invoices, from_column: id, to_table: findings, to_column: invoice_id}
+    notes: Invoice-level findings have line_number NULL.
+  - name: lines_to_findings
+    steps:
+      - {from_table: invoice_lines, from_column: invoice_id, to_table: findings, to_column: invoice_id}
+      - {from_table: invoice_lines, from_column: line_number, to_table: findings, to_column: line_number}
+    notes: >-
+      Composite join — line-level findings match on BOTH columns;
+      joining on invoice_id alone cross-multiplies lines with the
+      invoice's other findings.
+  - name: findings_to_feedback
+    steps:
+      - {from_table: findings, from_column: id, to_table: finding_feedback, to_column: finding_id}
+    notes: At most one feedback row per finding (finding_id is unique).
+  - name: invoices_to_suppliers
+    steps:
+      - {from_table: invoices, from_column: supplier_id, to_table: suppliers, to_column: id}
+  - name: invoices_to_claimer
+    steps:
+      - {from_table: invoices, from_column: claimed_by, to_table: users, to_column: id}
+    notes: >-
+      claimed_by is a user id; invoice_history.actor is a user
+      short_name (string) — two different keys for people.
+  - name: invoices_to_history
+    steps:
+      - {from_table: invoices, from_column: id, to_table: invoice_history, to_column: invoice_id}
+  - name: suppliers_to_contracts
+    steps:
+      - {from_table: suppliers, from_column: id, to_table: contracts, to_column: supplier_id}
+    notes: >-
+      The active contract for a line also matches item_code and the
+      date window effective_from <= at < effective_to (open-ended
+      when effective_to is NULL); several revisions of a contract can
+      exist per (supplier, item).
+  - name: invoices_to_compliance
+    steps:
+      - {from_table: invoices, from_column: id, to_table: compliance_reports, to_column: invoice_id}
+      - {from_table: compliance_reports, from_column: id, to_table: compliance_rules, to_column: compliance_report_id}
+
+gotchas:
+  - name: adjustment_totals
+    summary: >-
+      invoice_total legitimately differs from the sum of lines when
+      adjustments exist — a silent mismatch is not an error.
+    detail: >-
+      When invoices.adjustment_flag = 1, the stated invoice_total is
+      deliberately below SUM(invoice_lines.extended_price) (supplier-
+      side credits and adjustments, typically 50-500), and the
+      total_mismatch rule deliberately stays silent. A separate,
+      smaller population carries genuine unexplained mismatches
+      (typically 5-50) with adjustment_flag = 0, and those ARE
+      flagged as total_mismatch findings. Never validate
+      invoice_total against the line sum without checking
+      adjustment_flag first. To count the silent-adjustment
+      population: SELECT COUNT(*) FROM invoices i WHERE
+      i.adjustment_flag = 1 AND ABS(i.invoice_total - (SELECT
+      SUM(l.extended_price) FROM invoice_lines l WHERE l.invoice_id =
+      i.id)) > 0.01 AND NOT EXISTS (SELECT 1 FROM findings f WHERE
+      f.invoice_id = i.id AND f.rule_name = 'total_mismatch').
+    tables: [invoices, invoice_lines, findings]
+  - name: data_coverage
+    summary: >-
+      The data covers 2026-03-02 through 2026-05-30 — never use
+      date('now') or CURRENT_DATE in queries.
+    detail: >-
+      This is a simulated world: activity runs 2026-03-02 to
+      2026-05-30 and nothing is newer. Relative phrases like "last
+      week" anchor to the data's end (the last received_at day is
+      2026-05-29; scheduled tasks run through 2026-05-30), not to
+      today. Invoices arrive on business days only — weekends have no
+      received_at values, though daily sweeps still log.
+    tables: [invoices, findings, invoice_history]
+  - name: naive_datetime_strings
+    summary: >-
+      Datetimes are naive-UTC strings; booleans are 0/1 integers.
+    detail: >-
+      Datetime columns store 'YYYY-MM-DD HH:MM:SS.ffffff' with no
+      timezone (UTC by convention). Compare against full string
+      literals ('2026-05-23 00:00:00' works; date('now') does not
+      belong here at all). Boolean columns (adjustment_flag,
+      rush_flag, is_credit_memo, disputed_hold, network, available)
+      store 0/1.
+    tables: [invoices, suppliers, users]
+  - name: null_amount_findings
+    summary: >-
+      findings.amount is NULL for flat flag-style findings — SUM over
+      amounts silently skips them, and excepted findings still carry
+      their original amount.
+    detail: >-
+      Flag-style rules (new_supplier, split_billing, line_note) write
+      amount NULL: they mark risk, not dollars. And when an auditor
+      marks a finding a valid exception (finding_feedback.
+      valid_exception = 1), the app treats its effective amount as 0
+      — but findings.amount keeps the original value. Dollar
+      aggregations that should reflect the app's numbers must
+      LEFT JOIN finding_feedback and zero out excepted rows.
+    tables: [findings, finding_feedback]
+  - name: compliance_dual_signal
+    summary: >-
+      Critical compliance uses two deliberately different signals —
+      the weight boost reads finding amounts, sweep protection reads
+      the denormalized column.
+    detail: >-
+      The roll-up's flat weight boost fires when the SUM of
+      COMPLIANCE finding amounts reaches the critical threshold
+      (1500); stale-sweep protection instead reads
+      invoices.compliance_score (denormalized from the compliance
+      report). Excepting a compliance finding removes the boost but
+      not the protection — the two questions have different answers
+      by design.
+    tables: [invoices, findings, compliance_reports]
+  - name: no_closed_at_column
+    summary: >-
+      invoices has no closed/worked timestamp — completion times live
+      in invoice_history.
+    detail: >-
+      To answer when an invoice was claimed or closed, join
+      invoice_history and filter to_status ('CLAIMED', 'CLOSED',
+      'NO_REVIEW_NEEDED') using invoice_history.at. received_at and
+      scored_at are the only timestamps on invoices.
+    tables: [invoices, invoice_history]
+  - name: rule_name_prefixes
+    summary: >-
+      findings.rule_name drops the code's rule_ prefix, and
+      compliance findings are named compliance_<rule code>.
+    detail: >-
+      The rules engine's rule_rate_variance writes rule_name
+      'rate_variance', and so on. Compliance-intake findings arrive
+      as compliance_CR-147 etc. — filtering rule_name LIKE
+      'compliance_%' selects exactly the compliance layer.
+    tables: [findings]
+
+examples:
+  - question: How many invoices received last week had findings?
+    guidance: >-
+      Join invoices to findings on invoice_id; COUNT(DISTINCT
+      invoices.id); window on invoices.received_at anchored to the
+      data's end (see data_coverage — "last week" means the final
+      seven days ending 2026-05-30, i.e. received_at >= '2026-05-23
+      00:00:00' AND received_at < '2026-05-30 00:00:00').
+  - question: Which supplier draws the most rate-variance findings?
+    guidance: >-
+      findings WHERE rule_name = 'rate_variance', joined through
+      invoices to suppliers; GROUP BY suppliers.code ORDER BY
+      COUNT(*) DESC. Rate variance is the planted specialty of one
+      supplier, so expect a dominant leader.
+  - question: Is a given service item usually flagged for excessive hours?
+    guidance: >-
+      Use item_flag_rate with rule_name = 'service_hours_excessive'
+      over invoice_lines filtered to the item_code — remember the
+      composite line-level join (lines_to_findings).
+  - question: Who closes the most reviews?
+    guidance: >-
+      auditor_throughput over invoice_history: to_status IN
+      ('CLOSED', 'NO_REVIEW_NEEDED') GROUP BY actor, joined to users
+      on short_name and filtered to role = 'auditor'.
+  - question: How much recovery opportunity did each team close last month?
+    guidance: >-
+      recovered_opportunity per team/day (PRODUCTION_ROLLUP_SQL
+      shape), windowed on invoice_history.at — anchored to the data's
+      end, per data_coverage.
