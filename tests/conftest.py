@@ -87,8 +87,10 @@ def snapshot_outputs(snapshot_duckdb) -> dict:
 def tool_pack(snapshot_outputs, snapshot_duckdb, tmp_path) -> Path:
     """A complete pack directory for tool tests: generated substrates
     from the snapshot, manifests, authored artifacts, the carved log
-    slice, and a config enabling all nine tools. The LLM adapter is
-    'scripted' — tests register a ScriptedLLM under that name."""
+    slice, and a config enabling all nine tools. The config names the
+    real 'openrouter' LLM adapter; build_tool_registry overrides that
+    registry slot with the pytest stub, so the same pack also works
+    through the CLI (whose lazy OpenRouter adapter needs no key)."""
     import shutil
 
     from engine.substrates.jsonl import write_substrate
@@ -155,7 +157,7 @@ def tool_pack(snapshot_outputs, snapshot_duckdb, tmp_path) -> Path:
             "answer_from_known_items",
         ],
         "adapters": {
-            "llm": {"adapter": "scripted", "settings": {}},
+            "llm": {"adapter": "openrouter", "settings": {"model": "openrouter/auto"}},
             "sql": {"adapter": "duckdb", "settings": {"database": str(snapshot_duckdb)}},
             "work_store": {"adapter": "sqlite", "settings": {"database": ":memory:"}},
             "identity": {
@@ -196,7 +198,7 @@ def tool_pack(snapshot_outputs, snapshot_duckdb, tmp_path) -> Path:
 
 def build_tool_registry(pack_dir: Path, llm_responses: list | None = None):
     """load → DI-build → tool-build, with the pytest LLM stub wired in
-    under the 'scripted' adapter name. Returns (registry, ports)."""
+    over the 'openrouter' registry slot. Returns (registry, ports)."""
     from engine.config.models import PortName
     from engine.config.pack_loader import load_pack
     from engine.runtime.container import build
@@ -207,7 +209,7 @@ def build_tool_registry(pack_dir: Path, llm_responses: list | None = None):
     pack = load_pack(pack_dir)
     registry = default_registry()
     stub = ScriptedLLM(llm_responses or [])
-    registry.register(PortName.LLM, "scripted", lambda settings, root: stub)
+    registry.register(PortName.LLM, "openrouter", lambda settings, root: stub)
     ports = build(pack, registry)
     return build_tools(pack, ports), ports
 

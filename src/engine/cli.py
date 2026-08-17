@@ -1,4 +1,4 @@
-"""Engine CLI: `uv run engine <info|convert|generate|validate>`.
+"""Engine CLI: `uv run engine <info|convert|generate|validate|tool>`.
 
 The composition root for pack tooling: subcommands load a pack, build
 its adapters through the DI container, and inject the resulting ports
@@ -91,6 +91,26 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("--pack", required=True)
     validate.add_argument("--out", help="Also write the report to this file.")
 
+    tool = subparsers.add_parser(
+        "tool",
+        help="Invoke one registered tool by hand and inspect its envelope.",
+    )
+    tool.add_argument("--pack", required=True)
+    tool.add_argument(
+        "name", help="Tool name (run_sql, app_primer, ...); `engine info` lists them."
+    )
+    tool.add_argument(
+        "--args",
+        default="{}",
+        help='Tool arguments as a JSON object, e.g. \'{"table": "invoices"}\'.',
+    )
+    tool.add_argument(
+        "--evidence",
+        action="store_true",
+        help="Print the full invocation envelope (evidence bundle included) "
+        "instead of just the output.",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "info":
@@ -101,6 +121,8 @@ def main(argv: list[str] | None = None) -> int:
             return _generate(args.pack, args.source, args.only, args.check)
         if args.command == "validate":
             return _validate(args.pack, args.out)
+        if args.command == "tool":
+            return _tool(args.pack, args.name, args.args, args.evidence)
     except (PackLoadError, UnknownAdapterError, AdapterBuildError, CliError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -332,6 +354,35 @@ def _validate(pack_dir: str, out: str | None) -> int:
     if out is not None:
         Path(out).write_text(text, encoding="utf-8", newline="\n")
     return 0 if report.passed else 1
+
+
+def _tool(pack_dir: str, name: str, args_json: str, show_evidence: bool) -> int:
+    import json
+
+    from engine.runtime.tools import ToolBuildError, build_tools
+    from engine.tools.registry import UnknownToolError
+
+    try:
+        arguments = json.loads(args_json)
+    except json.JSONDecodeError as exc:
+        raise CliError(f"--args is not valid JSON: {exc}")
+    if not isinstance(arguments, dict):
+        raise CliError("--args must be a JSON object.")
+
+    pack = load_pack(pack_dir)
+    try:
+        registry = build_tools(pack, build(pack))
+        invocation = registry.invoke(name, arguments)
+    except (ToolBuildError, UnknownToolError) as exc:
+        raise CliError(str(exc))
+
+    if show_evidence:
+        print(json.dumps(invocation.model_dump(mode="json"), indent=2))
+    elif invocation.status == "ok":
+        print(json.dumps(invocation.output.model_dump(mode="json"), indent=2))
+    else:
+        print(f"error: {invocation.error}", file=sys.stderr)
+    return 0 if invocation.status == "ok" else 1
 
 
 def _info(pack_dir: str) -> int:

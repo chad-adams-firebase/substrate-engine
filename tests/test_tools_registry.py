@@ -121,7 +121,7 @@ def test_registry_catch_all_converts_crashes_to_error_envelopes(tool_pack):
     pack = load_pack(tool_pack)
     registry = default_registry()
     registry.register(
-        PortName.LLM, "scripted", lambda settings, root: ExplodingLLM()
+        PortName.LLM, "openrouter", lambda settings, root: ExplodingLLM()
     )
     tools = build_tools(pack, build(pack, registry))
     invocation = tools.invoke("run_sql", {"question": "x"})

@@ -53,3 +53,57 @@ def test_info_on_invalid_config_fails_legibly(tmp_path, capsys):
 
     assert exit_code == 1
     assert "failed validation" in capsys.readouterr().err
+
+
+def test_tool_subcommand_invokes_and_prints_output(tool_pack, capsys):
+    exit_code = main(["tool", "--pack", str(tool_pack), "app_primer"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Snapshot primer" in captured.out
+    assert '"kind": "app_primer"' in captured.out
+
+
+def test_tool_subcommand_evidence_prints_the_full_envelope(tool_pack, capsys):
+    exit_code = main(
+        [
+            "tool",
+            "--pack",
+            str(tool_pack),
+            "query_univariate_stats",
+            "--args",
+            '{"table": "invoices", "column": "status"}',
+            "--evidence",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert '"status": "ok"' in captured.out
+    assert '"substrates_read"' in captured.out
+    assert '"manifest_ids"' in captured.out
+
+
+def test_tool_subcommand_error_envelope_exits_nonzero(tool_pack, capsys):
+    exit_code = main(
+        [
+            "tool",
+            "--pack",
+            str(tool_pack),
+            "query_univariate_stats",
+            "--args",
+            '{"table": "no_such_table"}',
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "error:" in captured.err
+
+
+def test_tool_subcommand_rejects_bad_json_and_unknown_tools(tool_pack, capsys):
+    assert main(["tool", "--pack", str(tool_pack), "app_primer", "--args", "not json"]) == 1
+    assert "not valid JSON" in capsys.readouterr().err
+
+    assert main(["tool", "--pack", str(tool_pack), "run_spl"]) == 1
+    assert "closed" in capsys.readouterr().err
