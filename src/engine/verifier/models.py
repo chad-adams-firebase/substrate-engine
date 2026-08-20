@@ -7,9 +7,9 @@ internal claim/evidence-pool models live beside the code that builds
 them (claims.py, matching.py).
 """
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from engine.config.models import ToolName
 
@@ -24,6 +24,111 @@ class DraftAnswer(BaseModel):
     kind: Literal["prose", "table_passthrough"]
     text: str
     injected_spans: list[tuple[int, int]] = []
+
+
+class NumericClaim(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["numeric"] = "numeric"
+    surface: str  # "1,442,986", "$1,200.50", "34.2%", "1.4 million"
+    start: int
+    end: int
+    value: float | None = None  # None for date-form claims
+    date: str | None = None  # ISO, for date claims
+    is_percent: bool = False
+    is_currency: bool = False
+    is_approximate: bool = False
+    comparator: Literal["over", "under", "at_least", "at_most"] | None = None
+    # Half the last displayed unit: "1.4 million" -> 50_000, "34.2%"
+    # -> 0.05, "146" -> 0.5. Drives the mechanical rounding match.
+    resolution: float | None = None
+
+
+class EntityClaim(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["entity"] = "entity"
+    surface: str
+    start: int
+    end: int
+    entity: str
+    subkind: Literal["identifier", "location"] = "identifier"
+    # location claims only: rules_engine.py:116-149
+    file_path: str | None = None
+    line_start: int | None = None
+    line_end: int | None = None
+
+
+class QuoteClaim(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["quote"] = "quote"
+    surface: str
+    start: int
+    end: int
+    text: str
+    fenced: bool = False
+
+
+Claim = Annotated[
+    NumericClaim | EntityClaim | QuoteClaim, Field(discriminator="kind")
+]
+
+
+class EvidenceValue(BaseModel):
+    """One quotable number from the evidence. salience separates what
+    a claim may match: result cells, counts, statistics, and code/doc
+    literals behave differently in percent bridging and derivations."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: float
+    ref: str  # dotted path, e.g. "e1.table.rows[0].n"
+    salience: Literal["cell", "count", "stat", "literal"]
+    # Same-row grouping for ratio derivations ("e1.rows[0]"); None for
+    # ungrouped values.
+    group: str | None = None
+
+
+class LineRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    file_path: str
+    start: int
+    end: int
+    ref: str
+
+
+class CorpusText(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    ref: str
+
+
+class EvidenceContribution(BaseModel):
+    """What one invocation's registered check harvests into the merged
+    pools. Vocabulary is identifier-shaped names a drafted entity may
+    cite; strings are exact values (cells, dates, slugs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    numbers: list[EvidenceValue] = []
+    line_refs: list[LineRef] = []
+    vocabulary: set[str] = set()
+    strings: set[str] = set()
+    quote_corpus: list[CorpusText] = []
+
+
+class PlausibilityFinding(BaseModel):
+    """A check's raw finding; verify() stamps the tool to make the
+    provenance-facing PlausibilityRecord."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    check: str
+    severity: Literal["fail", "warn"]
+    detail: str
 
 
 class ClaimRecord(BaseModel):
