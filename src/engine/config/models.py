@@ -11,7 +11,7 @@ and typos fail loudly.
 """
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -142,6 +142,81 @@ class ToolSettings(BaseModel):
     check_execution: CheckExecutionSettings = CheckExecutionSettings()
 
 
+class HarnessSettings(BaseModel):
+    """Knobs for the Phase 4 agent harness (Brief §8). Every bound the
+    graph enforces is pack config, never a constant in graph code."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Router iterations per turn; hitting the cap is a first-class
+    # refuse outcome, not an error.
+    max_router_iterations: int = 6
+    # Redraft attempts after a placeholder-resolution failure or a
+    # verifier mismatch, before the downgrade path.
+    max_draft_retries: int = 2
+    # Table rows shown back to the router in tool-result feedback;
+    # the drafter and verifier always see the full retained output.
+    max_rows_in_context: int = 30
+
+
+class JudgeSettings(BaseModel):
+    """The verifier's LLM fuzzy judge (§9.2 step 3) — a yes/no call
+    for claims mechanical matching cannot settle."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    # Judge calls per verification attempt; exhausted budget leaves
+    # remaining fuzzy claims unmatched (fail toward the ladder).
+    max_calls_per_turn: int = 5
+    # Evidence values shown per judge call, ranked by proximity.
+    max_candidate_values: int = 10
+
+
+class PlausibilitySettings(BaseModel):
+    """Thresholds for evidence-side sanity checks (§9.3). Defaults fit
+    the InvoiceGuard fixture; tuned at work against real distributions,
+    which is exactly why they are config."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # An unfiltered COUNT over one table may deviate this much from the
+    # stats snapshot's row_count (the snapshot may trail the live DB).
+    row_count_tolerance_pct: float = 10.0
+    # A filtered COUNT must not exceed the table's known size.
+    enforce_filtered_count_bound: bool = True
+    # Non-aggregate result values must lie within stats min/max.
+    enforce_min_max_bounds: bool = True
+    # Date-shaped results must lie within the stats date range — the
+    # data anchor; the verifier never consults the wall clock.
+    enforce_date_bounds: bool = True
+    # Dates past the stats max are a warning inside this grace window
+    # (a slightly stale snapshot), a failure beyond it.
+    date_bound_grace_days: int = 7
+    # Columns with these suffixes must hold values in [0,1] or [0,100].
+    rate_column_suffixes: list[str] = ["_rate", "_pct", "_ratio"]
+
+
+class VerifierSettings(BaseModel):
+    """The Verifier's ladder and matching bounds (Brief §9)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Regenerations after a faithfulness mismatch before downgrading.
+    max_regenerate_retries: int = 1
+    # Where the ladder lands when retries are exhausted: label the
+    # answer unverified (default) or refuse outright.
+    unmatched_final: Literal["unverified", "refuse"] = "unverified"
+    # Relative tolerance for exact numeric matches (float round-trips).
+    numeric_rel_tolerance: float = 1e-9
+    # Candidate-pair cap for ratio/difference derivations; past it the
+    # claim falls to the judge. A derivation engine that can derive
+    # anything verifies nothing.
+    max_derivation_pairs: int = 200
+    judge: JudgeSettings = JudgeSettings()
+    plausibility: PlausibilitySettings = PlausibilitySettings()
+
+
 class PackConfig(BaseModel):
     """The validated shape of a pack's config.yaml."""
 
@@ -153,4 +228,6 @@ class PackConfig(BaseModel):
     tools: list[ToolName]
     adapters: dict[PortName, AdapterSelection]
     tool_settings: ToolSettings = ToolSettings()
+    harness: HarnessSettings = HarnessSettings()
+    verifier: VerifierSettings = VerifierSettings()
     generation: GenerationConfig | None = None

@@ -100,6 +100,29 @@ tool_settings:
   check_execution:
     max_errors: 50
 
+harness:
+  max_router_iterations: 6
+  max_draft_retries: 2
+  max_rows_in_context: 30
+
+verifier:
+  max_regenerate_retries: 1
+  unmatched_final: unverified
+  judge:
+    enabled: true
+    max_calls_per_turn: 5
+    max_candidate_values: 10
+  plausibility:
+    # Tuned at work against real distributions (Brief §9.3); these fit
+    # the seed-42 world, whose data ends 2026-05-30 — date bounds come
+    # from the stats substrate, never the wall clock.
+    row_count_tolerance_pct: 10.0
+    enforce_filtered_count_bound: true
+    enforce_min_max_bounds: true
+    enforce_date_bounds: true
+    date_bound_grace_days: 7
+    rate_column_suffixes: ["_rate", "_pct", "_ratio"]
+
 generation:
   source_sqlite: ../../../invoice-guard/simout/invoiceguard.db
   simulation_seed: 42

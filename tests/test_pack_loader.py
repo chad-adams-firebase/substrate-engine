@@ -97,3 +97,37 @@ def test_tool_settings_typo_rejected(make_pack):
     config["tool_settings"] = {"run_sql": {"max_repair_attemps": 5}}  # typo
     with pytest.raises(PackLoadError, match="max_repair_attemps"):
         load_pack(make_pack(config))
+
+
+def test_harness_and_verifier_settings_default_and_override(make_pack):
+    """Phase 3 packs (no harness/verifier blocks) keep loading; every
+    Phase 4 bound is pack config with a default."""
+    config = copy.deepcopy(VALID_CONFIG)
+    pack = load_pack(make_pack(config))
+    assert pack.config.harness.max_router_iterations == 6
+    assert pack.config.verifier.max_regenerate_retries == 1
+    assert pack.config.verifier.unmatched_final == "unverified"
+    assert pack.config.verifier.judge.enabled is True
+    assert pack.config.verifier.plausibility.row_count_tolerance_pct == 10.0
+
+    config["harness"] = {"max_router_iterations": 3}
+    config["verifier"] = {
+        "unmatched_final": "refuse",
+        "judge": {"max_calls_per_turn": 2},
+        "plausibility": {"date_bound_grace_days": 0},
+    }
+    pack = load_pack(make_pack(config, name="pack2"))
+    assert pack.config.harness.max_router_iterations == 3
+    # Unspecified knobs keep their defaults within an overridden block.
+    assert pack.config.harness.max_draft_retries == 2
+    assert pack.config.verifier.unmatched_final == "refuse"
+    assert pack.config.verifier.judge.max_calls_per_turn == 2
+    assert pack.config.verifier.judge.max_candidate_values == 10
+    assert pack.config.verifier.plausibility.date_bound_grace_days == 0
+
+
+def test_verifier_settings_typo_rejected(make_pack):
+    config = copy.deepcopy(VALID_CONFIG)
+    config["verifier"] = {"plausibility": {"row_count_tolerence_pct": 5}}  # typo
+    with pytest.raises(PackLoadError, match="row_count_tolerence_pct"):
+        load_pack(make_pack(config))
