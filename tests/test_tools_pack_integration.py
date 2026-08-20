@@ -177,6 +177,103 @@ def test_check_execution_answers_did_the_stale_sweep_run_on_day_n():
     assert len(errors.output.errors) == 30
 
 
+def test_full_graph_ask_to_answer_with_complete_provenance():
+    """Phase 4 end-to-end against the real pack: route -> run_sql
+    (real grounding, real DuckDB) -> draft with placeholders -> real
+    Verifier -> verified answer, with the §12 row checked against the
+    pack's real manifests. Only the LLM is scripted; the work store is
+    in-memory so the committed pack directory stays untouched."""
+    from engine.adapters.work_store_sqlite import (
+        SqliteWorkStore,
+        SqliteWorkStoreSettings,
+    )
+    from engine.harness.drafter import Drafter
+    from engine.harness.graph import GraphDeps
+    from engine.harness.prompts import (
+        render_drafter_prompt,
+        render_router_prompt,
+    )
+    from engine.harness.session import AskSession
+    from engine.ports.types import ToolCall
+    from engine.runtime.harness import build_verifier
+    from engine.verifier.models import VerifierVerdict
+
+    responses = [
+        LLMResponse(
+            content="",
+            tool_calls=[
+                ToolCall(
+                    name="run_sql",
+                    arguments={
+                        "question": (
+                            "How many invoices received last week had findings?"
+                        )
+                    },
+                )
+            ],
+            model="scripted",
+        ),
+        LLMResponse(content=f"```sql\n{LAST_WEEK_SQL}\n```", model="scripted"),
+        LLMResponse(
+            content="",
+            tool_calls=[
+                ToolCall(name="give_answer", arguments={"shape": "prose"})
+            ],
+            model="scripted",
+        ),
+        LLMResponse(
+            content=(
+                "Of the invoices received last week, "
+                "{{e0.table.rows[0].invoices_with_findings}} had at least "
+                "one finding."
+            ),
+            model="scripted",
+        ),
+    ]
+    registry, ports = real_pack_registry(responses)
+    pack = load_pack(PACK)
+    llm = ports.get(PortName.LLM)
+    deps = GraphDeps(
+        llm=llm,
+        registry=registry,
+        verifier=build_verifier(pack, ports),
+        drafter=Drafter(llm, render_drafter_prompt(app_name=pack.config.name)),
+        settings=pack.config.harness,
+        router_prompt=render_router_prompt(
+            app_name=pack.config.name,
+            app_description=pack.config.description,
+            max_iterations=pack.config.harness.max_router_iterations,
+        ),
+    )
+    work_store = SqliteWorkStore(SqliteWorkStoreSettings(database=":memory:"))
+    session = AskSession(
+        deps=deps,
+        work_store=work_store,
+        identity=ports.get(PortName.IDENTITY),
+    )
+
+    result = session.ask("How many invoices received last week had findings?")
+
+    assert result.outcome.kind == "answer"
+    assert result.outcome.verification == "verified"
+    assert "146 had at least one finding" in result.outcome.body.text
+
+    (entry,) = work_store.list_turn_logs(result.conversation_id)
+    assert entry.tools_used == ["run_sql"]
+    assert "application_database" in entry.substrates_read
+    verdict = VerifierVerdict.model_validate_json(entry.verifier_verdict)
+    assert verdict.disposition == "verified"
+    # The logged substrate versions are real manifest ids of this pack.
+    known_manifests = {
+        m.manifest_id for m in ports.get(PortName.SUBSTRATE_STORE).manifests()
+    }
+    assert entry.substrate_versions
+    assert set(entry.substrate_versions) <= known_manifests
+    # The bundle round-trips and the winning SQL is inside it.
+    payload = work_store.load_evidence_bundle(entry.evidence_bundle_ref)
+    assert LAST_WEEK_SQL.splitlines()[0] in payload
+
+
 def test_full_pack_round_trip_of_a_multi_tool_turn():
     from engine.tools.envelope import dumps_turn_evidence, loads_turn_evidence
 
