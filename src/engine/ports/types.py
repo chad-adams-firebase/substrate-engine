@@ -94,6 +94,37 @@ class Workspace(BaseModel):
     created_at: datetime
 
 
+class Conversation(BaseModel):
+    """One chat thread inside a workspace. Its id doubles as the
+    checkpointer thread key (Brief §8)."""
+
+    id: int
+    workspace_id: int
+    title: str
+    created_at: datetime
+
+
+class TurnLogEntry(BaseModel):
+    """One §12 turn_log row — the provenance record every turn writes.
+
+    verifier_verdict and status_events cross this boundary as opaque
+    JSON strings: the port stays neutral about harness/verifier model
+    shapes, exactly the neutrality the TEXT columns encode.
+    """
+
+    conversation_id: int
+    turn: int
+    actor: str
+    action: str  # "ask" in Phase 4; package/publish actions are Phase 6
+    tools_used: list[str] = []
+    substrates_read: list[str] = []
+    evidence_bundle_ref: str | None = None
+    verifier_verdict: str | None = None
+    substrate_versions: list[str] = []
+    status_events: str | None = None
+    created_at: datetime
+
+
 class UnitSummary(BaseModel):
     """A published Unit of Work, as answer_from_known_items surfaces
     it: enough to suggest ("this looks answered already"), never the
