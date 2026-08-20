@@ -1,11 +1,13 @@
 """The tool registry: the pack's complete, closed capability list.
 
-invoke() never raises for anything an LLM could cause: malformed
-arguments and tool-domain failures come back as status="error"
-envelopes the harness can feed back or fail closed on. The only
-exceptions that escape are programming errors of the harness itself —
-asking for a tool name that is not in the closed ToolName enum or was
-never registered (an LLM cannot do that: it only sees to_specs()).
+invoke() never raises for anything an LLM could cause with valid tool
+names: malformed arguments and tool-domain failures come back as
+status="error" envelopes the harness can feed back or fail closed on.
+A name outside the registry raises UnknownToolError — an LLM choosing
+names from specs CAN hallucinate one, so the harness's act step
+catches it and answers with the list of tools that exist
+(engine/harness/router.py); a bare UnknownToolError escaping anywhere
+else is a programming error.
 """
 
 from typing import Any
@@ -19,8 +21,9 @@ from engine.tools.envelope import ToolInvocation
 
 
 class UnknownToolError(Exception):
-    """The caller asked for a tool outside the registry — a harness
-    bug, not an LLM mistake."""
+    """The caller asked for a tool outside the registry. The harness
+    catches this where the name came from an LLM; anywhere else it is
+    a programming error."""
 
 
 class ToolRegistry:

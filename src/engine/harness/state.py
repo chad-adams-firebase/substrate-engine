@@ -18,7 +18,11 @@ from pydantic import BaseModel, ConfigDict
 from engine.harness.outcomes import AnswerBody, TurnOutcome
 from engine.ports.types import Message
 from engine.tools.envelope import ToolInvocation
-from engine.verifier.models import VerifierVerdict
+from engine.verifier.models import (
+    AttemptRecord,
+    PlausibilityRecord,
+    VerifierVerdict,
+)
 
 
 class ToolSelection(BaseModel):
@@ -62,7 +66,13 @@ class TurnState(BaseModel):
     iterations: int = 0
     decision: RouteDecision | None = None
     draft: AnswerBody | None = None
+    draft_raw: str | None = None  # placeholders intact, for retry context
+    injected_spans: list[tuple[int, int]] = []
     draft_feedback: list[str] = []
-    draft_attempts: int = 0
+    draft_attempts: int = 0  # placeholder-resolution retries
+    verify_attempt: int = 0  # verifier ladder attempts
+    verifier_attempts: list[AttemptRecord] = []
+    verifier_plausibility: list[PlausibilityRecord] = []
+    judge_calls_total: int = 0
     verdict: VerifierVerdict | None = None
     outcome: TurnOutcome | None = None

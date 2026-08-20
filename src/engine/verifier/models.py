@@ -209,6 +209,6 @@ class VerifierResult(BaseModel):
 
     disposition: Literal["verified", "retry", "unverified", "refused"]
     attempt_record: AttemptRecord
-    plausibility: list[PlausibilityRecord]
+    plausibility: list[PlausibilityRecord] = []
     feedback: RegenerationFeedback | None = None
     judge_calls: int = 0
