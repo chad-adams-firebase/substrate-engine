@@ -128,6 +128,42 @@ def test_echo_and_results_messages_shape():
     assert note.startswith("There is no tool")
 
 
+def test_router_call_offers_all_real_and_control_specs(tool_pack):
+    from engine.config.models import PortName
+    from tests.harness_support import build_ask_session, tool_call
+
+    session, ports, _ = build_ask_session(
+        tool_pack, [tool_call("refuse", {"reason": "r"})]
+    )
+    session.ask("q")
+    llm = ports.get(PortName.LLM)
+    offered = [spec.name for spec in llm.calls[0]["tools"]]
+    assert len(offered) == 9 + 4  # the closed surface + control verbs
+    assert "app_primer" in offered and "give_answer" in offered
+    assert llm.calls[0]["temperature"] == 0.0
+
+
+def test_router_prompt_states_the_altitude_ladder_truthfully():
+    """The prompt is LLM-facing surface; these lines are the phasing
+    done-checks in prompt form. If traversal mechanics change, this
+    test forces the prompt to change with them."""
+    from engine.harness.prompts import render_router_prompt
+
+    prompt = render_router_prompt(
+        app_name="invoiceguard", app_description="d", max_iterations=6
+    )
+    # L0 questions go to the primer and never the graph.
+    assert "app_primer" in prompt
+    assert "never the code knowledge graph" in prompt
+    # Traversal truth: component -> functions is two hops.
+    assert "members, then contains" in prompt
+    # Result-set questions steer to the untouched table envelope.
+    assert "shape='table'" in prompt
+    # Fail-closed is a correct outcome, and the loop is bounded.
+    assert "Refusing is a correct outcome" in prompt
+    assert "at most 6 steps" in prompt
+
+
 def test_router_messages_order_system_history_question_scratch():
     messages = build_router_messages(
         "SYSTEM",
