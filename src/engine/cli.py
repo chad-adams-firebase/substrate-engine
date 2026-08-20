@@ -111,6 +111,56 @@ def main(argv: list[str] | None = None) -> int:
         "instead of just the output.",
     )
 
+    ask = subparsers.add_parser(
+        "ask",
+        help="Ask a question through the full graph: route, tools, draft, "
+        "verify.",
+        epilog="Exit codes: 0 verified answer · 1 error · 2 unverified "
+        "answer · 3 refuse · 4 clarify · 5 escalate.",
+    )
+    ask.add_argument("--pack", required=True)
+    ask.add_argument("question", help="A plain-English question.")
+    ask.add_argument(
+        "--conversation",
+        type=int,
+        help="Continue this conversation id; omitted starts a new one in "
+        "the scratch workspace.",
+    )
+    ask.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the full TurnResult as JSON instead of rendered text.",
+    )
+    ask.add_argument(
+        "--show-evidence",
+        action="store_true",
+        help="Append the turn's evidence bundle JSON after the answer.",
+    )
+    ask.add_argument(
+        "--show-verdict",
+        action="store_true",
+        help="Append the verifier verdict (claim-level detail) after the "
+        "answer.",
+    )
+
+    turns = subparsers.add_parser(
+        "turns",
+        help="Inspect turn provenance: conversations, per-turn §12 rows, "
+        "evidence bundles.",
+    )
+    turns.add_argument("--pack", required=True)
+    turns.add_argument(
+        "--conversation", type=int, help="List this conversation's turns."
+    )
+    turns.add_argument(
+        "--turn", type=int, help="Show one turn's full provenance row."
+    )
+    turns.add_argument(
+        "--evidence",
+        action="store_true",
+        help="With --turn: also print the resolved evidence bundle.",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "info":
@@ -123,6 +173,17 @@ def main(argv: list[str] | None = None) -> int:
             return _validate(args.pack, args.out)
         if args.command == "tool":
             return _tool(args.pack, args.name, args.args, args.evidence)
+        if args.command == "ask":
+            return _ask(
+                args.pack,
+                args.question,
+                args.conversation,
+                as_json=args.json,
+                show_evidence=args.show_evidence,
+                show_verdict=args.show_verdict,
+            )
+        if args.command == "turns":
+            return _turns(args.pack, args.conversation, args.turn, args.evidence)
     except (PackLoadError, UnknownAdapterError, AdapterBuildError, CliError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -383,6 +444,182 @@ def _tool(pack_dir: str, name: str, args_json: str, show_evidence: bool) -> int:
     else:
         print(f"error: {invocation.error}", file=sys.stderr)
     return 0 if invocation.status == "ok" else 1
+
+
+_OUTCOME_EXIT_CODES = {
+    ("answer", "verified"): 0,
+    ("answer", "unverified"): 2,
+    ("refuse", None): 3,
+    ("clarify", None): 4,
+    ("escalate", None): 5,
+}
+
+
+def _build_session(pack_dir: str, listener):
+    """Seam for CLI tests: monkeypatch this to inject a scripted
+    session. Returns (session, ports)."""
+    from engine.runtime.harness import build_harness
+    from engine.runtime.tools import ToolBuildError, build_tools
+
+    pack = load_pack(pack_dir)
+    ports = build(pack)
+    try:
+        registry = build_tools(pack, ports)
+        session = build_harness(pack, ports, registry, listener)
+    except ToolBuildError as exc:
+        raise CliError(str(exc))
+    return session, ports
+
+
+def _print_status(event) -> None:
+    marker = "·" if event.phase == "start" else "  ✓"
+    print(f"{marker} {event.detail}", file=sys.stderr)
+
+
+def _render_text_table(table) -> str:
+    columns = table.columns
+    rows = [[_cell_text(row.get(c)) for c in columns] for row in table.rows]
+    widths = [
+        max(len(c), *(len(r[i]) for r in rows)) if rows else len(c)
+        for i, c in enumerate(columns)
+    ]
+    header = "  ".join(c.ljust(w) for c, w in zip(columns, widths))
+    lines = [header, "  ".join("-" * w for w in widths)]
+    lines.extend(
+        "  ".join(cell.ljust(w) for cell, w in zip(r, widths)) for r in rows
+    )
+    if table.truncated:
+        lines.append(f"({len(table.rows)} of {table.total_row_count} rows)")
+    return "\n".join(lines)
+
+
+def _cell_text(value) -> str:
+    return "" if value is None else str(value)
+
+
+def _ask(
+    pack_dir: str,
+    question: str,
+    conversation_id: int | None,
+    *,
+    as_json: bool,
+    show_evidence: bool,
+    show_verdict: bool,
+) -> int:
+    import json
+
+    from engine.harness.session import UnknownConversationError
+
+    session, ports = _build_session(pack_dir, _print_status)
+    try:
+        result = session.ask(question, conversation_id=conversation_id)
+    except UnknownConversationError as exc:
+        raise CliError(str(exc))
+
+    print(
+        f"conversation {result.conversation_id} · turn {result.turn}",
+        file=sys.stderr,
+    )
+    outcome = result.outcome
+    exit_code = _OUTCOME_EXIT_CODES[
+        (
+            outcome.kind,
+            outcome.verification if outcome.kind == "answer" else None,
+        )
+    ]
+
+    if as_json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2))
+        return exit_code
+
+    if outcome.kind == "answer":
+        if outcome.verification == "unverified":
+            print("[UNVERIFIED] This answer could not be fully verified "
+                  "against its evidence.")
+        if outcome.body.kind == "table":
+            print(_render_text_table(outcome.body.table))
+            if outcome.body.caption:
+                print(f"\n({outcome.body.caption})")
+        else:
+            print(outcome.body.text)
+    elif outcome.kind == "refuse":
+        print(f"REFUSED: {outcome.reason}")
+        if outcome.what_would_work:
+            print(f"What would work: {outcome.what_would_work}")
+    elif outcome.kind == "clarify":
+        print(f"CLARIFY: {outcome.question}")
+    else:
+        print(f"ESCALATED: {outcome.reason}")
+
+    if show_verdict and result.verdict is not None:
+        print("\n--- verdict ---")
+        print(json.dumps(result.verdict.model_dump(mode="json"), indent=2))
+    if show_evidence and result.evidence_bundle_ref is not None:
+        from engine.config.models import PortName as _PortName
+
+        store = ports.get(_PortName.WORK_STORE)
+        payload = store.load_evidence_bundle(result.evidence_bundle_ref)
+        print(f"\n--- evidence {result.evidence_bundle_ref} ---")
+        print(payload)
+    return exit_code
+
+
+def _turns(
+    pack_dir: str,
+    conversation_id: int | None,
+    turn: int | None,
+    show_evidence: bool,
+) -> int:
+    import json
+
+    pack = load_pack(pack_dir)
+    ports = build(pack)
+    store = ports.get(PortName.WORK_STORE)
+    identity = ports.get(PortName.IDENTITY)
+    store.ensure_schema()
+
+    if conversation_id is None:
+        owner = identity.current_user().username
+        for workspace in store.list_workspaces(owner):
+            for conversation in store.list_conversations(workspace.id):
+                count = len(store.list_turn_logs(conversation.id))
+                print(
+                    f"{conversation.id:>4}  {conversation.created_at:%Y-%m-%d %H:%M}  "
+                    f"{count} turn(s)  {conversation.title}"
+                )
+        return 0
+
+    entries = store.list_turn_logs(conversation_id)
+    if not entries:
+        raise CliError(f"No turns logged for conversation {conversation_id}.")
+
+    if turn is None:
+        for entry in entries:
+            verdict = "-"
+            if entry.verifier_verdict:
+                verdict = json.loads(entry.verifier_verdict).get(
+                    "disposition", "?"
+                )
+            tools = ",".join(entry.tools_used) or "-"
+            print(
+                f"turn {entry.turn:>2}  {entry.actor}  {entry.action}  "
+                f"tools={tools}  verdict={verdict}  "
+                f"evidence={entry.evidence_bundle_ref or '-'}"
+            )
+        return 0
+
+    matching = [e for e in entries if e.turn == turn]
+    if not matching:
+        raise CliError(
+            f"No turn {turn} in conversation {conversation_id}."
+        )
+    (entry,) = matching[:1]
+    print(json.dumps(entry.model_dump(mode="json"), indent=2))
+    if show_evidence and entry.evidence_bundle_ref:
+        payload = store.load_evidence_bundle(entry.evidence_bundle_ref)
+        print(f"\n--- evidence {entry.evidence_bundle_ref} ---")
+        print(payload)
+    return 0
 
 
 def _info(pack_dir: str) -> int:
