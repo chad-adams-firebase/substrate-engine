@@ -20,6 +20,24 @@ RULES_IN_ORDER = [
     "rule_split_billing",
 ]
 
+# The same twelve rules in the order the module DEFINES them, which
+# run_rules does not follow — contains answers "what lives here",
+# callees answers "what runs, in order".
+RULES_DEFINED_IN_ORDER = [
+    "rule_rate_variance",
+    "rule_unapproved_item",
+    "rule_quantity_spike",
+    "rule_duplicate_line",
+    "rule_new_supplier",
+    "rule_freight_overcharge",
+    "rule_rush_fee_unjustified",
+    "rule_markup_over_list",
+    "rule_service_hours_excessive",
+    "rule_contract_lapsed_rate",
+    "rule_total_mismatch",
+    "rule_split_billing",
+]
+
 
 def test_callees_of_run_rules_come_back_in_call_order(tool_pack):
     registry, _ = build_tool_registry(tool_pack)
@@ -99,6 +117,47 @@ def test_members_hop_lists_a_components_nodes(tool_pack):
     # is the L1 signal); functions hang off the module via the graph.
     names = {node.qualified_name for node in invocation.output.nodes}
     assert names == {"invoiceguard.spine.rules_engine"}
+
+
+def test_contains_hop_lists_a_modules_definitions_in_source_order(tool_pack):
+    registry, _ = build_tool_registry(tool_pack)
+    invocation = registry.invoke(
+        "traverse_code_knowledge_graph",
+        {"entry": "invoiceguard.spine.rules_engine", "hop": "contains"},
+    )
+    assert invocation.status == "ok", invocation.error
+    starts = [node.start_line for node in invocation.output.nodes]
+    assert starts == sorted(starts)
+    lines = [edge.line for edge in invocation.output.edges]
+    assert lines == sorted(lines)
+    names = [n.qualified_name.rsplit(".", 1)[1] for n in invocation.output.nodes]
+    # Every rule function is a direct child of the module, in DEFINITION
+    # order — which is not the call order run_rules uses (that is what
+    # the callees hop answers; the two orders differing is the point).
+    in_module_order = [n for n in names if n in RULES_IN_ORDER]
+    assert in_module_order == RULES_DEFINED_IN_ORDER
+    assert set(in_module_order) == set(RULES_IN_ORDER)
+    assert "run_rules" in names
+    assert invocation.manifest_ids
+
+
+def test_component_to_functions_is_members_then_contains(tool_pack):
+    # The two-hop ladder the router prompt documents: L1 memberships are
+    # module-granularity, so component -> functions is members, then
+    # contains from the member module.
+    registry, _ = build_tool_registry(tool_pack)
+    members = registry.invoke(
+        "traverse_code_knowledge_graph",
+        {"entry": "ig.spine.rules-engine", "hop": "members"},
+    )
+    assert members.status == "ok", members.error
+    (module,) = members.output.nodes
+    contained = registry.invoke(
+        "traverse_code_knowledge_graph", {"entry": module.id, "hop": "contains"}
+    )
+    assert contained.status == "ok", contained.error
+    names = {n.qualified_name.rsplit(".", 1)[1] for n in contained.output.nodes}
+    assert set(RULES_IN_ORDER) <= names
 
 
 def test_unknown_entry_is_an_error_with_a_component_hint(tool_pack):

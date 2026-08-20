@@ -19,6 +19,7 @@ from engine.tools.envelope import CkgTraversalOutput, ToolInvocation
 Hop = Literal[
     "node",
     "members",
+    "contains",
     "callees",
     "callers",
     "reads_tables",
@@ -40,9 +41,11 @@ class TraverseCodeKnowledgeGraph(Tool):
     description = (
         "Traverse the code knowledge graph one hop from an entry point "
         "(a component id, node id, or qualified name): a node's details, "
-        "a component's members, a function's callees or callers in "
-        "source order, the tables it reads or writes, or its branch "
-        "conditions."
+        "a component's members (its modules), the definitions a module "
+        "or class contains in source order, a function's callees or "
+        "callers in source order, the tables it reads or writes, or its "
+        "branch conditions. Component members are modules, so reaching "
+        "a component's functions takes two hops: members, then contains."
     )
     input_model = CkgTraverseInput
 
@@ -107,16 +110,19 @@ class TraverseCodeKnowledgeGraph(Tool):
             output = output.model_copy(
                 update={"conditionals": index.conditionals(node.id)}
             )
-        elif params.hop in ("callees", "callers"):
-            edges = (
-                index.callees(node.id)
-                if params.hop == "callees"
-                else index.callers(node.id)
-            )
+        elif params.hop in ("contains", "callees", "callers"):
+            if params.hop == "contains":
+                edges = index.contains(node.id)
+            elif params.hop == "callees":
+                edges = index.callees(node.id)
+            else:
+                edges = index.callers(node.id)
             # The counterpart nodes, in the same (line) order, so the
-            # caller gets names alongside edge rows.
+            # caller gets names alongside edge rows. Contains edges sit
+            # at the child's start line, so this order is definition
+            # order.
             counterpart_ids = [
-                edge.target_node_id if params.hop == "callees" else edge.source_id
+                edge.source_id if params.hop == "callers" else edge.target_node_id
                 for edge in edges
             ]
             nodes = [

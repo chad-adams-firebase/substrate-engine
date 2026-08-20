@@ -82,6 +82,12 @@ class CkgIndex:
     def callees(self, node_id: str) -> list[CkgEdge]:
         return self.edges_from(node_id, "calls")
 
+    def contains(self, node_id: str) -> list[CkgEdge]:
+        """A module's or class's contained definitions. The walker
+        records each contains edge at the child's own start line, so
+        line order here IS definition order."""
+        return self.edges_from(node_id, "contains")
+
     def callers(self, node_id: str) -> list[CkgEdge]:
         return self.edges_to(node_id, "calls")
 
