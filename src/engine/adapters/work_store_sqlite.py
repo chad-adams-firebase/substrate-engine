@@ -240,6 +240,58 @@ class SqliteWorkStore:
         ).fetchone()
         return row["payload"] if row else None
 
+    @staticmethod
+    def checkpoint_serde() -> Any:
+        """The checkpoint serializer with every engine type it round-
+        trips registered up front (Addendum N8): LangGraph's msgpack
+        deserialization warns on unregistered types today and will
+        refuse them once strict becomes the default. The allowlist
+        takes exact classes, no module prefixes; the round-trip test
+        in tests/test_harness_checkpoint.py is what forces this list
+        to grow with the state schema."""
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        from engine.config.models import SubstrateName, ToolName
+        from engine.harness.outcomes import (
+            AnswerOutcome,
+            ClarifyOutcome,
+            EscalateOutcome,
+            MarkdownAnswer,
+            RefuseOutcome,
+            TableAnswer,
+        )
+        from engine.harness.state import RouteDecision, ToolSelection, TurnState
+        from engine.ports.types import Message
+        from engine.tools.envelope import ToolInvocation
+        from engine.verifier.models import (
+            AttemptRecord,
+            InjectedSpan,
+            PlausibilityRecord,
+            VerifierVerdict,
+        )
+
+        return JsonPlusSerializer(
+            allowed_msgpack_modules=[
+                Message,
+                ToolName,
+                SubstrateName,
+                ToolInvocation,
+                RouteDecision,
+                ToolSelection,
+                TurnState,
+                MarkdownAnswer,
+                TableAnswer,
+                AnswerOutcome,
+                RefuseOutcome,
+                ClarifyOutcome,
+                EscalateOutcome,
+                AttemptRecord,
+                PlausibilityRecord,
+                VerifierVerdict,
+                InjectedSpan,
+            ]
+        )
+
     def checkpointer(self) -> Any:
         """The LangGraph SqliteSaver, against this store's database
         file. The saver owns its checkpoints/writes tables alongside
@@ -260,7 +312,8 @@ class SqliteWorkStore:
         if database != ":memory:":
             Path(database).parent.mkdir(parents=True, exist_ok=True)
         return SqliteSaver(
-            sqlite3.connect(database, check_same_thread=False)
+            sqlite3.connect(database, check_same_thread=False),
+            serde=self.checkpoint_serde(),
         )
 
     def search_published_units(self, text: str) -> list[UnitSummary]:

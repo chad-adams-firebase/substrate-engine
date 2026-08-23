@@ -76,3 +76,74 @@ def test_separate_conversations_have_separate_histories(tool_pack, tmp_path):
     llm = ports.get(PortName.LLM)
     second_contents = [m.content for m in llm.calls[1]["messages"]]
     assert "first question" not in " ".join(second_contents)
+
+
+def test_every_checkpointed_engine_type_survives_the_msgpack_allowlist():
+    # Addendum N8: the saver's serializer registers every engine type
+    # it round-trips; an unregistered one revives as a raw kwargs dict
+    # (breaking, once LangGraph's strict mode is the default) and
+    # fails the deep equality below. Growing TurnState grows this
+    # populated state, so the allowlist is forced to keep up.
+    from engine.adapters.work_store_sqlite import SqliteWorkStore
+    from engine.harness.outcomes import AnswerOutcome, MarkdownAnswer
+    from engine.harness.state import RouteDecision, ToolSelection, TurnState
+    from engine.ports.types import Message
+    from engine.verifier.models import (
+        AttemptRecord,
+        ClaimRecord,
+        InjectedSpan,
+        PlausibilityRecord,
+        VerifierVerdict,
+    )
+    from tests.verifier_support import sql_invocation
+
+    claim = ClaimRecord(
+        kind="numeric",
+        surface="146",
+        start=0,
+        end=3,
+        status="matched_injected",
+        method="injected",
+        evidence_ref="e0.table.rows[0].n",
+        injected=True,
+    )
+    attempt = AttemptRecord(attempt=1, claims=[claim], unmatched_count=0)
+    plausibility = PlausibilityRecord(
+        check="run_sql.count_vs_stats",
+        tool="run_sql",
+        severity="warn",
+        detail="d",
+    )
+    state = TurnState(
+        history=[Message(role="user", content="q")],
+        turn=1,
+        question="q",
+        scratch=[Message(role="assistant", content="a")],
+        evidence=[sql_invocation("SELECT 1 AS n", [{"n": 146}])],
+        iterations=2,
+        decision=RouteDecision(
+            kind="tools",
+            selections=[ToolSelection(name="run_sql", arguments={"question": "q"})],
+        ),
+        draft=MarkdownAnswer(text="146 rows."),
+        draft_raw="{{e0.table.rows[0].n}} rows.",
+        injected_spans=[InjectedSpan(start=0, end=3, ref="e0.table.rows[0].n")],
+        verifier_attempts=[attempt],
+        verifier_plausibility=[plausibility],
+        judge_calls_total=1,
+        verdict=VerifierVerdict(
+            disposition="verified",
+            mode="prose",
+            attempts=[attempt],
+            plausibility=[plausibility],
+            judge_calls=1,
+        ),
+        outcome=AnswerOutcome(
+            body=MarkdownAnswer(text="146 rows."), verification="verified"
+        ),
+    )
+
+    serde = SqliteWorkStore.checkpoint_serde()
+    for name, value in state:
+        revived = serde.loads_typed(serde.dumps_typed(value))
+        assert revived == value, f"channel {name!r} did not round-trip"
