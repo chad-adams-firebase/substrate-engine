@@ -32,6 +32,9 @@ def render_grounding(
         "alias made of letters, digits, and underscores",
         "(COUNT(*) AS invoice_count), never a default name like",
         "count_star().",
+        "When the question asks who, join id columns to their",
+        "human-readable name columns via the join paths below, so the",
+        "result names people and suppliers rather than bare ids.",
         "",
         "## Tables and columns",
     ]
