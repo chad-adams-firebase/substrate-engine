@@ -9,7 +9,7 @@ from engine.harness.prompts import render_drafter_prompt, render_router_prompt
 from engine.harness.session import AskSession
 from engine.ports.types import LLMResponse, ToolCall
 from engine.runtime.harness import build_verifier
-from engine.runtime.tools import resolve_pack_coverage
+from engine.runtime.tools import resolve_data_terms, resolve_pack_coverage
 from engine.tools.envelope import ToolInvocation
 from engine.verifier.models import (
     AttemptRecord,
@@ -118,6 +118,7 @@ def build_ask_session(
                 if coverage is not None
                 else None
             ),
+            data_terms=resolve_data_terms(pack, ports),
         ),
     )
     session = AskSession(

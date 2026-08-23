@@ -46,7 +46,7 @@ concepts:
       the contract labor rate. Stored on invoices.opportunity by the
       roll-up.
     tables: [invoices]
-    synonyms: [recovery opportunity, dollars on the table]
+    synonyms: [recovery opportunity, dollars on the table, savings, productivity]
   - name: weight
     definition: >-
       Queue priority: opportunity-derived, multiplied for creep-back

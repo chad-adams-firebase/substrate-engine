@@ -15,6 +15,7 @@ def render_router_prompt(
     app_description: str,
     max_iterations: int,
     data_coverage: tuple[str, str] | None = None,
+    data_terms: list[str] | None = None,
 ) -> str:
     described = f"{app_name} — {app_description}" if app_description else app_name
     # Resolved from the stats substrate at composition — the same
@@ -25,6 +26,16 @@ def render_router_prompt(
         f"{data_coverage[1]}; give explicit ISO windows inside that "
         "range — never guess a year."
         if data_coverage is not None
+        else ""
+    )
+    # The Dictionary Map's concept and metric vocabulary, resolved at
+    # composition — business phrasings of data questions must not
+    # route away from run_sql just because they skip data words.
+    terms_line = (
+        " Business phrasings of these — "
+        + ", ".join(data_terms)
+        + " — are still run_sql questions."
+        if data_terms
         else ""
     )
     return f"""\
@@ -42,8 +53,9 @@ the component map, then traverse_code_knowledge_graph.
 - "Show me the code" -> traverse_code_knowledge_graph to locate the \
 node, then read_source.
 - Data questions (counts, rates, listings, specific records) -> \
-run_sql. Column meanings and business terms -> lookup_data_dictionary. \
-A column's shape (nulls, ranges, top values) -> query_univariate_stats.
+run_sql.{terms_line} Column meanings and business terms -> \
+lookup_data_dictionary. A column's shape (nulls, ranges, top values) \
+-> query_univariate_stats.
 - "Did X run", "were there errors" -> check_execution.{coverage_line} \
 Policy and \
 why-does-this-rule-exist questions -> search_business_docs. Questions \

@@ -121,6 +121,30 @@ def resolve_pack_coverage(
         raise ToolBuildError(f"check_execution coverage: {exc}") from exc
 
 
+def resolve_data_terms(
+    pack: LoadedPack, ports: ResolvedPorts
+) -> list[str] | None:
+    """The Dictionary Map's concept names, concept synonyms, and
+    metric names — the business vocabulary the router prompt ties to
+    run_sql (Addendum N6: "savings" must route like "fires the most").
+    None when the pack configures no substrate store or no map."""
+    from engine.ports.substrate_store import SubstrateStoreError
+
+    if PortName.SUBSTRATE_STORE not in set(ports.configured()):
+        return None
+    try:
+        mapping = ports.get(PortName.SUBSTRATE_STORE).dictionary_map()
+    except SubstrateStoreError:
+        return None
+    terms: list[str] = []
+    for concept in mapping.concepts:
+        terms.append(concept.name)
+        terms.extend(concept.synonyms)
+    terms.extend(metric.name for metric in mapping.metrics)
+    deduped = list(dict.fromkeys(terms))
+    return deduped or None
+
+
 def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
     _validate(pack, ports)
     settings = pack.config.tool_settings

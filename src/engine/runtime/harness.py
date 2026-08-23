@@ -11,7 +11,7 @@ from engine.harness.graph import GraphDeps
 from engine.harness.prompts import render_drafter_prompt, render_router_prompt
 from engine.harness.session import AskSession
 from engine.runtime.container import ResolvedPorts
-from engine.runtime.tools import resolve_pack_coverage
+from engine.runtime.tools import resolve_data_terms, resolve_pack_coverage
 from engine.tools.registry import ToolRegistry
 from engine.verifier.checks import CheckRegistry, default_checks
 from engine.verifier.verify import Verifier
@@ -52,6 +52,7 @@ def build_harness(
                 if coverage is not None
                 else None
             ),
+            data_terms=resolve_data_terms(pack, ports),
         ),
     )
     return AskSession(

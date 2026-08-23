@@ -174,6 +174,44 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     assert "retrying once with a corrected tool call" in prompt
 
 
+def test_dictionary_terms_resolve_from_the_real_pack(tool_pack):
+    # Addendum N6, the runtime half: the fixture map's concept
+    # synonym and metric name reach the composed router prompt.
+    from engine.config.pack_loader import load_pack
+    from engine.runtime.tools import resolve_data_terms
+    from tests.conftest import build_tool_registry as _build
+
+    _, ports = _build(tool_pack)
+    terms = resolve_data_terms(load_pack(tool_pack), ports)
+    assert "bill" in terms  # concept synonym
+    assert "flag_rate" in terms  # metric name
+
+
+def test_router_prompt_ties_business_terms_to_run_sql():
+    # Addendum N6: "which rule produces the most savings" routed away
+    # from run_sql twice because the Dictionary Map's vocabulary never
+    # informed routing. The rendered prompt now names the terms inside
+    # the run_sql guidance. (The route itself is the scripted LLM's
+    # input in this harness, so prompt truth is the pinnable half; the
+    # synonym-pair route assertion is 4b eval-bank territory.)
+    from engine.harness.prompts import render_router_prompt
+
+    prompt = render_router_prompt(
+        app_name="a",
+        app_description="d",
+        max_iterations=6,
+        data_terms=["opportunity", "savings", "flag_rate"],
+    )
+    bullet = prompt.split("run_sql.", 1)[1]
+    assert "savings" in bullet
+    assert "are still run_sql questions" in bullet
+
+    without = render_router_prompt(
+        app_name="a", app_description="d", max_iterations=6
+    )
+    assert "still run_sql questions" not in without
+
+
 def test_router_prompt_renders_data_coverage_only_when_given():
     from engine.harness.prompts import render_router_prompt
 
