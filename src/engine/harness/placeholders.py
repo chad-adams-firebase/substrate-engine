@@ -43,6 +43,18 @@ def referenced_indices(surfaces: list[str]) -> list[int]:
     ]
 
 
+def _candidates(path: str) -> tuple[str, ...]:
+    """The paths a surface may mean, in trust order: as written, then —
+    because render_evidence nests each tool result under "output" and
+    drafters believe the JSON they see over the prompt's examples —
+    the same path with that wrapper segment stripped once. As-written
+    wins, so a genuine output field, should one ever exist, still
+    resolves."""
+    if path.startswith("output."):
+        return (path, path[len("output.") :])
+    return (path,)
+
+
 def _navigate(value: object, path: str) -> object:
     """Walk a dot/bracket path into a model_dump(mode="json") tree.
     Raises KeyError/IndexError/TypeError on a bad step — the caller
@@ -94,10 +106,13 @@ def resolve_placeholders(
         rendered: str | None = None
         if 0 <= index < len(evidence) and evidence[index].output is not None:
             tree = evidence[index].output.model_dump(mode="json")
-            try:
-                rendered = _render(_navigate(tree, path))
-            except (KeyError, IndexError, TypeError, ValueError):
-                rendered = None
+            for candidate in _candidates(path):
+                try:
+                    rendered = _render(_navigate(tree, candidate))
+                except (KeyError, IndexError, TypeError, ValueError):
+                    rendered = None
+                if rendered is not None:
+                    break
 
         if rendered is None:
             failures.append(surface)

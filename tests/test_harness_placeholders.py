@@ -105,6 +105,50 @@ def test_run_status_paths_resolve():
     assert resolution.text == "Ran: true, count 16."
 
 
+def test_output_prefixed_paths_resolve_identically():
+    # Addendum N1: render_evidence shows the drafter the tool result
+    # nested under "output", so drafters write {{e0.output.path}} and
+    # believed JSON beat the prompt's examples. Both spellings resolve.
+    evidence = _sql_evidence([{"n": 146}])
+    plain = resolve_placeholders("{{e0.table.rows[0].n}}", evidence)
+    prefixed = resolve_placeholders("{{e0.output.table.rows[0].n}}", evidence)
+    assert plain.failures == [] and prefixed.failures == []
+    assert plain.text == prefixed.text == "146"
+    assert plain.injected_spans == prefixed.injected_spans
+
+
+def test_the_exact_c1b_placeholder_resolves():
+    # Addendum N1: {{e1.output.run_status.count}} — right index, right
+    # renamed field, right leaf, one spurious prefix — killed C1b.
+    padding = _sql_evidence([{"n": 1}])
+    evidence = padding + [
+        ToolInvocation(
+            tool="check_execution",
+            arguments={},
+            status="ok",
+            output=CheckExecutionOutput(
+                run_status=RunStatus(
+                    ran=True, count=16, detail="16 stale_sweep_completed events"
+                )
+            ),
+            substrates_read=[],
+        )
+    ]
+    resolution = resolve_placeholders(
+        "The sweep ran {{e1.output.run_status.count}} times.", evidence
+    )
+    assert resolution.failures == []
+    assert resolution.text == "The sweep ran 16 times."
+
+
+def test_bare_output_is_still_a_failure():
+    # {{e0.output}} names the whole structure, not a scalar; the strip
+    # applies only to an "output." prefix with a path behind it.
+    evidence = _sql_evidence([{"n": 146}])
+    resolution = resolve_placeholders("{{e0.output}}", evidence)
+    assert resolution.failures == ["{{e0.output}}"]
+
+
 def test_text_without_placeholders_passes_through_untouched():
     resolution = resolve_placeholders("No figures here.", [])
     assert resolution.text == "No figures here."
