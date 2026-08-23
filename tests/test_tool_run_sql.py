@@ -43,6 +43,52 @@ def test_repair_loop_recovers_and_feeds_the_error_back(tool_pack):
     assert second_call_messages[-2].content == BROKEN.content
 
 
+def test_unaliased_aggregate_triggers_a_repair_round(tool_pack):
+    """Carryback #3b: DuckDB's default aggregate names (count_star())
+    are unaddressable by the placeholder grammar, so a correct result
+    was refused downstream. The guard now spends a repair round on an
+    AS alias instead."""
+    unaliased = LLMResponse(
+        content="```sql\nSELECT COUNT(*) FROM invoices\n```", model="scripted"
+    )
+    registry, ports = build_tool_registry(tool_pack, [unaliased, REPAIRED])
+    invocation = registry.invoke("run_sql", {"question": "how many invoices?"})
+
+    assert invocation.status == "ok", invocation.error
+    assert invocation.output.table.rows == [{"n": 50}]
+
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert "AS alias" in attempts[0].error
+    assert "count_star()" in attempts[0].error
+    assert attempts[0].row_count == 1  # it ran; the name was the problem
+    assert attempts[1].error is None
+
+    stub = ports.get(PortName.LLM)
+    assert attempts[0].error in stub.calls[1]["messages"][-1].content
+
+
+def test_zero_row_results_skip_the_alias_guard(tool_pack):
+    empty = LLMResponse(
+        content="```sql\nSELECT id + 1 FROM invoices WHERE 1 = 0\n```",
+        model="scripted",
+    )
+    registry, _ = build_tool_registry(tool_pack, [empty])
+    invocation = registry.invoke("run_sql", {"question": "nothing"})
+    assert invocation.status == "ok", invocation.error
+    assert invocation.output.table.rows == []
+
+
+def test_alias_criterion_matches_the_placeholder_segment_grammar():
+    """The tools layer duplicates the placeholder name grammar rather
+    than importing harness; this pin makes drift a test failure."""
+    from engine.harness.placeholders import _SEGMENT
+    from engine.tools.run_sql import _ADDRESSABLE_COLUMN
+
+    name_grammar = _ADDRESSABLE_COLUMN.pattern.strip("^$")
+    assert _SEGMENT.pattern == rf"^({name_grammar})((?:\[\d+\])*)$"
+
+
 def test_grounding_prompt_matches_the_golden_fixture(
     tool_pack, snapshot_outputs
 ):

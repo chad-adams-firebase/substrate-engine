@@ -28,6 +28,10 @@ def render_grounding(
         "Use only the tables, columns, joins, and definitions below.",
         "Reply with exactly one read-only SELECT (or WITH) statement in",
         "a ```sql fence and nothing else.",
+        "Give every aggregate or computed select-list expression an AS",
+        "alias made of letters, digits, and underscores",
+        "(COUNT(*) AS invoice_count), never a default name like",
+        "count_star().",
         "",
         "## Tables and columns",
     ]

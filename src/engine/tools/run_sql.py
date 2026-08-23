@@ -40,6 +40,13 @@ from engine.tools.grounding import render_grounding
 
 _SQL_FENCE = re.compile(r"```(?:sql)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 
+# Must stay identical to the name group of the placeholder grammar's
+# _SEGMENT (engine.harness.placeholders): a result column the drafter
+# cannot address as {{eN.table.rows[i].<name>}} is a value the answer
+# cannot cite. Tools never import harness, so the pattern is
+# duplicated here and pinned equal by a test.
+_ADDRESSABLE_COLUMN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
 _SUBSTRATES = [
     SubstrateName.DATA_DICTIONARY,
     SubstrateName.DATA_DICTIONARY_MAP,
@@ -139,6 +146,7 @@ class RunSql(Tool):
         for _ in range(self._settings.max_repair_attempts + 1):
             response = self._llm.complete(messages, temperature=0.0)
             sql = extract_sql(response.content)
+            row_count: int | None = None
             if sql is None:
                 error = (
                     "No SQL statement found in the reply. Reply with exactly "
@@ -152,24 +160,50 @@ class RunSql(Tool):
                 except Exception as exc:
                     error = str(exc)
                 else:
-                    attempts.append(
-                        SqlAttempt(
-                            raw_response=response.content,
-                            sql=sql,
-                            row_count=len(rows),
-                        )
+                    # Zero rows carry no keys and nothing citable, so
+                    # only non-empty results face the alias check.
+                    bad = (
+                        [
+                            column
+                            for column in rows[0].keys()
+                            if not _ADDRESSABLE_COLUMN.match(column)
+                        ]
+                        if rows
+                        else []
                     )
-                    return self.ok(
-                        params,
-                        RunSqlOutput(sql=sql, table=self._to_table(rows)),
-                        evidence=RunSqlEvidence(
-                            grounding_prompt=prompt, attempts=attempts
-                        ),
-                        substrates_read=_SUBSTRATES,
-                        manifest_ids=manifest_ids,
+                    if not bad:
+                        attempts.append(
+                            SqlAttempt(
+                                raw_response=response.content,
+                                sql=sql,
+                                row_count=len(rows),
+                            )
+                        )
+                        return self.ok(
+                            params,
+                            RunSqlOutput(sql=sql, table=self._to_table(rows)),
+                            evidence=RunSqlEvidence(
+                                grounding_prompt=prompt, attempts=attempts
+                            ),
+                            substrates_read=_SUBSTRATES,
+                            manifest_ids=manifest_ids,
+                        )
+                    row_count = len(rows)
+                    named = ", ".join(repr(column) for column in bad)
+                    error = (
+                        f"Result column name(s) {named} are not plain "
+                        "identifiers. Add an AS alias (letters, digits, "
+                        "underscores) to every aggregate or expression, "
+                        "e.g. COUNT(*) AS invoice_count, and resend the "
+                        "full statement."
                     )
             attempts.append(
-                SqlAttempt(raw_response=response.content, sql=sql, error=error)
+                SqlAttempt(
+                    raw_response=response.content,
+                    sql=sql,
+                    error=error,
+                    row_count=row_count,
+                )
             )
             messages.append(Message(role="assistant", content=response.content))
             messages.append(
