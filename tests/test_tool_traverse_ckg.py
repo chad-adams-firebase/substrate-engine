@@ -160,6 +160,55 @@ def test_component_to_functions_is_members_then_contains(tool_pack):
     assert set(RULES_IN_ORDER) <= names
 
 
+def test_bare_function_name_resolves_when_unique(tool_pack):
+    # Addendum N4: the L3 bare-name death — exact-match resolve_node
+    # dead-ended on rule_rate_variance with no steering. A suffix
+    # naming exactly one node now resolves like the qualified name.
+    registry, _ = build_tool_registry(tool_pack)
+    bare = registry.invoke(
+        "traverse_code_knowledge_graph",
+        {"entry": "rule_rate_variance", "hop": "node"},
+    )
+    assert bare.status == "ok", bare.error
+    assert bare.output.entry_node.qualified_name == (
+        "invoiceguard.spine.rules_engine.rule_rate_variance"
+    )
+
+
+def test_ambiguous_suffix_errors_naming_the_candidates():
+    # Addendum N4: two nodes share the suffix — never guess; the
+    # steering error names both so the router can retry with one.
+    from engine.substrates.ckg_index import CkgIndex
+    from engine.substrates.models import CkgNode, Provenance
+    from engine.tools.traverse_code_knowledge_graph import (
+        CkgTraverseInput,
+        TraverseCodeKnowledgeGraph,
+    )
+
+    machine = Provenance(
+        source="machine", confidence=1.0, needs_validation=False, manifest_id="m"
+    )
+    nodes = [
+        CkgNode(
+            id=f"n{i}",
+            kind="function",
+            qualified_name=name,
+            file_path="pkg/mod.py",
+            start_line=1,
+            end_line=5,
+            provenance=machine,
+        )
+        for i, name in enumerate(["pkg.alpha.run", "pkg.beta.run"])
+    ]
+    tool = TraverseCodeKnowledgeGraph(store=None)
+    tool._lazy_index = CkgIndex(nodes, [], [], [], [])
+    invocation = tool.run(CkgTraverseInput(entry="run", hop="node"))
+    assert invocation.status == "error"
+    assert "pkg.alpha.run" in invocation.error
+    assert "pkg.beta.run" in invocation.error
+    assert "one full qualified name" in invocation.error
+
+
 def test_unknown_entry_is_an_error_with_a_component_hint(tool_pack):
     registry, _ = build_tool_registry(tool_pack)
     unknown = registry.invoke(

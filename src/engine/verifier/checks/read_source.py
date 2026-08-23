@@ -5,9 +5,9 @@ but never participate in derivations."""
 
 from engine.config.models import ToolName
 from engine.tools.envelope import ReadSourceOutput, ToolInvocation
+from engine.substrates.ckg_index import dotted_suffixes
 from engine.verifier.checks.base import (
     SubstrateCheck,
-    dotted_suffixes,
     identifier_tokens,
     numeric_literals,
 )

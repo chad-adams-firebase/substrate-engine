@@ -30,6 +30,16 @@ def test_returns_the_exact_lines_of_the_rule_function(tool_pack):
     assert invocation.evidence is None  # the output IS the raw record
 
 
+def test_bare_node_name_resolves_when_unique(tool_pack):
+    # Addendum N4: the same suffix steering as the traverse tool.
+    registry, _ = build_tool_registry(tool_pack)
+    invocation = registry.invoke(
+        "read_source", {"node": "rule_rate_variance"}
+    )
+    assert invocation.status == "ok", invocation.error
+    assert invocation.output.qualified_name == RATE_VARIANCE
+
+
 def test_sha_drift_refuses_with_both_shas_named(tool_pack):
     config = yaml.safe_load((tool_pack / "config.yaml").read_text())
     config["adapters"]["source_code"]["settings"]["commit_sha"] = "f" * 40

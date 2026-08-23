@@ -83,6 +83,10 @@ class TraverseCodeKnowledgeGraph(Tool):
                 # L3 flail was hop='members' with a function name, and
                 # the component-list dump steered the wrong way.
                 node = index.resolve_node(params.entry)
+                if node is None:
+                    suffixed = index.resolve_suffix(params.entry)
+                    if len(suffixed) == 1:
+                        node = suffixed[0]
                 if node is not None:
                     return self.fail(
                         params,
@@ -109,6 +113,22 @@ class TraverseCodeKnowledgeGraph(Tool):
             )
 
         node = index.resolve_node(params.entry)
+        if node is None:
+            # Addendum N4: a bare suffix — the most human phrasing —
+            # resolves when it names exactly one node; ambiguity is a
+            # steering error naming the candidates, never a guess.
+            candidates = index.resolve_suffix(params.entry)
+            if len(candidates) == 1:
+                node = candidates[0]
+            elif len(candidates) > 1:
+                named = ", ".join(
+                    n.qualified_name for n in candidates[:8]
+                )
+                return self.fail(
+                    params,
+                    f"{params.entry!r} names {len(candidates)} nodes: "
+                    f"{named}. Re-ask with one full qualified name.",
+                )
         if node is None:
             hint = ""
             if index.resolve_component(params.entry) is not None:

@@ -19,6 +19,16 @@ from engine.substrates.models import (
 )
 
 
+def dotted_suffixes(qualified_name: str) -> set[str]:
+    """run_rules, rules_engine.run_rules, ... — every suffix a human
+    or drafter may reasonably use to name the same thing. Shared by
+    the Verifier's suffix vocabulary and resolve_suffix below, so the
+    names the engine recognizes and the names its tools can resolve
+    stay one set."""
+    parts = qualified_name.split(".")
+    return {".".join(parts[i:]) for i in range(len(parts))}
+
+
 class CkgIndex:
     def __init__(
         self,
@@ -33,6 +43,11 @@ class CkgIndex:
             n.qualified_name: n for n in nodes
         }
         self.component_by_id: dict[str, Component] = {c.id: c for c in components}
+
+        self._nodes_by_suffix: dict[str, list[CkgNode]] = {}
+        for node in nodes:
+            for suffix in dotted_suffixes(node.qualified_name):
+                self._nodes_by_suffix.setdefault(suffix, []).append(node)
 
         self._edges_from: dict[str, list[CkgEdge]] = {}
         self._edges_to: dict[str, list[CkgEdge]] = {}
@@ -55,6 +70,18 @@ class CkgIndex:
         """A node by id or by qualified name — the two handles callers
         legitimately hold (ids from prior hops, names from humans)."""
         return self.node_by_id.get(entry) or self.node_by_qualified_name.get(entry)
+
+    def resolve_suffix(self, entry: str) -> list[CkgNode]:
+        """Nodes whose qualified name ends with this dotted suffix, by
+        qualified name. The deliberate asymmetry with the Verifier's
+        vocabulary: vocabulary accepts ambiguous suffixes (naming),
+        resolution demands uniqueness (dereferencing) — callers
+        proceed only on exactly one candidate and error naming the
+        rest, never guess."""
+        return sorted(
+            self._nodes_by_suffix.get(entry, []),
+            key=lambda n: n.qualified_name,
+        )
 
     def resolve_component(self, entry: str) -> Component | None:
         return self.component_by_id.get(entry)

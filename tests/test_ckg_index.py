@@ -105,6 +105,27 @@ def test_resolve_by_id_and_qualified_name():
     assert index.resolve_component("app.core").name == "Core"
 
 
+def test_suffix_resolution_unique_ambiguous_and_empty():
+    # Addendum N4: a bare dotted suffix — the most human phrasing —
+    # resolves when unique; resolve_node stays exact (dereferencing
+    # never guesses), and ambiguity returns every candidate for the
+    # caller's steering error.
+    index = _index()
+    (only,) = index.resolve_suffix("entry")
+    assert only.id == "n1"
+    assert index.resolve_suffix("nope") == []
+    assert index.resolve_node("entry") is None
+
+    ambiguous = CkgIndex(
+        [_node("a1", "pkg.alpha.run"), _node("a2", "pkg.beta.run")],
+        [],
+        [],
+        [],
+        [],
+    )
+    assert [n.id for n in ambiguous.resolve_suffix("run")] == ["a1", "a2"]
+
+
 def test_callees_ordered_by_call_site_line():
     index = _index()
     callees = index.callees("n1")

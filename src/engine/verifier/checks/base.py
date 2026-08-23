@@ -58,12 +58,5 @@ def identifier_tokens(text: str) -> set[str]:
     return {t for t in _IDENTIFIER.findall(text) if len(t) >= 2}
 
 
-def dotted_suffixes(qualified_name: str) -> set[str]:
-    """run_rules, rules_engine.run_rules, ... — every suffix a drafter
-    may reasonably use to name the same thing."""
-    parts = qualified_name.split(".")
-    return {".".join(parts[i:]) for i in range(len(parts))}
-
-
 def numeric_literals(text: str) -> list[float]:
     return [float(m) for m in _NUMBER.findall(text)]

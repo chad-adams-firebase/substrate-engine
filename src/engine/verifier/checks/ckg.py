@@ -12,9 +12,9 @@ lists from the line-ordered edges. No plausibility check (Brief §9.3).
 
 from engine.config.models import ToolName
 from engine.tools.envelope import CkgTraversalOutput, ToolInvocation
+from engine.substrates.ckg_index import dotted_suffixes
 from engine.verifier.checks.base import (
     SubstrateCheck,
-    dotted_suffixes,
     identifier_tokens,
     numeric_literals,
 )

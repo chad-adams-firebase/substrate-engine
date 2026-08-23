@@ -71,6 +71,18 @@ class ReadSource(Tool):
         except SubstrateStoreError as exc:
             return self.fail(params, str(exc))
         if node is None:
+            # Addendum N4: same suffix steering as the traverse tool.
+            candidates = self._index.resolve_suffix(params.node)
+            if len(candidates) == 1:
+                node = candidates[0]
+            elif len(candidates) > 1:
+                named = ", ".join(n.qualified_name for n in candidates[:8])
+                return self.fail(
+                    params,
+                    f"{params.node!r} names {len(candidates)} nodes: "
+                    f"{named}. Re-ask with one full qualified name.",
+                )
+        if node is None:
             return self.fail(
                 params,
                 f"No CKG node with id or qualified name {params.node!r} — "
