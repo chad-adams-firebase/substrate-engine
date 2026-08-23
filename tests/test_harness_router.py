@@ -164,6 +164,24 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     assert "at most 6 steps" in prompt
 
 
+def test_router_prompt_renders_data_coverage_only_when_given():
+    from engine.harness.prompts import render_router_prompt
+
+    without = render_router_prompt(
+        app_name="a", app_description="d", max_iterations=6
+    )
+    assert "execution log covers" not in without
+
+    prompt = render_router_prompt(
+        app_name="a",
+        app_description="d",
+        max_iterations=6,
+        data_coverage=("2026-03-02", "2026-05-30"),
+    )
+    assert "The execution log covers 2026-03-02 through 2026-05-30" in prompt
+    assert "never guess a year" in prompt
+
+
 def test_router_messages_order_system_history_question_scratch():
     messages = build_router_messages(
         "SYSTEM",

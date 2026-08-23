@@ -99,6 +99,14 @@ tool_settings:
     top_k: 5
   check_execution:
     max_errors: 50
+    # The stats columns anchoring the log's data coverage — the
+    # structured analog of the dictionary map's data_coverage gotcha.
+    # Values resolve from the stats substrate at build; never dates
+    # typed here, never wall-clock.
+    coverage_columns:
+      - invoices.received_at
+      - scheduled_tasks.completed_at
+    coverage_grace_days: 7
 
 harness:
   max_router_iterations: 6

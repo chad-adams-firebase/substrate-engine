@@ -10,9 +10,23 @@ the tool's hops change, this text changes with them.
 
 
 def render_router_prompt(
-    *, app_name: str, app_description: str, max_iterations: int
+    *,
+    app_name: str,
+    app_description: str,
+    max_iterations: int,
+    data_coverage: tuple[str, str] | None = None,
 ) -> str:
     described = f"{app_name} — {app_description}" if app_description else app_name
+    # Resolved from the stats substrate at composition — the same
+    # anchor the plausibility checks use, never wall-clock. None (no
+    # coverage columns configured) renders the prompt without it.
+    coverage_line = (
+        f" The execution log covers {data_coverage[0]} through "
+        f"{data_coverage[1]}; give explicit ISO windows inside that "
+        "range — never guess a year."
+        if data_coverage is not None
+        else ""
+    )
     return f"""\
 You route questions about the {described} application to \
 evidence-gathering tools. You never answer from memory; every answer \
@@ -30,7 +44,8 @@ node, then read_source.
 - Data questions (counts, rates, listings, specific records) -> \
 run_sql. Column meanings and business terms -> lookup_data_dictionary. \
 A column's shape (nulls, ranges, top values) -> query_univariate_stats.
-- "Did X run", "were there errors" -> check_execution. Policy and \
+- "Did X run", "were there errors" -> check_execution.{coverage_line} \
+Policy and \
 why-does-this-rule-exist questions -> search_business_docs. Questions \
 that sound like a previously published analysis -> \
 answer_from_known_items.

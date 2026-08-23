@@ -4,7 +4,7 @@ methods. The component→query mapping is pack config; nothing here (or
 anywhere) lets the LLM write a log query.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -13,6 +13,7 @@ from engine.config.models import CheckExecutionSettings, SubstrateName, ToolName
 from engine.ports.execution_log import ExecutionLogError, ExecutionLogPort
 from engine.ports.types import LogEvent, TimeWindow
 from engine.tools.base import Tool
+from engine.tools.coverage import CoverageWindow
 from engine.tools.envelope import (
     CheckExecutionEvidence,
     CheckExecutionOutput,
@@ -56,17 +57,43 @@ class CheckExecution(Tool):
         "run in a time window (mode 'did_run', optionally narrowed by a "
         "key such as an invoice id), or what error-level events did it "
         "emit (mode 'recent_errors'). Timestamps are ISO 8601 with "
-        "timezone."
+        "timezone. Windows must fall inside the pack's data coverage; "
+        "an out-of-range window returns an error naming the coverage."
     )
     input_model = CheckExecutionInput
 
     def __init__(
-        self, log: ExecutionLogPort, settings: CheckExecutionSettings
+        self,
+        log: ExecutionLogPort,
+        settings: CheckExecutionSettings,
+        coverage: CoverageWindow | None = None,
     ) -> None:
         self._log = log
         self._settings = settings
+        self._coverage = coverage
 
     def run(self, params: CheckExecutionInput) -> ToolInvocation:
+        # A window entirely outside data coverage is a hallucinated
+        # date (carryback #3a: an invented 2023 window returned an
+        # honest ran:false that would have VERIFIED a wrong "no").
+        # Steering error, recoverable: the router re-asks in range.
+        if self._coverage is not None:
+            grace = timedelta(days=self._settings.coverage_grace_days)
+            if (
+                params.window_end.date() < self._coverage.start - grace
+                or params.window_start.date() > self._coverage.end + grace
+            ):
+                return self.fail(
+                    params,
+                    (
+                        f"The window [{params.window_start.date()} .. "
+                        f"{params.window_end.date()}] is entirely outside "
+                        f"the data coverage [{self._coverage.start} .. "
+                        f"{self._coverage.end}]. Re-ask with a window "
+                        "inside coverage; relative dates anchor to the "
+                        "coverage end, not today."
+                    ),
+                )
         window = TimeWindow(start=params.window_start, end=params.window_end)
         try:
             if params.mode == "did_run":

@@ -9,6 +9,7 @@ from engine.harness.prompts import render_drafter_prompt, render_router_prompt
 from engine.harness.session import AskSession
 from engine.ports.types import LLMResponse, ToolCall
 from engine.runtime.harness import build_verifier
+from engine.runtime.tools import resolve_pack_coverage
 from engine.tools.envelope import ToolInvocation
 from engine.verifier.models import (
     AttemptRecord,
@@ -101,6 +102,7 @@ def build_ask_session(
         verifier = (
             build_verifier(pack, ports) if real_verifier else StubVerifier()
         )
+    coverage = resolve_pack_coverage(pack, ports)
     deps = GraphDeps(
         llm=llm,
         registry=registry,
@@ -111,6 +113,11 @@ def build_ask_session(
             app_name=pack.config.name,
             app_description=pack.config.description,
             max_iterations=pack.config.harness.max_router_iterations,
+            data_coverage=(
+                (coverage.start.isoformat(), coverage.end.isoformat())
+                if coverage is not None
+                else None
+            ),
         ),
     )
     session = AskSession(

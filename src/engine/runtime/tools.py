@@ -14,6 +14,7 @@ from engine.tools.answer_from_known_items import AnswerFromKnownItems
 from engine.tools.app_primer import AppPrimer
 from engine.tools.base import Tool
 from engine.tools.check_execution import CheckExecution
+from engine.tools.coverage import CoverageWindow, resolve_coverage_window
 from engine.tools.lookup_data_dictionary import LookupDataDictionary
 from engine.tools.query_univariate_stats import QueryUnivariateStats
 from engine.tools.read_source import ReadSource
@@ -91,6 +92,35 @@ def _validate(pack: LoadedPack, ports: ResolvedPorts) -> None:
         )
 
 
+def resolve_pack_coverage(
+    pack: LoadedPack, ports: ResolvedPorts
+) -> CoverageWindow | None:
+    """The pack's data-coverage window, from the stats substrate via
+    the columns named in check_execution settings; None when the pack
+    names none. The dependency is conditional (the static REQUIRED_*
+    tables stay unconditional), so it is checked here, loudly."""
+    columns = pack.config.tool_settings.check_execution.coverage_columns
+    if not columns:
+        return None
+    if SubstrateName.UNIVARIATE_STATISTICS not in pack.config.substrates:
+        raise ToolBuildError(
+            "check_execution coverage_columns require the "
+            "univariate_statistics substrate, which the pack does not "
+            "enable"
+        )
+    if PortName.SUBSTRATE_STORE not in set(ports.configured()):
+        raise ToolBuildError(
+            "check_execution coverage_columns require an adapter for "
+            "port 'substrate_store', which the pack does not configure"
+        )
+    try:
+        return resolve_coverage_window(
+            ports.get(PortName.SUBSTRATE_STORE).stats(), columns
+        )
+    except ValueError as exc:
+        raise ToolBuildError(f"check_execution coverage: {exc}") from exc
+
+
 def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
     _validate(pack, ports)
     settings = pack.config.tool_settings
@@ -131,7 +161,9 @@ def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
     if ToolName.CHECK_EXECUTION in enabled:
         tools.append(
             CheckExecution(
-                ports.get(PortName.EXECUTION_LOG), settings.check_execution
+                ports.get(PortName.EXECUTION_LOG),
+                settings.check_execution,
+                coverage=resolve_pack_coverage(pack, ports),
             )
         )
     if ToolName.ANSWER_FROM_KNOWN_ITEMS in enabled:

@@ -127,6 +127,17 @@ class CheckExecutionSettings(BaseModel):
     # Error events kept in the tool's output/evidence; the port
     # returns everything, the tool truncates visibly.
     max_errors: int = 50
+    # Stats columns ("table.column") whose [min, max] anchor the log's
+    # data coverage — resolved from the stats substrate at composition,
+    # never wall-clock. Empty (default) disables the window guard and
+    # the router-prompt coverage line. Naming columns is deliberate: a
+    # naive all-TIMESTAMP reduce would drag coverage back to the
+    # oldest contract date, years before any log line.
+    coverage_columns: list[str] = []
+    # A window may overhang resolved coverage by this much before the
+    # entirely-outside guard fires (stats snapshots trail the log; the
+    # log, not the snapshot, is the source of truth at the edges).
+    coverage_grace_days: int = 7
 
 
 class ToolSettings(BaseModel):
