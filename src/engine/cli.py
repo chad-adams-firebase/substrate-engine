@@ -201,6 +201,43 @@ def main(argv: list[str] | None = None) -> int:
         "(row, rep) keys.",
     )
 
+    eval_grade = eval_sub.add_parser(
+        "grade",
+        help="Grade a run report fully offline (no LLM): execute gold "
+        "scripts against the world, evaluate assertions, render the "
+        "verdict table.",
+        epilog="Exit codes: 0 pass · 1 error · 2 threshold failures · "
+        "3 bank rot · 4 wrong-but-verified invariant breach.",
+    )
+    eval_grade.add_argument(
+        "--bank", required=True, help="Bank root (e.g. evals/invoiceguard)."
+    )
+    eval_grade.add_argument(
+        "--report",
+        type=_cwd_path,
+        help="Run report JSONL (omit with --check-gold).",
+    )
+    eval_grade.add_argument(
+        "--pack",
+        help="Pack directory; defaults to the pack path in the bank's "
+        "eval.yaml.",
+    )
+    eval_grade.add_argument(
+        "--out", help="Also write the rendered text report to this file."
+    )
+    eval_grade.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the GradeReport as JSON instead of rendered text.",
+    )
+    eval_grade.add_argument(
+        "--check-gold",
+        action="store_true",
+        dest="check_gold",
+        help="Execute every gold script and compare against committed "
+        "expectations (bank-rot detector); needs no report.",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "info":
@@ -226,6 +263,8 @@ def main(argv: list[str] | None = None) -> int:
             return _turns(args.pack, args.conversation, args.turn, args.evidence)
         if args.command == "eval" and args.eval_command == "run":
             return _eval_run(args)
+        if args.command == "eval" and args.eval_command == "grade":
+            return _eval_grade(args)
     except (PackLoadError, UnknownAdapterError, AdapterBuildError, CliError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -508,6 +547,56 @@ def _eval_run(args) -> int:
             resume=args.resume,
         )
     except (BankLoadError, RunnerError) as exc:
+        raise CliError(str(exc))
+
+
+def _eval_grade(args) -> int:
+    import json
+
+    from engine.eval.bank import BankLoadError, load_bank
+    from engine.eval.gold import check_gold
+    from engine.eval.grade import GradeError, grade
+    from engine.eval.report import render, render_gold_checks
+    from engine.eval.runner import RunnerError, load_report
+    from engine.eval.world import World, WorldError
+
+    try:
+        bank = load_bank(args.bank)
+        pack_dir = (
+            Path(args.pack)
+            if args.pack
+            else (bank.root / bank.config.pack).resolve()
+        )
+        world = World.from_pack(pack_dir)
+
+        if args.check_gold:
+            checks = check_gold(bank, world)
+            text = render_gold_checks(checks)
+            print(text, end="")
+            if args.out is not None:
+                Path(args.out).write_text(text, encoding="utf-8", newline="\n")
+            return 0 if all(c.status == "ok" for c in checks) else 3
+
+        if not args.report:
+            raise CliError("--report is required (or pass --check-gold).")
+        header, records = load_report(Path(args.report))
+        result = grade(
+            bank,
+            header,
+            records,
+            world,
+            pack_root=pack_dir,
+            report_path=Path(args.report).name,
+        )
+        if args.json:
+            print(json.dumps(result.model_dump(mode="json"), indent=2))
+        else:
+            text = render(result)
+            print(text, end="")
+            if args.out is not None:
+                Path(args.out).write_text(text, encoding="utf-8", newline="\n")
+        return result.exit_code()
+    except (BankLoadError, RunnerError, GradeError, WorldError) as exc:
         raise CliError(str(exc))
 
 

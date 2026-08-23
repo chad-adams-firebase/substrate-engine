@@ -1,0 +1,653 @@
+"""engine eval grade: the fully offline half.
+
+Reads a run report, executes each row's gold script fresh against the
+world (never the committed transcription — the grader's-correction
+law), evaluates assertions per rep, and aggregates pass-rates against
+thresholds. No LLM anywhere: every assertion is mechanical, which is
+why the assertion vocabulary is closed.
+
+The one law above all thresholds: any rep that exits 0 while a
+content assertion fails is a wrong-but-verified occurrence — the
+invariant the Verifier exists to enforce — and one occurrence fails
+the entire grade loudly, xfail and sentinel rows included.
+"""
+
+import json
+import re
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict
+
+from engine.eval.bank import LoadedBank
+from engine.eval.gold import GoldError, compare_expected, run_gold
+from engine.eval.models import (
+    Assertion,
+    BankRow,
+    EmittedTokens,
+    Expectation,
+    RunRecord,
+    RunReportHeader,
+    TurnRecord,
+)
+from engine.eval.tokens import FLOAT_TAILS, MONEY, extract_numbers, flatten_answer
+from engine.eval.world import World
+from engine.tools.envelope import ToolInvocation, loads_turn_evidence
+
+_CURRENCY = re.compile(r"\$\s?\d{1,3}(?:,\d{3})*\.\d{2}$")
+_BARE_ID = re.compile(r"\b[a-z_]*_?id\b\s*[:=]?\s*\d+", re.IGNORECASE)
+
+
+class GradeError(Exception):
+    """Grading cannot proceed (wrong world, wrong bank, unreadable
+    report); the message says which pin mismatched."""
+
+
+# --- Result models ------------------------------------------------------
+
+
+class BreachRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row_id: str
+    rep: int
+    turn_index: int
+    assertion: str
+    detail: str
+    evidence_ref: str | None = None
+
+
+class RowGrade(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    row_id: str
+    category: str
+    reps: int
+    passes: int
+    threshold: float
+    status: Literal["ok", "fail", "xfail", "xpass", "rot"]
+    xfail_ref: str | None = None
+    failure_classes: list[str] = []
+    notes: list[str] = []
+
+    @property
+    def pass_rate(self) -> float:
+        return self.passes / self.reps if self.reps else 0.0
+
+
+class RoutePairGrade(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pair: str
+    rows: list[str]
+    observed: dict[str, int]  # first-decision tool -> rep count
+
+    @property
+    def consistent(self) -> bool:
+        return len(self.observed) == 1
+
+
+class GradeReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    pack: str
+    report_path: str
+    header: RunReportHeader
+    warnings: list[str] = []
+    breaches: list[BreachRecord] = []
+    rows: list[RowGrade] = []
+    route_pairs: list[RoutePairGrade] = []
+
+    def exit_code(self) -> int:
+        """4 breach (dominates) · 3 bank rot · 2 threshold failures ·
+        0 pass. 1 is reserved for usage/IO errors upstream."""
+        if self.breaches:
+            return 4
+        if any(row.status == "rot" for row in self.rows):
+            return 3
+        if any(row.status == "fail" for row in self.rows):
+            return 2
+        return 0
+
+
+# --- Preflight ----------------------------------------------------------
+
+
+def preflight(
+    bank: LoadedBank, header: RunReportHeader, world_manifests: dict[str, str]
+) -> list[str]:
+    """Refuse on world/bank drift; warn on engine drift. Returns the
+    warnings; raises GradeError on refusals."""
+    if bank.bank_hash != header.bank_hash:
+        raise GradeError(
+            f"bank hash mismatch: report ran bank {header.bank_hash}, this "
+            f"bank is {bank.bank_hash} — grade against the bank the run "
+            f"used (or re-run)."
+        )
+    for generator, manifest_id in sorted(header.world_manifests.items()):
+        current = world_manifests.get(generator)
+        if current != manifest_id:
+            raise GradeError(
+                f"world mismatch: report ran against {generator} manifest "
+                f"{manifest_id}, this world has {current!r} — gold "
+                f"recomputed here would referee a different world."
+            )
+    warnings = []
+    from engine.eval.runner import _engine_sha
+
+    current_sha, _ = _engine_sha()
+    if current_sha != header.engine_sha:
+        warnings.append(
+            f"engine drift: report from {header.engine_sha[:12]}, grading "
+            f"at {current_sha[:12]} (grading logic may legitimately be "
+            f"newer)"
+        )
+    if header.engine_dirty:
+        warnings.append("the run's engine working tree was dirty")
+    return warnings
+
+
+def pack_world_manifests(pack_root) -> dict[str, str]:
+    manifests: dict[str, str] = {}
+    directory = pack_root / "substrates" / "manifests"
+    if directory.is_dir():
+        for path in sorted(directory.glob("*.json")):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            manifests[data.get("generator", path.stem)] = data.get(
+                "manifest_id", "?"
+            )
+    return manifests
+
+
+# --- Assertion evaluation ------------------------------------------------
+
+
+class _TurnView:
+    """One recorded turn, with its lazily parsed evidence."""
+
+    def __init__(self, record: TurnRecord) -> None:
+        self.record = record
+        self.text = flatten_answer(record.outcome)
+        self._invocations: list[ToolInvocation] | None = None
+
+    @property
+    def invocations(self) -> list[ToolInvocation]:
+        if self._invocations is None:
+            self._invocations = (
+                loads_turn_evidence(self.record.evidence_payload)
+                if self.record.evidence_payload
+                else []
+            )
+        return self._invocations
+
+
+def evaluate(
+    assertion: Assertion, view: _TurnView, gold: dict[str, Any] | None
+) -> tuple[bool, str]:
+    """(passed, detail). Every branch is mechanical and offline."""
+    kind = assertion.kind
+    if kind == "nonempty":
+        return bool(view.text.strip()), "answer is empty"
+
+    if kind == "numeric_from_gold":
+        want = _gold_value(gold, assertion.field)
+        if not isinstance(want, (int, float)) or isinstance(want, bool):
+            return False, f"gold field {assertion.field} is not numeric"
+        stated = extract_numbers(view.text)
+        if any(_numbers_match(value, float(want)) for value in stated):
+            return True, ""
+        return False, (
+            f"gold {want} absent from answer numerics "
+            f"{stated[:8]}{'…' if len(stated) > 8 else ''}"
+        )
+
+    if kind == "name_from_gold":
+        want = _gold_value(gold, assertion.field)
+        if not isinstance(want, str) or not want:
+            return False, f"gold field {assertion.field} is not a name"
+        if re.search(rf"\b{re.escape(want)}\b", view.text, re.IGNORECASE):
+            return True, ""
+        if assertion.forbid_bare_ids and _BARE_ID.search(view.text):
+            return False, f"answer names an id, not the person {want!r}"
+        return False, f"gold name {want!r} absent from the answer"
+
+    if kind == "contains":
+        return _contains(view.text, assertion.pattern, assertion.regex,
+                         assertion.case_sensitive), (
+            f"pattern {assertion.pattern!r} absent"
+        )
+
+    if kind == "not_contains":
+        if assertion.from_gold_field is not None:
+            names = _gold_value(gold, assertion.from_gold_field)
+            if not isinstance(names, list):
+                return False, (
+                    f"gold field {assertion.from_gold_field} is not a list"
+                )
+            offending = [
+                str(name)
+                for name in names
+                if re.search(
+                    rf"\b{re.escape(str(name))}\b", view.text, re.IGNORECASE
+                )
+            ]
+            return not offending, f"forbidden name(s) present: {offending}"
+        present = _contains(
+            view.text, assertion.pattern, assertion.regex,
+            assertion.case_sensitive,
+        )
+        return not present, f"forbidden pattern {assertion.pattern!r} present"
+
+    if kind == "currency_format":
+        bad = [
+            token
+            for token in MONEY.findall(view.text)
+            if not _CURRENCY.match(token)
+        ]
+        tails = FLOAT_TAILS.findall(view.text)
+        if bad or tails:
+            return False, f"unformatted money {bad}, float tails {tails}"
+        return True, ""
+
+    if kind == "window_data_anchored":
+        return _check_window(assertion, view, gold)
+
+    if kind == "route":
+        return _check_route(assertion, view.record.tools_used)
+
+    if kind == "retry_count":
+        return _check_retries(assertion, view.invocations)
+
+    if kind == "envelope":
+        outcome = view.record.outcome
+        if outcome is None or outcome.kind != "answer":
+            return False, "no answer envelope"
+        return (
+            outcome.body.kind == assertion.body,
+            f"envelope is {outcome.body.kind}, expected {assertion.body}",
+        )
+
+    if kind == "no_text_block_dump":
+        return _check_no_dump(assertion, view)
+
+    if kind == "verdict_check":
+        return _check_verdict(assertion, view.record)
+
+    raise GradeError(f"unknown assertion kind {kind!r}")  # unreachable
+
+
+def _gold_value(gold: dict[str, Any] | None, field: str):
+    if gold is None:
+        return None
+    return gold.get(field)
+
+
+def _numbers_match(stated: float, want: float) -> bool:
+    def close(a: float, b: float) -> bool:
+        return abs(a - b) <= max(1e-6 * max(abs(a), abs(b)), 0.005)
+
+    if close(stated, want):
+        return True
+    # A gold ratio may legitimately surface as its percent form.
+    return 0 < abs(want) <= 1 and close(stated, want * 100)
+
+
+def _contains(
+    text: str, pattern: str | None, regex: bool, case_sensitive: bool
+) -> bool:
+    if pattern is None:
+        return False
+    flags = 0 if case_sensitive else re.IGNORECASE
+    if regex:
+        return re.search(pattern, text, flags) is not None
+    return re.search(re.escape(pattern), text, flags) is not None
+
+
+def _check_window(assertion, view: _TurnView, gold) -> tuple[bool, str]:
+    literals = _gold_value(gold, assertion.field)
+    if literals is None:
+        return False, f"gold field {assertion.field} missing"
+    if not isinstance(literals, list):
+        literals = [literals]
+    corpus_parts = []
+    for invocation in view.invocations:
+        if invocation.tool.value == "run_sql":
+            if invocation.output is not None:
+                corpus_parts.append(invocation.output.sql)
+            if invocation.evidence is not None:
+                corpus_parts.extend(
+                    attempt.sql or "" for attempt in invocation.evidence.attempts
+                )
+        if invocation.tool.value == "check_execution":
+            corpus_parts.append(json.dumps(invocation.arguments))
+    corpus = "\n".join(corpus_parts)
+    if not corpus:
+        return False, "no windowed-tool SQL/arguments in evidence"
+    missing = [str(lit) for lit in literals if str(lit) not in corpus]
+    if missing:
+        return False, f"window literal(s) {missing} absent from executed SQL"
+    lowered = corpus.lower()
+    forbidden = [tok for tok in assertion.forbid if tok.lower() in lowered]
+    if forbidden:
+        return False, f"wall-clock anchor(s) {forbidden} in executed SQL"
+    return True, ""
+
+
+def _check_route(assertion, tools_used: list[str]) -> tuple[bool, str]:
+    tools = [tool.value for tool in assertion.tools]
+    detail = f"tools_used={tools_used}"
+    if assertion.mode == "first":
+        return (
+            bool(tools_used) and tools_used[0] in tools,
+            f"first tool not in {tools}; {detail}",
+        )
+    if assertion.mode == "must_include":
+        return (
+            all(tool in tools_used for tool in tools),
+            f"missing required tool(s) from {tools}; {detail}",
+        )
+    if assertion.mode == "must_not_include":
+        return (
+            not any(tool in tools_used for tool in tools),
+            f"forbidden tool(s) from {tools} used; {detail}",
+        )
+    return (
+        set(tools_used) == set(tools),
+        f"route set differs from {tools}; {detail}",
+    )
+
+
+def _check_retries(assertion, invocations) -> tuple[bool, str]:
+    tool = assertion.tool.value
+    errored = [
+        index
+        for index, invocation in enumerate(invocations)
+        if invocation.tool.value == tool
+        and invocation.status == "error"
+        and assertion.error_contains in (invocation.error or "")
+    ]
+    if len(errored) != assertion.errors:
+        return False, (
+            f"expected {assertion.errors} matching {tool} error(s), "
+            f"saw {len(errored)}"
+        )
+    for index in errored:
+        followed = any(
+            later.tool.value == tool
+            for later in invocations[index + 1 :]
+        )
+        if not followed:
+            return False, (
+                f"{tool} error at invocation {index} was never retried "
+                f"(the N5 license)"
+            )
+    return True, ""
+
+
+def _check_no_dump(assertion, view: _TurnView) -> tuple[bool, str]:
+    minimum = assertion.min_length
+    if len(view.text) < minimum:
+        return True, ""
+    for invocation in view.invocations:
+        for value in _long_strings(
+            invocation.model_dump(mode="json"), minimum
+        ):
+            step = max(1, minimum // 4)
+            for start in range(0, len(value) - minimum + 1, step):
+                window = value[start : start + minimum]
+                if window in view.text:
+                    return False, (
+                        f"answer pastes ≥{minimum} chars of evidence "
+                        f"verbatim: {window[:60]!r}…"
+                    )
+    return True, ""
+
+
+def _long_strings(payload, minimum: int):
+    if isinstance(payload, str):
+        if len(payload) >= minimum:
+            yield payload
+    elif isinstance(payload, dict):
+        for value in payload.values():
+            yield from _long_strings(value, minimum)
+    elif isinstance(payload, list):
+        for value in payload:
+            yield from _long_strings(value, minimum)
+
+
+def _check_verdict(assertion, record: TurnRecord) -> tuple[bool, str]:
+    verdict = record.verdict
+    if verdict is None:
+        return False, "no verifier verdict recorded"
+    if (
+        assertion.disposition is not None
+        and verdict.disposition != assertion.disposition
+    ):
+        return False, (
+            f"disposition {verdict.disposition}, expected "
+            f"{assertion.disposition}"
+        )
+    if (
+        assertion.max_judge_calls is not None
+        and verdict.judge_calls > assertion.max_judge_calls
+    ):
+        return False, (
+            f"judge_calls {verdict.judge_calls} > {assertion.max_judge_calls}"
+        )
+    if assertion.min_injected_claims is not None:
+        injected = (
+            sum(
+                claim.status == "matched_injected"
+                for claim in verdict.attempts[-1].claims
+            )
+            if verdict.attempts
+            else 0
+        )
+        if injected < assertion.min_injected_claims:
+            return False, (
+                f"{injected} matched_injected claim(s) < "
+                f"{assertion.min_injected_claims}"
+            )
+    return True, ""
+
+
+# --- Rep and row grading -------------------------------------------------
+
+
+def _grade_rep(
+    row: BankRow,
+    record: RunRecord,
+    gold: dict[str, Any] | None,
+    breaches: list[BreachRecord],
+) -> tuple[bool, list[str]]:
+    """(rep passed, failure classes). Breach detection runs on every
+    turn with exit 0 — xfail and sentinel rows included — because the
+    invariant outranks every annotation."""
+    expected_turns = row.all_turns()
+    failures: list[str] = []
+    for index, bank_turn in enumerate(expected_turns):
+        if index >= len(record.turns):
+            failures.append("turn-missing")
+            continue
+        turn = record.turns[index]
+        view = _TurnView(turn)
+        expectation = bank_turn.expect
+
+        exit_ok = turn.exit_equiv in expectation.exit
+        if not exit_ok:
+            failures.append(
+                f"exit({turn.exit_equiv} not in {expectation.exit})"
+            )
+
+        for assertion in expectation.assertions:
+            applicable = not (
+                row.sentinel
+                and type(assertion).content
+                and turn.exit_equiv != 0
+            )
+            if not applicable:
+                continue
+            passed, detail = evaluate(assertion, view, gold)
+            if passed:
+                continue
+            if type(assertion).content and turn.exit_equiv == 0:
+                breaches.append(
+                    BreachRecord(
+                        row_id=row.id,
+                        rep=record.rep,
+                        turn_index=index,
+                        assertion=assertion.kind,
+                        detail=detail,
+                        evidence_ref=turn.evidence_ref,
+                    )
+                )
+            if assertion.xfail_ref is not None:
+                continue  # expected-fail assertion: never gates the rep
+            failures.append(assertion.kind)
+    return not failures, failures
+
+
+def _token_notes(
+    reps: list[tuple[RunRecord, bool]]
+) -> list[str]:
+    """Where failure splits cleanly on an emitted token, say so — the
+    coin-flip made visible (verdict §7.2)."""
+    notes = []
+    for field in EmittedTokens.model_fields:
+        with_token = [
+            passed
+            for record, passed in reps
+            if any(getattr(t.emitted_tokens, field) for t in record.turns)
+        ]
+        without = [
+            passed
+            for record, passed in reps
+            if not any(getattr(t.emitted_tokens, field) for t in record.turns)
+        ]
+        if not with_token or not without:
+            continue
+        if not any(with_token) and all(without):
+            notes.append(
+                f"fails exactly when {field} emitted "
+                f"({len(with_token)} with, {len(without)} without)"
+            )
+    return notes
+
+
+def grade(
+    bank: LoadedBank,
+    header: RunReportHeader,
+    records: list[RunRecord],
+    world: World,
+    *,
+    pack_root,
+    report_path: str = "",
+) -> GradeReport:
+    warnings = preflight(bank, header, pack_world_manifests(pack_root))
+
+    by_row: dict[str, list[RunRecord]] = {}
+    for record in records:
+        by_row.setdefault(record.row_id, []).append(record)
+    unknown = sorted(set(by_row) - set(bank.row_ids()))
+    if unknown:
+        raise GradeError(
+            f"report contains rows the bank does not: {unknown} — "
+            f"bank hash matched, so this is a loader bug; refusing."
+        )
+
+    breaches: list[BreachRecord] = []
+    row_grades: list[RowGrade] = []
+    first_tools: dict[str, dict[str, int]] = {}
+
+    for row in bank.rows:
+        row_records = sorted(by_row.get(row.id, []), key=lambda r: r.rep)
+        if not row_records:
+            continue  # not part of this run's --rows selection
+        threshold = (
+            row.threshold
+            if row.threshold is not None
+            else bank.config.default_threshold
+        )
+
+        gold_values = None
+        notes: list[str] = []
+        if row.gold is not None:
+            try:
+                gold_values = run_gold(bank.gold_path(row), world)
+            except GoldError as exc:
+                row_grades.append(
+                    RowGrade(
+                        row_id=row.id, category=row.category,
+                        reps=len(row_records), passes=0, threshold=threshold,
+                        status="rot", xfail_ref=_xfail_ref(row),
+                        notes=[str(exc)],
+                    )
+                )
+                continue
+            mismatches = compare_expected(
+                row.expected_gold or {}, gold_values
+            )
+            if mismatches:
+                row_grades.append(
+                    RowGrade(
+                        row_id=row.id, category=row.category,
+                        reps=len(row_records), passes=0, threshold=threshold,
+                        status="rot", xfail_ref=_xfail_ref(row),
+                        notes=[f"gold rot: {m}" for m in mismatches],
+                    )
+                )
+                continue
+
+        graded = []
+        failure_classes: list[str] = []
+        for record in row_records:
+            passed, failures = _grade_rep(row, record, gold_values, breaches)
+            graded.append((record, passed))
+            for failure in failures:
+                if failure not in failure_classes:
+                    failure_classes.append(failure)
+
+        passes = sum(passed for _, passed in graded)
+        met = passes / len(graded) >= threshold
+        if row.xfail is not None:
+            status = "xpass" if met else "xfail"
+        else:
+            status = "ok" if met else "fail"
+        notes.extend(_token_notes(graded))
+        row_grades.append(
+            RowGrade(
+                row_id=row.id, category=row.category, reps=len(graded),
+                passes=passes, threshold=threshold, status=status,
+                xfail_ref=_xfail_ref(row), failure_classes=failure_classes,
+                notes=notes,
+            )
+        )
+
+        if row.route_pair is not None:
+            observed = first_tools.setdefault(row.route_pair, {})
+            for record, _ in graded:
+                if record.turns and record.turns[0].tools_used:
+                    first = record.turns[0].tools_used[0]
+                    observed[first] = observed.get(first, 0) + 1
+
+    route_pairs = [
+        RoutePairGrade(
+            pair=pair,
+            rows=[r.id for r in bank.rows if r.route_pair == pair],
+            observed=observed,
+        )
+        for pair, observed in sorted(first_tools.items())
+    ]
+
+    return GradeReport(
+        pack=header.pack,
+        report_path=report_path,
+        header=header,
+        warnings=warnings,
+        breaches=breaches,
+        rows=row_grades,
+        route_pairs=route_pairs,
+    )
+
+
+def _xfail_ref(row: BankRow) -> str | None:
+    return row.xfail.ref if row.xfail is not None else None
