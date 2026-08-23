@@ -250,7 +250,13 @@ def test_real_verifier_swaps_in_and_verifies_a_clean_turn(tool_pack):
         if c.kind == "numeric"
     ]
     assert numeric and all(c.injected for c in numeric)
-    assert all(c.status == "matched_exact" for c in numeric)
+    # Addendum N3: injected figures are verified by construction, each
+    # carrying the evidence path the resolver injected it from.
+    assert all(c.status == "matched_injected" for c in numeric)
+    assert {c.evidence_ref for c in numeric} == {
+        "e0.rows[0].row_count",
+        "e0.rows[0].distinct_count",
+    }
 
 
 def test_status_events_reach_the_listener_and_the_result(tool_pack):

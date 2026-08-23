@@ -14,16 +14,29 @@ from pydantic import BaseModel, ConfigDict, Field
 from engine.config.models import ToolName
 
 
+class InjectedSpan(BaseModel):
+    """A char range of the resolved draft that code wrote, and the
+    evidence path it was resolved from. Injected values are faithful
+    by construction (§9.4) — the ref is their verification basis."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    start: int
+    end: int
+    ref: str  # dotted evidence path, e.g. "e1.run_status.count"
+
+
 class DraftAnswer(BaseModel):
     """The final answer text as it would ship — placeholders already
-    resolved. injected_spans are the char ranges code wrote (injected
-    figures verify like any claim; they simply cannot mismatch)."""
+    resolved. Claims contained in injected_spans are verified by
+    construction against their resolution refs; the matcher and judge
+    prosecute only model-typed spans."""
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["prose", "table_passthrough"]
     text: str
-    injected_spans: list[tuple[int, int]] = []
+    injected_spans: list[InjectedSpan] = []
 
 
 class NumericClaim(BaseModel):
@@ -142,9 +155,13 @@ class ClaimRecord(BaseModel):
     start: int
     end: int
     status: Literal[
-        "matched_exact", "matched_derived", "matched_judge", "unmatched"
+        "matched_exact",
+        "matched_derived",
+        "matched_judge",
+        "matched_injected",
+        "unmatched",
     ]
-    method: str = ""  # "exact", "rounding", "ratio", "judge", ...
+    method: str = ""  # "exact", "rounding", "ratio", "judge", "injected", ...
     matched_value: str | None = None
     evidence_ref: str | None = None
     reason: str = ""

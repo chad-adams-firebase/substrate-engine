@@ -15,6 +15,7 @@ import re
 from pydantic import BaseModel, ConfigDict
 
 from engine.tools.envelope import ToolInvocation
+from engine.verifier.models import InjectedSpan
 
 _PLACEHOLDER = re.compile(r"\{\{e(\d+)\.([^{}]+)\}\}")
 _SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)((?:\[\d+\])*)$")
@@ -25,9 +26,10 @@ class Resolution(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str
-    # Char spans of injected values in the resolved text — the
-    # Verifier marks claims inside them injected=True.
-    injected_spans: list[tuple[int, int]] = []
+    # Spans of injected values in the resolved text, each carrying the
+    # evidence path it resolved from — the Verifier treats claims
+    # inside them as verified by construction.
+    injected_spans: list[InjectedSpan] = []
     # Placeholders that did not resolve, verbatim, for retry feedback.
     failures: list[str] = []
 
@@ -90,7 +92,7 @@ def resolve_placeholders(
     text: str, evidence: list[ToolInvocation]
 ) -> Resolution:
     parts: list[str] = []
-    spans: list[tuple[int, int]] = []
+    spans: list[InjectedSpan] = []
     failures: list[str] = []
     length = 0
     cursor = 0
@@ -104,6 +106,7 @@ def resolve_placeholders(
         index = int(match.group(1))
         path = match.group(2)
         rendered: str | None = None
+        effective = path
         if 0 <= index < len(evidence) and evidence[index].output is not None:
             tree = evidence[index].output.model_dump(mode="json")
             for candidate in _candidates(path):
@@ -112,6 +115,7 @@ def resolve_placeholders(
                 except (KeyError, IndexError, TypeError, ValueError):
                     rendered = None
                 if rendered is not None:
+                    effective = candidate
                     break
 
         if rendered is None:
@@ -120,7 +124,13 @@ def resolve_placeholders(
             length += len(surface)
         else:
             parts.append(rendered)
-            spans.append((length, length + len(rendered)))
+            spans.append(
+                InjectedSpan(
+                    start=length,
+                    end=length + len(rendered),
+                    ref=f"e{index}.{effective}",
+                )
+            )
             length += len(rendered)
 
     parts.append(text[cursor:])

@@ -6,12 +6,15 @@ numeric residue (budgeted) → run plausibility → decide the ladder
 step. The retry LOOP lives in the graph; the retry DECISION and the
 feedback live here.
 
-Injected figures are not a bypass: verification runs on the final
-resolved text, and claims inside injected spans verify like any other
-— they simply cannot mismatch. Table pass-through answers run the
-same pipeline: caption prose usually yields zero claims (honest — the
-numbers never passed through a model) and plausibility still runs, so
-a doctored result set is refused no matter how it would have shipped.
+Claims contained in an injected span were written by code from a
+resolved evidence path — faithful by construction (§9.4) — and are
+recorded matched_injected with that path as their basis; the matcher
+and judge prosecute only model-typed spans. A claim extending beyond
+an injected span contains model-typed characters and verifies
+normally. Table pass-through answers run the same pipeline: caption
+prose usually yields zero claims (honest — the numbers never passed
+through a model) and plausibility still runs, so a doctored result
+set is refused no matter how it would have shipped.
 """
 
 from collections.abc import Callable
@@ -34,6 +37,7 @@ from engine.verifier.models import (
     Claim,
     ClaimRecord,
     DraftAnswer,
+    InjectedSpan,
     NumericClaim,
     PlausibilityRecord,
     QuoteClaim,
@@ -42,8 +46,22 @@ from engine.verifier.models import (
 from engine.verifier.verdict import build_feedback, decide
 
 
-def _overlaps(claim: Claim, spans: list[tuple[int, int]]) -> bool:
-    return any(claim.start < end and claim.end > start for start, end in spans)
+def _overlaps(claim: Claim, spans: list[InjectedSpan]) -> bool:
+    return any(
+        claim.start < span.end and claim.end > span.start for span in spans
+    )
+
+
+def _containing_span(
+    claim: Claim, spans: list[InjectedSpan]
+) -> InjectedSpan | None:
+    """The injected span that wholly contains the claim, or None.
+    Containment, not overlap: a claim that extends past an injected
+    span has model-typed characters and must verify normally."""
+    for span in spans:
+        if span.start <= claim.start and claim.end <= span.end:
+            return span
+    return None
 
 
 class Verifier:
@@ -137,6 +155,24 @@ class Verifier:
         records: list[ClaimRecord] = []
         unmatched_pairs: list[tuple[ClaimRecord, Claim]] = []
         for claim in claims:
+            span = _containing_span(claim, draft.injected_spans)
+            if span is not None:
+                # Code wrote this value from a resolved evidence path;
+                # it cannot mismatch. Record the basis, spend no judge.
+                records.append(
+                    ClaimRecord(
+                        kind=claim.kind,
+                        surface=claim.surface,
+                        start=claim.start,
+                        end=claim.end,
+                        status="matched_injected",
+                        method="injected",
+                        evidence_ref=span.ref,
+                        reason="injected by placeholder resolution",
+                        injected=True,
+                    )
+                )
+                continue
             outcome = match_claim(claim, pools, self._settings)
             status: Literal[
                 "matched_exact", "matched_derived", "matched_judge", "unmatched"

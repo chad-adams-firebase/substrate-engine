@@ -51,8 +51,17 @@ def test_injected_spans_cover_exactly_the_injected_values():
         "Of {{e0.table.rows[0].n}} invoices, {{e0.table.total_row_count}} row.",
         evidence,
     )
-    values = [resolution.text[a:b] for a, b in resolution.injected_spans]
+    values = [
+        resolution.text[span.start : span.end]
+        for span in resolution.injected_spans
+    ]
     assert values == ["146", "1"]
+    # Addendum N3: each span carries the evidence path it resolved
+    # from — the Verifier's basis for verified-by-construction.
+    assert [span.ref for span in resolution.injected_spans] == [
+        "e0.table.rows[0].n",
+        "e0.table.total_row_count",
+    ]
 
 
 def test_bad_index_bad_path_and_non_scalar_fail_visibly():

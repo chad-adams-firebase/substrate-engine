@@ -20,6 +20,7 @@ from engine.ports.types import Message
 from engine.tools.envelope import ToolInvocation
 from engine.verifier.models import (
     AttemptRecord,
+    InjectedSpan,
     PlausibilityRecord,
     VerifierVerdict,
 )
@@ -67,7 +68,7 @@ class TurnState(BaseModel):
     decision: RouteDecision | None = None
     draft: AnswerBody | None = None
     draft_raw: str | None = None  # placeholders intact, for retry context
-    injected_spans: list[tuple[int, int]] = []
+    injected_spans: list[InjectedSpan] = []
     draft_feedback: list[str] = []
     draft_attempts: int = 0  # placeholder-resolution retries
     verify_attempt: int = 0  # verifier ladder attempts
