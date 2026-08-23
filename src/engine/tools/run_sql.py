@@ -61,6 +61,17 @@ class RunSqlInput(BaseModel):
     question: str
 
 
+# A question argument that is itself SQL — the observed router leak.
+# Deliberately case-sensitive: leaked SQL comes uppercase-keyworded,
+# while English like "Select the invoices from last week" must pass.
+_SQL_SHAPED = re.compile(
+    r"^\s*(?:SELECT|WITH)\b.*\bFROM\b"
+    r"|\bGROUP BY\b|\bORDER BY\b|\bCOUNT\(\*\)"
+    r"|\bJOIN\b.*\bON\b",
+    re.DOTALL,
+)
+
+
 def extract_sql(response_text: str) -> str | None:
     """The statement out of an LLM response, deterministically: prefer
     a fenced block, else accept bare text that starts with SELECT/WITH
@@ -125,6 +136,14 @@ class RunSql(Tool):
         self._settings = settings
 
     def run(self, params: RunSqlInput) -> ToolInvocation:
+        if _SQL_SHAPED.search(params.question):
+            # Steering error, recoverable: the router re-asks with the
+            # user's question instead of its own SQL.
+            return self.fail(
+                params,
+                "run_sql writes its own SQL — send the English "
+                "question, not a SQL statement.",
+            )
         try:
             dictionary = self._store.dictionary()
             dictionary_map = self._store.dictionary_map()

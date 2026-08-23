@@ -135,6 +135,28 @@ def test_non_select_statements_are_rejected_not_executed(tool_pack):
     assert registry2.invoke("run_sql", {"question": "count"}).status == "ok"
 
 
+def test_sql_shaped_question_is_a_steering_error_before_any_work(tool_pack):
+    # Addendum hygiene: the router leaked its own hallucinated SQL
+    # into the question argument 2-for-2. SQL shapes bounce with a
+    # steering error before the substrate loads or the LLM runs...
+    registry, _ = build_tool_registry(tool_pack, [])
+    leaked = registry.invoke(
+        "run_sql",
+        {"question": "SELECT COUNT(*) FROM invoices WHERE status = 'READY'"},
+    )
+    assert leaked.status == "error"
+    assert "English" in leaked.error
+    assert leaked.evidence is None  # no attempt was spent
+
+    # ...while an English imperative that merely starts with "Select"
+    # and contains "from" passes the case-sensitive heuristic.
+    registry2, _ = build_tool_registry(tool_pack, [REPAIRED])
+    english = registry2.invoke(
+        "run_sql", {"question": "Select the invoices from last week"}
+    )
+    assert english.status == "ok", english.error
+
+
 def test_response_without_sql_counts_as_a_failed_attempt(tool_pack):
     chatty = LLMResponse(
         content="I would need to know more about your schema.", model="scripted"
