@@ -80,8 +80,11 @@ reply that is not a valid tool call is discarded and costs one of \
 your steps. Arguments must match each tool's schema exactly \
 (give_answer with shape='table' requires evidence_index). Calling \
 evidence tools and give_answer together runs the tools and ignores \
-the give_answer — gather first, answer in a later step. You have at \
-most {max_iterations} steps."""
+the give_answer — gather first, answer in a later step. When a tool \
+returns an error that names valid alternatives or tells you what to \
+send instead, spend a step retrying once with a corrected tool call \
+before you consider refusing. You have at most {max_iterations} \
+steps."""
 
 
 def render_drafter_prompt(*, app_name: str) -> str:

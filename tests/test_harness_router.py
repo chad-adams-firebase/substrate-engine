@@ -168,6 +168,10 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     # and priced in the step budget.
     assert "tool calls only" in prompt
     assert "costs one of your steps" in prompt
+    # Addendum N5: the hardened prompt over-corrected into early
+    # surrender; one retry after a steering error is licensed, in
+    # tool-call form only — no violation class reopened.
+    assert "retrying once with a corrected tool call" in prompt
 
 
 def test_router_prompt_renders_data_coverage_only_when_given():
