@@ -1,0 +1,79 @@
+# Multi-turn anchor→pronoun rows (gate verdict §7.7) — continuation
+# is proven live twice; these keep it proven. A row's turns share one
+# engine conversation; the rep passes only if every turn passes.
+
+- id: MT1
+  provenance: user-sourced
+  category: multiturn
+  gold: gold/mt1_totals.py
+  expected_gold: {total: 1990, march: 674, april: 682, may: 634}
+  threshold: 0.8
+  turns:
+    - question: "How many invoices do we have in total?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: numeric_from_gold, field: total}
+    - question: "How many of those arrived in each month?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: numeric_from_gold, field: march}
+          - {kind: numeric_from_gold, field: april}
+          - {kind: numeric_from_gold, field: may}
+  note: >-
+    Reconstructed from addendum §6 (the engine's first-ever
+    multi-turn exchange; 674/682/634 verified there). Turn 2's
+    "those" must resolve against turn 1 via the checkpointer.
+
+- id: MT2
+  provenance: n-probe
+  category: multiturn
+  gold: gold/mt2_critical_compliance.py
+  expected_gold: {compliance: 4216, critical: 254}
+  turns:
+    - question: "How many findings came from the external compliance layer?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: numeric_from_gold, field: compliance}
+    - question: "How many of those are critical severity?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: numeric_from_gold, field: critical}
+  note: >-
+    Session-3 conv 14 verbatim (work.db checkpoint): the 254-exact
+    run that also confirmed zero msgpack warnings (N8).
+
+- id: MT3
+  provenance: scripted
+  category: multiturn
+  gold: gold/mt3_switch.py
+  expected_gold: {supplier: RVX01, start_line: 116}
+  xfail:
+    ref: N9
+    note: >-
+      Turn 2 shares B4's exposure: read_source drafts that state the
+      file path get downgraded. The row's real cargo — pronoun
+      resolution across a run_sql→CKG/read_source tool switch — is
+      untested territory; measure before promising.
+  turns:
+    - question: "Which supplier gets flagged most often for rate variance?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: name_from_gold, field: supplier}
+    - question: "Show me the source of the rule that flags it"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: route, mode: must_include, tools: [read_source]}
+          - {kind: contains, pattern: "def rule_rate_variance("}
+  note: The one multi-turn row crossing a tool switch.

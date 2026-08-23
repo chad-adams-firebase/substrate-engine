@@ -1,0 +1,40 @@
+# Ambiguity rows expecting exit 4 (gate verdict §7.8): clarify has
+# never fired in three sessions and 62 live turns. Whether it CAN
+# fire is an open empirical question — these rows settle it. The
+# xfail ref is clarify-open, not an N-anomaly: there is no diagnosed
+# defect, only an unexercised path.
+
+- id: AMB1
+  provenance: user-sourced
+  category: ambiguity
+  question: "How many invoices go unreviewed per day?"
+  gold: gold/amb1_unreviewed.py
+  expected_gold: {backlog: 78, lapsed: 679}
+  xfail:
+    ref: clarify-open
+    note: >-
+      U3's seed row: session 2 silently chose the current-backlog
+      reading (78) over the never-reviewed LAPSED reading (679) —
+      verified-correct SQL for an uninvited interpretation. The gold
+      computes both readings to prove the ambiguity is real.
+  expect:
+    exit: [4]
+    assertions:
+      - {kind: nonempty}
+
+- id: AMB2
+  provenance: scripted
+  category: ambiguity
+  question: "How many invoices are open?"
+  gold: gold/amb2_open.py
+  expected_gold: {ready: 78, not_closed: 965}
+  xfail:
+    ref: clarify-open
+    note: >-
+      'Open' names no status: READY (78) and not-CLOSED (965) are
+      both defensible. Twelve-fold apart — a silent choice here is
+      material, which is what clarify is for.
+  expect:
+    exit: [4]
+    assertions:
+      - {kind: nonempty}

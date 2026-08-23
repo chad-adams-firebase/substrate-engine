@@ -1,0 +1,52 @@
+# Session-3 N-probe rows (question texts verbatim from work.db
+# checkpoint history, conversations 4 and 11) — the exact row texts
+# the gate verdict's condition of closure names.
+
+- id: P-N11
+  provenance: n-probe
+  category: execution
+  question: "Did benchmark scoring have any errors on 2026-04-15?"
+  gold: gold/p_benchmark_clean_day.py
+  expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
+  xfail:
+    ref: N11
+    note: >-
+      The informal component name errors first (e0); the drafter
+      anchors on the errored invocation and ships "no information"
+      while the clean answer sits in e1 — session 3's only
+      non-safe-direction miss. Render errored invocations collapsed,
+      or draft from status:ok evidence only.
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: '\b(no|none|zero|clean)\b', regex: true}
+      - kind: not_contains
+        pattern: '(does not provide|no information|cannot determine)'
+        regex: true
+  note: >-
+    Clean day, informal name. The not_contains keeps sentinel teeth:
+    an exit-0 evidence-shrug is a breach, not a pass.
+
+- id: P-L3Q
+  provenance: n-probe
+  category: code
+  question: "Show me the source of invoiceguard.spine.rules_engine.rule_rate_variance"
+  gold: gold/b4_rule_rate_variance_source.py
+  expected_gold:
+    qualified_name: invoiceguard.spine.rules_engine.rule_rate_variance
+    file_path: src/invoiceguard/spine/rules_engine.py
+    start_line: 116
+    end_line: 149
+  xfail:
+    ref: N9
+    note: >-
+      The qualified-name control passed in session 2 only because
+      that draft omitted the file path — the coin-flip N9 rows exist
+      to expose. Token stratification (file_paths) shows it.
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [read_source]}
+      - {kind: contains, pattern: "def rule_rate_variance("}

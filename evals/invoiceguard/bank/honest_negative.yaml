@@ -1,0 +1,47 @@
+# Honest-negative rows (gate verdict §7.4): run 13 proved a tool can
+# work perfectly and be undraftable — one row per windowed/list tool
+# mode, expecting the engine to say "no" and mean it.
+
+- id: HN-DIDRUN
+  provenance: scripted
+  category: honest-negative
+  question: "Did the creepback scan run on 2026-05-26?"
+  gold: gold/hn_creepback_gap.py
+  expected_gold: {ran: false, count: 0, date: "2026-05-26"}
+  threshold: 0.8
+  expect:
+    exit: [0, 2]
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: '(\bno\b|did not|not run)', regex: true}
+      - {kind: not_contains, pattern: '\byes\b', regex: true}
+  note: >-
+    did_run mode's clean-miss: the scan ran 05-25 and 05-27, not
+    05-26, all inside coverage. An honest no at exit 0 or 2 passes; a
+    verified yes is a breach.
+
+- id: HN-ERRORS
+  provenance: n-probe
+  category: honest-negative
+  question: "Did the benchmark_scoring component have any errors on 2026-04-15?"
+  gold: gold/p_benchmark_clean_day.py
+  expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
+  xfail:
+    ref: N12
+    note: >-
+      recent_errors fills only errors: list; an empty list is a
+      non-scalar every placeholder legitimately fails to render, no
+      scalar count exists, table fallback finds no table — refuse.
+      Every component per-spec; the composition cannot say "no
+      errors." Flips when error_count lands on CheckExecutionOutput.
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: '\b(no|none|zero|clean)\b', regex: true}
+      - kind: not_contains
+        pattern: '(does not provide|no information)'
+        regex: true
+  note: >-
+    Session-3 run 13 verbatim (work.db conv 12) — the exact
+    honest-negative refusal the gate verdict names as a row text.

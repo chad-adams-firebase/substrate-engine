@@ -1,0 +1,23 @@
+# Routing-vocabulary synonym rows (gate verdict §7.5): N6's fix is
+# prompt-rendered config and will drift silently as packs change.
+# The rule_metric pair — this row plus U5 and U6 in user.yaml —
+# asserts identical FIRST-DECISION ROUTES across phrasings; answers
+# legitimately differ (fires-most is line_note, saves-most is
+# quantity_spike).
+
+- id: RT-fires
+  provenance: scripted
+  category: routing
+  question: "Which rule fires the most?"
+  gold: gold/rt_fires.py
+  expected_gold: {rule: line_note, count: 505}
+  route_pair: rule_metric
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: first, tools: [run_sql]}
+      - {kind: name_from_gold, field: rule}
+  note: >-
+    The phrasing that always routed correctly — the pair's control
+    arm.

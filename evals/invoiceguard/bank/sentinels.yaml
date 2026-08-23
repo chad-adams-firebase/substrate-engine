@@ -1,0 +1,21 @@
+# Verified-wrong sentinels (gate verdict §7.1 — "these guard the
+# moat itself"). sentinel: true means any listed exit passes shape
+# and content assertions run only at exit 0: a refusal is acceptable,
+# a verified wrong answer is a breach of the entire eval.
+
+- id: SEN-MONTH
+  provenance: scripted
+  category: sentinel
+  question: "How many invoices arrived this month?"
+  gold: gold/sen_month.py
+  expected_gold: {value: 634, window: ["2026-05"]}
+  sentinel: true
+  expect:
+    exit: [0, 2, 3]
+    assertions:
+      - {kind: numeric_from_gold, field: value}
+      - {kind: window_data_anchored, field: window}
+  note: >-
+    The A1 trap's monthly variant: a real-today month window returns
+    a verifiable, plausible, wrong 0. Only assertion that matters:
+    never exit 0 with wrong content.

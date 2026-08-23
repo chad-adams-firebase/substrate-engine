@@ -1,0 +1,74 @@
+# User-sourced rows — the session-2 free-play probes that found five
+# things forty scripted runs missed (addendum §6). U5/U6 texts are
+# the addendum's; U-WHO's is session 3's re-run phrasing (work.db
+# conv 10); U-META is reconstructed from the documented finding. The
+# remaining ~3 session-2 probes join if their exact texts are ever
+# recovered (per Chad: reconstruct the documented seven — U3 lives
+# in ambiguity.yaml, the multi-turn pair in multiturn.yaml).
+
+- id: U5
+  provenance: user-sourced
+  category: routing
+  question: "Which rule produces the most savings?"
+  gold: gold/u5_rule_savings.py
+  expected_gold: {rule: quantity_spike, effective: 610768.51}
+  route_pair: rule_metric
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: first, tools: [run_sql]}
+      - {kind: name_from_gold, field: rule}
+      - {kind: numeric_from_gold, field: effective}
+  note: >-
+    N6's only possible live test: business-flavored "savings" must
+    still route run_sql first. Gold is the EFFECTIVE figure —
+    exceptioned findings zeroed via the finding_feedback LEFT JOIN.
+
+- id: U6
+  provenance: user-sourced
+  category: routing
+  question: "Which rule is most productive at finding opportunity?"
+  gold: gold/u5_rule_savings.py
+  expected_gold: {rule: quantity_spike, effective: 610768.51}
+  route_pair: rule_metric
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: first, tools: [run_sql]}
+      - {kind: name_from_gold, field: rule}
+  note: The second phrasing that mis-routed twice in session 2.
+
+- id: U-WHO
+  provenance: user-sourced
+  category: data
+  question: "Who is our most productive reviewer?"
+  gold: gold/s3_top_closer.py
+  expected_gold: {name: nova, count: 390, next_tier: 130}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: name_from_gold, field: name}
+  note: >-
+    The U7 class: person-shaped answers name people via the users
+    join, never a bare reviewer_id (grounding mandate, f709d9c).
+
+- id: U-META
+  provenance: user-sourced
+  category: meta
+  question: "What can I ask you?"
+  threshold: 0.8
+  expect:
+    exit: [0, 3]
+    assertions:
+      - {kind: nonempty}
+  note: >-
+    The capability-discovery gap (addendum §6a): §10.5 starter
+    prompts cover the UI empty state, not the asked-in-chat case.
+    Either a real answer or a styled refusal passes; this row exists
+    to measure which one the engine actually produces.

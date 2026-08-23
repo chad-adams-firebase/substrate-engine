@@ -1,0 +1,48 @@
+# Recovery-path rows (gate verdict §7.6): assert the retry COUNT,
+# not just the outcome — N5's license is exactly one corrected call
+# after a steering error, and over-retry is as much a regression as
+# surrender.
+
+- id: REC-SQL
+  provenance: scripted
+  category: recovery
+  question: "SELECT COUNT(*) FROM invoices"
+  gold: gold/rec_sql_total.py
+  expected_gold: {value: 1990}
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - kind: retry_count
+        tool: run_sql
+        errors: 1
+        error_contains: "writes its own SQL"
+      - {kind: numeric_from_gold, field: value}
+  note: >-
+    A SQL-shaped question must bounce at run_sql's boundary
+    (ef55477) and recover through one English rephrase. Exploratory
+    threshold: the router may also translate before ever passing the
+    SQL through, in which case the bounce never fires — the grade's
+    failure classes will say which.
+
+- id: REC-CKG
+  provenance: scripted
+  category: recovery
+  question: "Show me the source of health"
+  gold: gold/rec_ckg_health.py
+  expected_gold: {candidate_count: 2}
+  threshold: 0.6
+  expect:
+    exit: [0, 2]
+    assertions:
+      - {kind: nonempty}
+      - kind: retry_count
+        tool: traverse_code_knowledge_graph
+        errors: 1
+        error_contains: "names 2 nodes"
+      - {kind: contains, pattern: "def health("}
+  note: >-
+    'health' is a genuinely ambiguous bare suffix (module + function)
+    — the steering error names both candidates and licenses exactly
+    one retry (N4's error path + N5's license, together).
