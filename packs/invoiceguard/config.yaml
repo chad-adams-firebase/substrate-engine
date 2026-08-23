@@ -32,7 +32,7 @@ adapters:
   llm:
     adapter: openrouter
     settings:
-      model: openrouter/auto
+      model: openai/gpt-4o
   sql:
     adapter: duckdb
     settings:
