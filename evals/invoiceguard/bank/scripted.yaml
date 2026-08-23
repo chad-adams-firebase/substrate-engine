@@ -1,0 +1,472 @@
+# The carryback §3 question bank — all 28 rows of the table (the
+# docs variously say 25/27; the table is authoritative). Question
+# texts are verbatim from docs/phase4-acceptance-carryback.md.
+# Every gold value is recomputed by the referenced script at grade
+# time; expected_gold is the committed tripwire --check-gold audits.
+
+- id: B1
+  provenance: scripted
+  category: docs
+  question: "What is this application?"
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [app_primer]}
+      - {kind: route, mode: must_not_include, tools: [traverse_code_knowledge_graph]}
+  note: L0 phasing done-check — primer route, never CKG.
+
+- id: B2
+  provenance: scripted
+  category: docs
+  question: "How does invoice scoring work?"
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: no_text_block_dump, xfail_ref: O1}
+  note: >-
+    L1. First-ever exit 0 in session 3; historically the wobbliest
+    row (S1 verifier false-pos, S2 N1/N2). The dump guard is
+    per-assertion xfail O1 (text-block injection is cosmetic until
+    the O1 guard lands).
+
+- id: B3
+  provenance: scripted
+  category: code
+  question: "What does invoiceguard.spine.rules_engine.run_rules call, in order?"
+  gold: gold/b3_run_rules_callees.py
+  expected_gold:
+    callee_count: 16
+    first_line: 84
+    last_line: 113
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [traverse_code_knowledge_graph]}
+      - {kind: contains, pattern: rule_rate_variance}
+      - {kind: contains, pattern: format_event}
+      - {kind: contains, pattern: run_prior_audit}
+      - {kind: numeric_from_gold, field: callee_count}
+  note: L2 — 16 callees by CKG edge line order (84-113).
+
+- id: B4
+  provenance: scripted
+  category: code
+  question: "Show me the source of rule_rate_variance"
+  gold: gold/b4_rule_rate_variance_source.py
+  expected_gold:
+    qualified_name: invoiceguard.spine.rules_engine.rule_rate_variance
+    file_path: src/invoiceguard/spine/rules_engine.py
+    start_line: 116
+    end_line: 149
+  xfail:
+    ref: N9
+    note: >-
+      The backticked file path fails both delimiter containment
+      (injected span excludes backticks) and pool reachability
+      (paths harvest into vocabulary, quote claims shop only in
+      quote_corpus). Fails exactly when the draft states the path —
+      S2's control passed only because that draft omitted it.
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [read_source]}
+      - {kind: contains, pattern: "def rule_rate_variance("}
+  note: L3 with the bare, most-human name (N4 resolution now handles it).
+
+- id: B5
+  provenance: scripted
+  category: data
+  question: "How many invoices received last week had findings?"
+  gold: gold/b5_last_week_findings.py
+  expected_gold:
+    value: 146
+    received: 161
+    window: ["2026-05-23", "2026-05-30"]
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+      - {kind: window_data_anchored, field: window}
+  note: The demo flagship. Never wobbled post-model-fix.
+
+- id: B6
+  provenance: scripted
+  category: fail-closed
+  question: "Which reviewer should we fire?"
+  gold: gold/b6_roster.py
+  expect:
+    exit: [3]
+    assertions:
+      - {kind: nonempty}
+      - {kind: not_contains, from_gold_field: roster}
+  note: >-
+    Fail-closed judgment call. The forbidden-name list is the
+    executed roster, not a transcription.
+
+- id: C1
+  provenance: scripted
+  category: execution
+  question: "Did the stale sweep run on May 29?"
+  gold: gold/c1_stale_sweep_may29.py
+  expected_gold: {ran: true, count: 1, date: "2026-05-29"}
+  xfail:
+    ref: N10
+    note: >-
+      Prose "May 29" extracts bare numeral 29; the value pool holds
+      count=1 and nothing calendar-shaped; the date lives in
+      run_status.detail text, unreachable by numeric claims. Correct
+      answer delivered since session 3, downgraded to exit 2.
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [check_execution]}
+      - {kind: contains, pattern: '\byes\b', regex: true}
+  note: Yearless phrasing — also re-proves the #3a 2026 anchor.
+
+- id: C1b
+  provenance: scripted
+  category: execution
+  question: "Did the stale sweep run on 2026-05-29?"
+  gold: gold/c1_stale_sweep_may29.py
+  expected_gold: {ran: true, count: 1, date: "2026-05-29"}
+  xfail:
+    ref: N10
+    note: Same class as C1 — the ISO phrasing control.
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [check_execution]}
+      - {kind: contains, pattern: '\byes\b', regex: true}
+
+- id: C2
+  provenance: scripted
+  category: docs
+  question: "Why is the rate variance threshold set at 15%?"
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [search_business_docs]}
+      - {kind: route, mode: must_not_include, tools: [traverse_code_knowledge_graph]}
+      - kind: contains
+        pattern: '(surcharg|indexation|substitution|clawback|self-resolv)'
+        regex: true
+  note: >-
+    Why-question: the Calloway memo's rationale, not the CKG's value.
+    The pattern names the memo's own vocabulary — the gold here is
+    the human-authored doc itself.
+
+- id: C3
+  provenance: scripted
+  category: data
+  question: "What's the range of invoice totals?"
+  gold: gold/c3_invoice_total_range.py
+  expected_gold: {min: 686.23, max: 43117.71}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: numeric_from_gold, field: min}
+      - {kind: numeric_from_gold, field: max}
+  note: Stats substrate row; live SQL acceptable if exact.
+
+- id: C4
+  provenance: scripted
+  category: data
+  question: "How many invoices arrived in the last 30 days?"
+  gold: gold/c4_last_30_days.py
+  expected_gold:
+    value: 692
+    window: ["2026-04-29"]
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+      - {kind: window_data_anchored, field: window}
+  note: >-
+    Adversarial verified-zero probe: a CURRENT_DATE window returns a
+    plausible, verifiable, wrong 0. Read the SQL window, not the
+    count. Cleanest flip of fix pass 1.
+
+- id: C5
+  provenance: scripted
+  category: data
+  question: "Which supplier gets flagged most often for rate variance?"
+  gold: gold/c5_rate_variance_supplier.py
+  expected_gold: {supplier: RVX01, count: 257, runner_up: QUILL8}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: name_from_gold, field: supplier}
+  note: Story 1 — RVX01 at 23x the runner-up.
+
+- id: S2
+  provenance: scripted
+  category: data
+  question: "Is SVC-4410 usually flagged for excessive service hours?"
+  gold: gold/s2_svc4410_service_hours.py
+  expected_gold: {flagged: 63, lines: 66, rate: 0.9545}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: '\byes\b', regex: true}
+      - {kind: numeric_from_gold, field: rate}
+  note: >-
+    Story 2 — composite (invoice_id, line_number) join required;
+    invoice_id-only cross-multiplies.
+
+- id: S3
+  provenance: scripted
+  category: data
+  question: "Who closes the most reviews?"
+  gold: gold/s3_top_closer.py
+  expected_gold: {name: nova, count: 390, next_tier: 130}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: name_from_gold, field: name}
+      - {kind: numeric_from_gold, field: count}
+  note: >-
+    Story 3 — who-question: expects the person's name from the
+    executed roster join, never a bare reviewer_id (the U7 finding).
+
+- id: S4
+  provenance: scripted
+  category: data
+  question: "How many invoices have totals that don't match their line sums but were never flagged?"
+  gold: gold/s4_silent_adjustments.py
+  expected_gold: {value: 114, flagged_mismatches: 42}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+  note: Story 4 gotcha — silent adjustments are sanctioned, not errors.
+
+- id: S5
+  provenance: scripted
+  category: execution
+  question: "Did anything unusual happen with benchmark scoring on March 11?"
+  gold: gold/s5_benchmark_outage.py
+  expected_gold:
+    fallback_warnings: 30
+    all_on_outage_day: true
+    date: "2026-03-11"
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - kind: contains
+        pattern: '(outage|fallback|unavailab|without benchmark|warning)'
+        regex: true
+      - {kind: not_contains, pattern: 'nothing unusual', regex: false}
+  note: >-
+    Story 5 — the planted outage day; needs run_sql and/or
+    check_execution composition, historically the hardest shape.
+
+- id: S6
+  provenance: scripted
+  category: data
+  question: "Has any supplier raised prices back up after accepting a correction?"
+  gold: gold/s6_creepback.py
+  expected_gold:
+    invoice: INV-CRP-0001
+    revision: 3
+    amount: 120.0
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: '(creepback|creep)', regex: true}
+      - {kind: numeric_from_gold, field: amount}
+  note: Story 6 — the creepback chain, $120.00 = (92-80) x 10.
+
+- id: S7
+  provenance: scripted
+  category: data
+  question: "Has a LAPSED invoice ever been reactivated, and by whom?"
+  gold: gold/s7_lapsed_reactivation.py
+  expected_gold: {count: 1, invoice: INV-LPS-0001, actor: mona}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: name_from_gold, field: actor}
+  note: >-
+    Story 7 — "LAPSED is terminal, so no" misses the sanctioned
+    audit-manager exception.
+
+- id: NP1
+  provenance: scripted
+  category: data
+  question: "How many suppliers are out-of-network?"
+  gold: gold/np1_out_of_network.py
+  expected_gold: {value: 6, suppliers: 40}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+
+- id: NP2
+  provenance: scripted
+  category: data
+  question: "How many invoices are credit memos?"
+  gold: gold/np2_credit_memos.py
+  expected_gold: {value: 17}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+
+- id: NP3
+  provenance: scripted
+  category: data
+  question: "What's in the READY backlog right now — count and total opportunity?"
+  gold: gold/np3_ready_backlog.py
+  expected_gold: {count: 78, money: 8308.92}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: numeric_from_gold, field: count}
+      - {kind: numeric_from_gold, field: money}
+      - {kind: currency_format}
+  note: >-
+    Money must render as currency — the float-tail observation
+    (8308.92139244107 in a money cell) is exactly what
+    currency_format catches.
+
+- id: NP4
+  provenance: scripted
+  category: data
+  question: "What share of invoices have at least one finding?"
+  gold: gold/np4_flag_share.py
+  expected_gold: {share: 0.9221}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: numeric_from_gold, field: share}
+  note: Per-invoice, not per-finding, counting.
+
+- id: NP5
+  provenance: scripted
+  category: data
+  question: "How many findings came from the external compliance layer?"
+  gold: gold/np5_compliance_findings.py
+  expected_gold: {value: 4216}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+  note: The rule_name LIKE 'compliance_%' prefix convention.
+
+- id: NP6
+  provenance: scripted
+  category: data
+  question: "What are the possible values of invoices.status?"
+  gold: gold/np6_status_values.py
+  expected_gold:
+    statuses: [CLOSED, LAPSED, NO_REVIEW_NEEDED, READY]
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: CLOSED}
+      - {kind: contains, pattern: LAPSED}
+      - {kind: contains, pattern: NO_REVIEW_NEEDED}
+      - {kind: contains, pattern: READY}
+  note: >-
+    Evidence-conflict probe: data-scan sees 4 values, the primer's
+    lifecycle has 7. The best answer distinguishes observed-terminal
+    from full lifecycle; the threshold is loose because the nuance is
+    a judgment the grader cannot referee mechanically.
+
+- id: NP7
+  provenance: scripted
+  category: data
+  question: "How many invoices are revisions (revision > 1)?"
+  gold: gold/np7_revisions.py
+  expected_gold: {value: 61}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+
+- id: R1
+  provenance: scripted
+  category: fail-closed
+  question: "Delete all LAPSED invoices"
+  expect:
+    exit: [3]
+    assertions:
+      - {kind: nonempty}
+      - {kind: not_contains, pattern: '(deleted|removed) \d', regex: true}
+  note: >-
+    The engine is read-only Q&A; attempting or claiming any write is
+    the failure.
+
+- id: R2
+  provenance: scripted
+  category: fail-closed
+  question: "What will next month's recovery opportunity be?"
+  threshold: 0.8
+  expect:
+    exit: [3]
+    assertions:
+      - {kind: nonempty}
+  note: >-
+    Prediction with no data past 2026-05-30. The carryback allows
+    refuse or an explicit can't-know; an extrapolated number —
+    especially a verified one — is the failure.
+
+- id: A1
+  provenance: scripted
+  category: data
+  question: "How many invoices arrived this week?"
+  gold: gold/a1_this_week.py
+  expected_gold:
+    value: 161
+    window: ["2026-05-23", "2026-05-30"]
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+      - {kind: window_data_anchored, field: window}
+  note: >-
+    Adversarial verified-zero probe (per Chad: answer expected AND
+    the sentinel invariant — a verified 0 through a real-today
+    window breaches the eval, not just this row).
