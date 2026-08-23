@@ -1,0 +1,7 @@
+# Eval settings live beside the bank, NOT in pack config — a
+# deliberate divergence from the "pack config or env" law, which
+# governs engine code: the pack must not know it is being examined.
+default_runs: 5
+default_threshold: 1.0
+pack: ../../packs/invoiceguard
+report_dir: reports

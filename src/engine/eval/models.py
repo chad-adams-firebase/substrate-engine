@@ -1,0 +1,409 @@
+"""Eval harness contract models: bank rows, assertions, run reports.
+
+Every shape that crosses a module boundary here is pydantic with
+extra="forbid" (CLAUDE.md): a typo in a hand-authored bank row must
+fail at load time, not silently grade as vacuously true.
+
+The assertion vocabulary is a closed discriminated union, like the
+tool surface: the grader evaluates registered assertion kinds, never
+ad-hoc predicates. Each kind declares whether it is a CONTENT
+assertion — the class whose failure at exit 0 constitutes the
+wrong-but-verified invariant breach (docs/phase4-gate-verdict.md §7.1)
+— or a SHAPE assertion (format, route, retry), whose failure is a row
+failure but never a breach.
+"""
+
+from datetime import datetime
+from typing import Annotated, Any, ClassVar, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from engine.config.models import ToolName
+from engine.harness.events import StatusEvent
+from engine.harness.outcomes import TurnOutcome
+from engine.verifier.models import VerifierVerdict
+
+# The open-backlog anomaly refs an expected-fail row may carry
+# (docs/phase4-gate-verdict.md §6 condition of closure), plus the
+# clarify open question (§7.8). Flipping a row to expected-pass is a
+# deliberate bank edit: delete the xfail block when the fix lands.
+XfailRef = Literal["N9", "N10", "N11", "N12", "O1", "clarify-open"]
+
+
+class Xfail(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ref: XfailRef
+    # The root-cause annotation the gate verdict requires — why this
+    # row is expected to fail, in terms of the anomaly's mechanism.
+    note: str
+
+
+# --- Assertions --------------------------------------------------------
+
+
+class _AssertionBase(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # True: failing this at exit 0 is a wrong-but-verified breach.
+    content: ClassVar[bool] = False
+    # Per-assertion expected-fail (e.g. O1's dump guard on a row whose
+    # other assertions must still gate). Row-level xfail covers the
+    # common case; this covers one assertion on an otherwise-green row.
+    xfail_ref: XfailRef | None = None
+
+
+class NonEmptyAssertion(_AssertionBase):
+    """The N7 shrug guard: a markdown answer has non-blank prose, a
+    table answer has at least one row."""
+
+    kind: Literal["nonempty"] = "nonempty"
+
+
+class NumericFromGoldAssertion(_AssertionBase):
+    """The gold script's value appears in the answer: any table cell,
+    or any numeric extracted from the prose (digit groups with $,%,
+    commas stripped; word-numbers one..twenty mapped). A gold ratio in
+    [0,1] also matches its percent form."""
+
+    content: ClassVar[bool] = True
+
+    kind: Literal["numeric_from_gold"] = "numeric_from_gold"
+    field: str  # key into the gold script's returned dict
+
+
+class NameFromGoldAssertion(_AssertionBase):
+    """Who-questions return people, not ids: the gold name (from an
+    executed roster query) appears word-bounded and case-folded, and
+    the answer does not present a bare id as the person."""
+
+    content: ClassVar[bool] = True
+
+    kind: Literal["name_from_gold"] = "name_from_gold"
+    field: str = "name"
+    forbid_bare_ids: bool = True
+
+
+class ContainsAssertion(_AssertionBase):
+    content: ClassVar[bool] = True
+
+    kind: Literal["contains"] = "contains"
+    pattern: str
+    regex: bool = False
+    case_sensitive: bool = False
+
+
+class NotContainsAssertion(_AssertionBase):
+    """Either a literal/regex pattern, or every string in a gold list
+    field (e.g. the executed roster feeding B6's 'no named person')."""
+
+    content: ClassVar[bool] = True
+
+    kind: Literal["not_contains"] = "not_contains"
+    pattern: str | None = None
+    regex: bool = False
+    case_sensitive: bool = False
+    from_gold_field: str | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_source(self) -> "NotContainsAssertion":
+        if (self.pattern is None) == (self.from_gold_field is None):
+            raise ValueError(
+                "not_contains needs exactly one of pattern / from_gold_field"
+            )
+        return self
+
+
+class CurrencyFormatAssertion(_AssertionBase):
+    """Money renders as currency: every $-amount is comma-grouped with
+    two decimals, and no float tail (8308.92139…) appears anywhere."""
+
+    kind: Literal["currency_format"] = "currency_format"
+
+
+class WindowDataAnchoredAssertion(_AssertionBase):
+    """The A1/C4 trap guard: the executed SQL (or windowed tool
+    arguments) in evidence contains the gold window's date literals
+    and none of the forbidden wall-clock anchors. Read the window, not
+    the count — a verified 0 through a real-today window is exactly
+    what this catches."""
+
+    content: ClassVar[bool] = True
+
+    kind: Literal["window_data_anchored"] = "window_data_anchored"
+    field: str  # gold dict key holding the expected date literal(s)
+    forbid: list[str] = ["CURRENT_DATE", "now(", "today"]
+
+
+class RouteAssertion(_AssertionBase):
+    """Graded against tools_used — one entry per invocation in call
+    order, duplicates and failed invocations included."""
+
+    kind: Literal["route"] = "route"
+    mode: Literal["first", "must_include", "must_not_include", "exact_set"]
+    tools: list[ToolName]
+
+
+class RetryCountAssertion(_AssertionBase):
+    """The N5 license: exactly `errors` errored invocations of `tool`,
+    each followed by a same-tool retry (counted from the evidence
+    bundle's invocation order)."""
+
+    kind: Literal["retry_count"] = "retry_count"
+    tool: ToolName
+    errors: int = 1
+    error_contains: str = ""
+
+
+class EnvelopeAssertion(_AssertionBase):
+    kind: Literal["envelope"] = "envelope"
+    body: Literal["markdown", "table"]
+
+
+class NoTextBlockDumpAssertion(_AssertionBase):
+    """The O1 guard: no long answer substring is a verbatim paste of
+    evidence payload text (whole descriptions/code blocks injected
+    inline)."""
+
+    kind: Literal["no_text_block_dump"] = "no_text_block_dump"
+    min_length: int = 200
+
+
+class VerdictCheckAssertion(_AssertionBase):
+    """Probe rows assert verifier internals (e.g. L2's injected line
+    numbers arrive matched_injected without exhausting the judge)."""
+
+    kind: Literal["verdict_check"] = "verdict_check"
+    max_judge_calls: int | None = None
+    disposition: Literal["verified", "unverified", "refused"] | None = None
+    min_injected_claims: int | None = None
+
+
+Assertion = Annotated[
+    NonEmptyAssertion
+    | NumericFromGoldAssertion
+    | NameFromGoldAssertion
+    | ContainsAssertion
+    | NotContainsAssertion
+    | CurrencyFormatAssertion
+    | WindowDataAnchoredAssertion
+    | RouteAssertion
+    | RetryCountAssertion
+    | EnvelopeAssertion
+    | NoTextBlockDumpAssertion
+    | VerdictCheckAssertion,
+    Field(discriminator="kind"),
+]
+
+GOLD_ASSERTION_KINDS = frozenset(
+    {"numeric_from_gold", "name_from_gold", "window_data_anchored"}
+)
+
+
+# --- Bank rows ----------------------------------------------------------
+
+
+class Expectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Exit-code equivalents that count as the expected shape
+    # (0 verified · 2 unverified · 3 refuse · 4 clarify · 5 escalate).
+    exit: list[int]
+    assertions: list[Assertion] = []
+
+
+class BankTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question: str
+    expect: Expectation
+
+
+class BankRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    provenance: Literal["scripted", "user-sourced", "n-probe"]
+    category: Literal[
+        "data",
+        "code",
+        "docs",
+        "execution",
+        "fail-closed",
+        "sentinel",
+        "routing",
+        "recovery",
+        "multiturn",
+        "ambiguity",
+        "honest-negative",
+        "meta",
+    ]
+    # Exactly one of question/expect (single-turn) or turns.
+    question: str | None = None
+    expect: Expectation | None = None
+    turns: list[BankTurn] = []
+    # Path to the executable gold script, relative to the bank root.
+    gold: str | None = None
+    # Committed tripwire only — grade compares answers against the
+    # EXECUTED gold value, never this transcription (the grader's-
+    # correction law, docs/phase4-gate-closing-addendum.md §9).
+    expected_gold: dict[str, Any] | None = None
+    # Pass-rate over reps required to pass; None takes eval.yaml's
+    # default.
+    threshold: float | None = None
+    xfail: Xfail | None = None
+    # Sentinel rows guard only the invariant: any exit in the expected
+    # list passes shape, and content assertions apply only at exit 0.
+    sentinel: bool = False
+    # Rows sharing a route_pair must route identically (first tool).
+    route_pair: str | None = None
+    # Why this row exists / where its text came from.
+    note: str = ""
+
+    @model_validator(mode="after")
+    def _single_or_multi(self) -> "BankRow":
+        single = self.question is not None
+        multi = bool(self.turns)
+        if single == multi:
+            raise ValueError(
+                f"row {self.id}: exactly one of question/turns is required"
+            )
+        if single and self.expect is None:
+            raise ValueError(f"row {self.id}: single-turn rows need expect")
+        if multi and self.expect is not None:
+            raise ValueError(
+                f"row {self.id}: multi-turn rows put expect on each turn"
+            )
+        if self.expected_gold is not None and self.gold is None:
+            raise ValueError(
+                f"row {self.id}: expected_gold without a gold script — "
+                f"gold values must be produced by executed code"
+            )
+        needs_gold = {
+            a.kind
+            for turn_expect in self._expectations()
+            for a in turn_expect.assertions
+            if a.kind in GOLD_ASSERTION_KINDS
+            or (a.kind == "not_contains" and a.from_gold_field is not None)
+        }
+        if needs_gold and self.gold is None:
+            raise ValueError(
+                f"row {self.id}: assertions {sorted(needs_gold)} need a "
+                f"gold script"
+            )
+        return self
+
+    def _expectations(self) -> list[Expectation]:
+        if self.expect is not None:
+            return [self.expect]
+        return [turn.expect for turn in self.turns]
+
+    def all_turns(self) -> list[BankTurn]:
+        """Uniform view: a single-turn row as a one-item turn list."""
+        if self.turns:
+            return self.turns
+        assert self.question is not None and self.expect is not None
+        return [BankTurn(question=self.question, expect=self.expect)]
+
+
+class EvalConfig(BaseModel):
+    """eval.yaml, beside the bank — deliberately NOT pack config: the
+    pack must not know it is being examined."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    default_runs: int = 5
+    default_threshold: float = 1.0
+    # Pack directory, relative to the bank root (or absolute).
+    pack: str
+    report_dir: str = "reports"
+
+
+# --- Run report (JSONL) --------------------------------------------------
+
+
+class LlmStats(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    latencies_ms: list[int] = []
+
+
+class EmittedTokens(BaseModel):
+    """Which optional tokens the draft emitted — the §7.2 requirement:
+    stochastic failures (N9/N10) fire only when the draft happens to
+    state a path or a prose date, so grade stratifies pass-rates by
+    these."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    line_numbers: list[str] = []
+    file_paths: list[str] = []
+    iso_dates: list[str] = []
+    prose_dates: list[str] = []
+    money: list[str] = []
+    float_tails: list[str] = []
+    word_numbers: list[str] = []
+    backticked: list[str] = []
+
+
+class TurnRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    turn_index: int
+    question: str
+    conversation_id: int | None = None
+    engine_turn: int | None = None
+    # None only when ask() raised; error then says why, exit_equiv 1.
+    outcome: TurnOutcome | None = None
+    exit_equiv: int
+    tools_used: list[str] = []
+    evidence_ref: str | None = None
+    # The canonical bundle JSON, inlined: grade needs the evidence for
+    # window/retry/dump checks and must not depend on shipping work.db.
+    evidence_payload: str | None = None
+    verdict: VerifierVerdict | None = None
+    status_events: list[StatusEvent] = []
+    substrate_versions: list[str] = []
+    wall_ms: int = 0
+    llm: LlmStats = LlmStats()
+    emitted_tokens: EmittedTokens = EmittedTokens()
+    placeholder_failures: list[str] = []
+    nudges: int = 0
+    error: str | None = None
+
+
+class RunRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["run"] = "run"
+    row_id: str
+    rep: int  # 1-based
+    started_at: datetime
+    wall_ms_total: int = 0
+    turns: list[TurnRecord]
+
+
+class RunReportHeader(BaseModel):
+    """First line of every report: the determinism block. Resume and
+    grade both refuse when the world under their feet is not the world
+    this header names."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["header"] = "header"
+    schema_version: int = 1
+    engine_sha: str
+    engine_dirty: bool
+    target_sha: str | None
+    seed: int | None
+    world_manifests: dict[str, str]
+    model: str
+    pack: str
+    bank_hash: str
+    eval_config: EvalConfig
+    runs_requested: int
+    rows_filter: list[str] | None = None
+    started_at: datetime
