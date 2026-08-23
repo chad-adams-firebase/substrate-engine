@@ -89,10 +89,13 @@ _FRACTION = re.compile(
 _CARDINALS = {
     "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
     "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+    "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
 }
 _CARDINAL = re.compile(
-    r"\b(?:the|all)\s+(two|three|four|five|six|seven|eight|nine|ten|"
-    r"eleven|twelve)\b",
+    r"\b(?:the|all)\s+(thirteen|fourteen|fifteen|sixteen|seventeen|"
+    r"eighteen|nineteen|twenty|two|three|four|five|six|seven|eight|"
+    r"nine|ten|eleven|twelve)\b",
     re.IGNORECASE,
 )
 
@@ -337,6 +340,7 @@ def extract_claims(text: str) -> list[Claim]:
                 end=match.end(1),
                 value=float(_CARDINALS[match.group(1).lower()]),
                 resolution=0.5,
+                spelled=True,
             )
         )
         _blank(masked, match.start(1), match.end(1))

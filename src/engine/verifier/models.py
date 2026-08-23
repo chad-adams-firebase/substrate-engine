@@ -55,6 +55,9 @@ class NumericClaim(BaseModel):
     # Half the last displayed unit: "1.4 million" -> 50_000, "34.2%"
     # -> 0.05, "146" -> 0.5. Drives the mechanical rounding match.
     resolution: float | None = None
+    # True for spelled cardinals ("twelve") — eligible for the quote-
+    # corpus fallback when no harvested value matches.
+    spelled: bool = False
 
 
 class EntityClaim(BaseModel):

@@ -132,6 +132,25 @@ def _match_numeric(
     if derived is not None:
         return derived
 
+    if claim.spelled:
+        # A spelled cardinal restating retrieved prose ("twelve audit
+        # rules", from the primer) is faithful as a quotation even
+        # when no harvested value carries it — the primer contributes
+        # no numbers by design. Accepted looseness: any occurrence of
+        # the word in this turn's retrieved text matches (§9.4 keeps
+        # prose-source checks minimal). Casefolding here is a separate
+        # policy from _match_quote's case-sensitivity: case is meaning
+        # in code, not in a spelled number.
+        word = re.compile(rf"\b{re.escape(claim.surface.casefold())}\b")
+        for corpus in pools.quote_corpus:
+            if word.search(corpus.text.casefold()):
+                return MatchOutcome(
+                    status="matched_derived",
+                    method="spelled-quote",
+                    matched_value=claim.surface,
+                    evidence_ref=corpus.ref,
+                )
+
     # Comparator claims are judge territory: code-side "at least"
     # logic is the derive-anything trap.
     return MatchOutcome(
@@ -264,7 +283,9 @@ def _match_quote(claim: QuoteClaim, pools: EvidencePools) -> MatchOutcome:
     """Whitespace-normalized substring match. Case and punctuation are
     meaning in code, so they are NOT normalized — and quotes never go
     to the judge: a judge blessing a near-quote is the exact failure
-    class this system exists to kill."""
+    class this system exists to kill. (The spelled-cardinal fallback
+    in _match_numeric casefolds deliberately — prose, not code — and
+    the two policies must not be unified.)"""
     lines = [
         _normalize(line)
         for line in claim.text.splitlines()

@@ -176,6 +176,78 @@ def test_component_name_quote_matches_via_structured_field():
     assert outcome.evidence_ref == "e0.components[0].name"
 
 
+def test_spelled_cardinal_matches_a_pooled_count_mechanically():
+    # Addendum N2: "the twelve" carries a comparable 12 and matches a
+    # harvested len(edges) count exactly like a digit claim.
+    from engine.substrates.models import CkgEdge, CkgNode
+    from tests.verifier_support import MACHINE
+
+    node = CkgNode(
+        id="n1",
+        kind="function",
+        qualified_name="pkg.rules.run_rules",
+        file_path="pkg/rules.py",
+        start_line=10,
+        end_line=90,
+        provenance=MACHINE,
+    )
+    traversal = ToolInvocation(
+        tool="traverse_code_knowledge_graph",
+        arguments={},
+        status="ok",
+        output=CkgTraversalOutput(
+            entry_node=node,
+            edges=[
+                CkgEdge(
+                    id=f"edge{i}",
+                    source_id="n1",
+                    kind="calls",
+                    target_node_id=f"n{i + 2}",
+                    line=20 + i,
+                    provenance=MACHINE,
+                )
+                for i in range(12)
+            ],
+        ),
+        substrates_read=[],
+    )
+    matches = _match("It runs the twelve audit rules in order.", traversal)
+    [(claim, outcome)] = [
+        (c, o) for c, o in matches if c.kind == "numeric"
+    ]
+    assert claim.surface == "twelve" and claim.value == 12.0
+    assert outcome.status == "matched_exact"
+    assert outcome.evidence_ref == "e0.len(edges)"
+
+
+def test_spelled_cardinal_falls_back_to_the_quote_corpus():
+    # Addendum N2: primer prose is quote corpus but never numbers (by
+    # design), so a spelled cardinal restating it matches as a
+    # quotation when no harvested value can carry it.
+    inv = _primer_invocation()
+    inv.output.primer = (
+        "Twelve audit rules score each invoice in the rules engine."
+    )
+    matches = _match("It applies the twelve audit rules.", inv)
+    [(claim, outcome)] = [(c, o) for c, o in matches if c.kind == "numeric"]
+    assert claim.spelled is True
+    assert outcome.status == "matched_derived"
+    assert outcome.method == "spelled-quote"
+    assert outcome.evidence_ref == "e0.primer"
+
+
+def test_digit_claims_never_take_the_spelled_fallback():
+    # Addendum N2: "12" typed as digits with only the word "twelve" in
+    # retrieved text stays judge territory — the fallback is for
+    # spelled restatements of prose, not a general number-word bridge.
+    inv = _primer_invocation()
+    inv.output.primer = "Twelve audit rules score each invoice."
+    matches = _match("There are 12 audit rules.", inv)
+    [(claim, outcome)] = [(c, o) for c, o in matches if c.kind == "numeric"]
+    assert claim.spelled is False
+    assert outcome.status == "fuzzy"
+
+
 def test_entity_matching_casefolds_as_a_derivation():
     inv = sql_invocation("SELECT rule_name FROM findings", [{"rule_name": "x"}])
     [(_, exact)] = _match("The `rule_name` column.", inv)

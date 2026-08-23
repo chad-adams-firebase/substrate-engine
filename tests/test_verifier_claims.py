@@ -107,7 +107,15 @@ def test_verbal_fractions_need_an_approximation_cue():
 def test_spelled_cardinals_only_after_the_or_all():
     (claim,) = _numeric(extract_claims("The twelve rule functions run."))
     assert claim.value == 12
+    assert claim.spelled is True
     assert _numeric(extract_claims("One of the reasons is speed.")) == []
+
+
+def test_spelled_cardinals_extend_through_twenty():
+    # Addendum N2: the lexicon reaches twenty; teens don't collapse to
+    # their prefixes ("seventeen" is 17, never "seven").
+    (claim,) = _numeric(extract_claims("All seventeen checks passed."))
+    assert claim.surface == "seventeen" and claim.value == 17
 
 
 def test_comparators_and_approximation_cues():
