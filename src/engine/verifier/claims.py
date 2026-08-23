@@ -24,7 +24,14 @@ from engine.verifier.models import (
 
 _FENCED = re.compile(r"```[^\n`]*\n(.*?)```", re.DOTALL)
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
-_IDENTIFIER_SHAPED = re.compile(r"^[A-Za-z_][A-Za-z0-9_.]*$")
+# A hyphen extends a segment only inside a dotted token (component-id
+# shape: ig.spine.invoice-parse). A bare hyphenated backtick body
+# (`invoice-parse`) stays a quote: the vocabulary harvest never yields
+# bare hyphenated tokens, so an entity claim there could not match.
+_IDENTIFIER_SHAPED = re.compile(
+    r"^[A-Za-z_][A-Za-z0-9_.]*$"
+    r"|^[A-Za-z_]\w*(?:-\w+)*(?:\.[A-Za-z_]\w*(?:-\w+)*)+$"
+)
 
 _LIST_MARKER = re.compile(r"^\s{0,3}\d{1,3}[.)]\s", re.MULTILINE)
 _TABLE_SEPARATOR = re.compile(r"^\s*\|?[\s:|-]{3,}\|?\s*$", re.MULTILINE)
@@ -45,7 +52,14 @@ _MONTH_DATE = re.compile(
 _LINE_REF = re.compile(r"\b([\w./-]+\.py):(\d+)(?:\s*[-–]\s*(\d+))?")
 _LINE_RANGE = re.compile(r"\blines?\s+(\d+)\s*[-–]\s*(\d+)\b")
 
-_DOTTED = re.compile(r"\b[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+\b")
+# Hyphens extend segments (ig.spine.invoice-parse is ONE token, never
+# truncated at the hyphen — the carryback's L1 false positives). Only
+# dotted tokens extract, and segments start [A-Za-z_], so date ranges
+# ("2024-05") and hyphenated English with no dot ("well-known",
+# "re-run") stay prose. An English suffix welded onto a dotted id
+# still extracts whole — accepted: extraction cannot consult evidence
+# to tell -parse from -like, and drafts backtick canonical names.
+_DOTTED = re.compile(r"\b[A-Za-z_]\w*(?:-\w+)*(?:\.[A-Za-z_]\w*(?:-\w+)*)+\b")
 _SNAKE = re.compile(r"\b[A-Za-z_][A-Za-z0-9]*(?:_[A-Za-z0-9]+)+\b")
 
 _MAGNITUDE = re.compile(

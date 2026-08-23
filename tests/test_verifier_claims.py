@@ -127,6 +127,37 @@ def test_dotted_suffix_entities_but_not_prose_abbreviations():
     assert "e.g" not in entities
 
 
+def test_hyphenated_dotted_id_extracts_whole():
+    # Carryback #1a: every unmatched entity in the L1 run was a
+    # hyphenated component id truncated at the hyphen.
+    prose = extract_claims("Parsing is handled by ig.spine.invoice-parse.")
+    assert [c.entity for c in _entities(prose)] == ["ig.spine.invoice-parse"]
+
+    ticked = extract_claims("Then `ig.spine.invoice-parse` takes over.")
+    assert [c.entity for c in _entities(ticked)] == ["ig.spine.invoice-parse"]
+    assert _quotes(ticked) == []
+
+    # The offsets span the whole id — the inspector highlight anchor.
+    text = "See ig.platform.file-lifecycle here."
+    (claim,) = _entities(extract_claims(text))
+    assert text[claim.start : claim.end] == "ig.platform.file-lifecycle"
+
+
+def test_hyphenated_prose_and_ranges_are_not_entities():
+    claims = extract_claims(
+        "A well-known, invoice-level check; re-run it for 2024-05 data."
+    )
+    assert _entities(claims) == []
+
+
+def test_bare_hyphenated_backtick_stays_a_quote():
+    # No dot means no component-id shape; the vocabulary harvest never
+    # yields bare hyphenated tokens, so an entity claim could not match.
+    claims = extract_claims("The `invoice-parse` step runs first.")
+    assert _entities(claims) == []
+    assert [q.text for q in _quotes(claims)] == ["invoice-parse"]
+
+
 def test_plain_words_are_not_entity_claims():
     claims = extract_claims("The invoices arrived and reviewers worked.")
     assert _entities(claims) == []
