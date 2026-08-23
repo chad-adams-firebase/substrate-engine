@@ -40,6 +40,7 @@ from engine.harness.router import (
     results_message,
     summarize_invocation,
 )
+from engine.harness.placeholders import referenced_indices
 from engine.harness.state import RouteDecision, TurnState
 from engine.harness.tables import caption_for, project_table
 from engine.harness.verifier_protocol import VerifierProtocol
@@ -69,6 +70,30 @@ class GraphDeps:
         self.settings = settings
         self.router_prompt = router_prompt
         self.events: EventLog = EventLog()
+
+
+def _fallback_table(evidence, failures):
+    """The evidence to ship as a table when placeholder resolution is
+    exhausted: the invocation the failed placeholders cite (most
+    referenced first, ties to the latest), else the latest ok
+    table-shaped invocation, else None (the refusal stands)."""
+    counts: dict[int, int] = {}
+    for index in referenced_indices(failures):
+        counts[index] = counts.get(index, 0) + 1
+    cited = sorted(counts, key=lambda index: (counts[index], index), reverse=True)
+    uncited = [
+        index for index in range(len(evidence) - 1, -1, -1) if index not in counts
+    ]
+    for index in cited + uncited:
+        if not 0 <= index < len(evidence):
+            continue
+        invocation = evidence[index]
+        if invocation.status != "ok" or invocation.output is None:
+            continue
+        table = project_table(invocation.output)
+        if table is not None:
+            return index, table, caption_for(invocation.output)
+    return None
 
 
 def build_graph(deps: GraphDeps, checkpointer=None):
@@ -171,9 +196,32 @@ def build_graph(deps: GraphDeps, checkpointer=None):
         )
         if result.resolution.failures:
             attempts = state.draft_attempts + 1
+            failed = ", ".join(result.resolution.failures)
             if attempts > deps.settings.max_draft_retries:
+                # §6: when the answer's substance is a result set the
+                # store already returned, deliver it as a table
+                # envelope instead of refusing — deterministically,
+                # and still through the Verifier (table_passthrough).
+                fallback = _fallback_table(
+                    state.evidence, result.resolution.failures
+                )
+                if fallback is not None:
+                    index, table, caption = fallback
+                    deps.events.emit(
+                        "draft",
+                        "finish",
+                        f"placeholder resolution exhausted; failed: {failed}"
+                        f" — returning evidence e{index} as a table",
+                    )
+                    return {
+                        "draft": TableAnswer(table=table, caption=caption),
+                        "draft_feedback": [],
+                    }
                 deps.events.emit(
-                    "draft", "finish", "placeholder budget exhausted"
+                    "draft",
+                    "finish",
+                    f"placeholder budget exhausted; failed: {failed} — no "
+                    "table-shaped evidence; refusing",
                 )
                 return {
                     "outcome": RefuseOutcome(
@@ -187,8 +235,8 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             deps.events.emit(
                 "draft",
                 "finish",
-                f"{len(result.resolution.failures)} placeholder(s) failed "
-                "— retrying",
+                f"placeholder(s) failed: {failed} — retrying "
+                f"({attempts}/{deps.settings.max_draft_retries})",
             )
             return {
                 "draft_raw": result.raw,

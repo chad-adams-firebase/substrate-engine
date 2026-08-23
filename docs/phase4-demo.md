@@ -90,3 +90,8 @@ uv run engine turns --pack packs/invoiceguard --conversation N --turn 1 --eviden
 - `work.db` in the pack directory (gitignored) now holds the
   conversations, turn logs, evidence bundles, and LangGraph
   checkpoints — one file, inspectable with any sqlite client.
+- Watch item (fix-pass re-run): the router prompt now says data-shaped
+  answers MUST take shape='table'. If answers start arriving as bare
+  tables where prose was wanted ("did any invoices arrive Sunday?"
+  wants "No — weekends receive nothing", not a 0-row table), soften
+  the wording to "strongly prefer". Behavior to observe, not pre-fix.

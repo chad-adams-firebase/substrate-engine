@@ -32,6 +32,17 @@ class Resolution(BaseModel):
     failures: list[str] = []
 
 
+def referenced_indices(surfaces: list[str]) -> list[int]:
+    """Evidence indices named by placeholder surfaces, one per
+    occurrence, in order — what the drafter was trying to cite when
+    resolution failed."""
+    return [
+        int(match.group(1))
+        for surface in surfaces
+        for match in _PLACEHOLDER.finditer(surface)
+    ]
+
+
 def _navigate(value: object, path: str) -> object:
     """Walk a dot/bracket path into a model_dump(mode="json") tree.
     Raises KeyError/IndexError/TypeError on a bad step — the caller

@@ -48,11 +48,11 @@ component id, a node id from a previous hop, or a qualified name.
 Loop contract: call one or more evidence tools per step; their \
 results come back before your next step. When the evidence answers \
 the question, call give_answer. When the answer IS a result set — a \
-listing, a distribution, rows the user asked to see — prefer \
-give_answer with shape='table' and the evidence_index of that result, \
-so the numbers reach the user exactly as the store returned them. Use \
-shape='prose' when the user needs an explanation woven around the \
-values. If the question is out of scope, unanswerable from the \
+count, a listing, a distribution, rows the user asked to see — you \
+MUST call give_answer with shape='table' and the evidence_index of \
+that result, so the numbers reach the user exactly as the store \
+returned them. Use shape='prose' only when the user needs an \
+explanation woven around the values. If the question is out of scope, unanswerable from the \
 available tools, or asks you to take an action rather than provide \
 information, call refuse and say what would work instead. If the \
 question is ambiguous, call clarify. If answering requires a human \

@@ -171,6 +171,58 @@ def test_protocol_violation_nudges_then_recovers(tool_pack):
     assert "calling one of" in nudge.content
 
 
+BAD_DRAFT = LLMResponse(
+    content="There are {{e0.rows[0].count_star()}} rows.", model="s"
+)
+
+
+def test_placeholder_exhaustion_falls_back_to_table(tool_pack):
+    # Carryback #3b: correct evidence in the bundle, placeholder
+    # grammar unable to address it, answer refused. Exhaustion now
+    # degrades to the untouched table envelope — still verified.
+    responses = [STATS_CALL, GIVE_PROSE, BAD_DRAFT, BAD_DRAFT, BAD_DRAFT]
+    session, _, verifier = build_ask_session(tool_pack, responses)
+    result = session.ask("how many invoice rows are there?")
+
+    assert result.outcome.kind == "answer"
+    assert result.outcome.body.kind == "table"
+    assert "row_count" in result.outcome.body.table.columns
+    (call,) = verifier.calls  # no bypasses: the fallback is verified
+    assert call["draft"].kind == "table_passthrough"
+    draft_events = [e for e in result.events if e.node == "draft"]
+    assert any(
+        "count_star()" in e.detail and "as a table" in e.detail
+        for e in draft_events
+    )
+
+
+def test_fallback_prefers_the_referenced_evidence_index(tool_pack):
+    # The failed placeholders cite e0; the table ships from e0 even
+    # though e1 (gathered later) also projects.
+    other_stats = tool_call(
+        "query_univariate_stats", {"table": "invoices", "column": "supplier_id"}
+    )
+    responses = [STATS_CALL, other_stats, GIVE_PROSE] + [BAD_DRAFT] * 3
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("how many?")
+
+    assert result.outcome.kind == "answer"
+    assert result.outcome.body.kind == "table"
+    columns = {row["column_name"] for row in result.outcome.body.table.rows}
+    assert columns == {"status"}  # e0, not the later supplier_id stats
+
+
+def test_no_projectable_evidence_still_refuses(tool_pack):
+    responses = [tool_call("app_primer"), GIVE_PROSE] + [BAD_DRAFT] * 3
+    session, _, verifier = build_ask_session(tool_pack, responses)
+    result = session.ask("q")
+
+    assert result.outcome.kind == "refuse"
+    assert verifier.calls == []
+    draft_events = [e for e in result.events if e.node == "draft"]
+    assert any("no table-shaped evidence" in e.detail for e in draft_events)
+
+
 def test_real_verifier_swaps_in_and_verifies_a_clean_turn(tool_pack):
     # The stub proves the seam; this proves the real Verifier fits it:
     # a clean placeholder-drafted answer through real tools verifies.
