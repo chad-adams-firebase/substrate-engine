@@ -41,6 +41,57 @@ def test_answer_path_routes_tools_drafts_and_verifies(tool_pack):
     assert call["draft"].injected_spans  # the 50 was code-injected
 
 
+def test_a_verified_shrug_ships_as_a_refusal(tool_pack):
+    # Addendum N7, the U6 twin pair: "the evidence does not provide…"
+    # passed verification with zero claims and exited 0 while its twin
+    # refused with 3. Same substance now gets the same outcome shape:
+    # a claim-free insufficiency answer converts to refuse, never 0.
+    shrug = (
+        "The evidence does not provide reviewer-level assignments, "
+        "so this cannot be determined."
+    )
+    responses = [
+        STATS_CALL,
+        GIVE_PROSE,
+        LLMResponse(content=shrug, model="s"),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("who reviews the most invoices?")
+    assert result.outcome.kind == "refuse"
+    assert result.outcome.reason == shrug
+
+    # The twin that refuses at the router keeps its non-zero exit.
+    twin, _, _ = build_ask_session(
+        tool_pack,
+        [
+            tool_call(
+                "refuse",
+                {
+                    "reason": "no reviewer assignment data",
+                    "what_would_work": "a per-rule breakdown",
+                },
+            )
+        ],
+    )
+    assert twin.ask("who reviews the most invoices?").outcome.kind == "refuse"
+
+
+def test_zero_claim_prose_without_insufficiency_still_answers(tool_pack):
+    # Addendum N7's guard is a conjunction: claim-free prose that
+    # asserts nothing about missing evidence is a legitimate answer.
+    responses = [
+        STATS_CALL,
+        GIVE_PROSE,
+        LLMResponse(
+            content="This application audits supplier invoices.", model="s"
+        ),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("what is this app?")
+    assert result.outcome.kind == "answer"
+    assert result.outcome.verification == "verified"
+
+
 def test_refuse_clarify_escalate_are_first_class_exits(tool_pack):
     for name, args, kind, field, expected in [
         (

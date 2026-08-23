@@ -15,6 +15,8 @@ swapped per turn by AskSession (an in-process callback does not
 belong in checkpointed state).
 """
 
+import re
+
 from langgraph.graph import END, START, StateGraph
 
 from engine.config.models import HarnessSettings
@@ -70,6 +72,25 @@ class GraphDeps:
         self.settings = settings
         self.router_prompt = router_prompt
         self.events: EventLog = EventLog()
+
+
+# A prose answer that asserts the evidence cannot answer, and grounds
+# no claim of its own, is a refusal wearing an answer's exit code —
+# the worst shape in the taxonomy (Addendum N7). Generic-English
+# lexicon, engine-owned like the claim extractor's; promote to pack
+# config only if a pack ever needs its own phrasing.
+_INSUFFICIENCY = re.compile(
+    r"(?:evidence|data|results?|tools?)\s+(?:do(?:es)?\s+not|don't|doesn't|"
+    r"cannot|can't)\s+(?:provide|contain|show|support|include|answer|"
+    r"indicate|specify)"
+    r"|no\s+(?:evidence|data|information|record)\b"
+    r"|insufficient\s+(?:evidence|data|information)"
+    r"|(?:cannot|can't|unable\s+to)\s+(?:determine|answer|be\s+determined|"
+    r"be\s+answered)"
+    r"|not\s+(?:available|present|found)\s+in\s+the\s+(?:evidence|data|"
+    r"results?)",
+    re.IGNORECASE,
+)
 
 
 def _fallback_table(evidence, failures):
@@ -345,6 +366,26 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 what_would_work=(
                     "Rephrasing the question, or asking for the underlying "
                     "data directly."
+                ),
+            )
+        elif (
+            state.draft.kind == "markdown"
+            and not result.attempt_record.claims
+            and _INSUFFICIENCY.search(state.draft.text)
+        ):
+            # Addendum N7: zero claims means verification was vacuous;
+            # insufficiency prose means the draft itself says so. Ship
+            # it as the refusal it is — never exit 0. (Clarify needs a
+            # question to ask, which no deterministic rule can mint;
+            # the router's clarify verb remains that path.)
+            deps.events.emit(
+                "verify", "finish", "verified but content-free — refusing"
+            )
+            outcome = RefuseOutcome(
+                reason=state.draft.text,
+                what_would_work=(
+                    "Asking about data or code the connected substrates "
+                    "cover, or naming the specific record to look up."
                 ),
             )
         else:
