@@ -157,11 +157,17 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     assert "never the code knowledge graph" in prompt
     # Traversal truth: component -> functions is two hops.
     assert "members, then contains" in prompt
-    # Result-set questions steer to the untouched table envelope.
-    assert "shape='table'" in prompt
+    # Result-set questions steer to the untouched table envelope —
+    # mandatory, not preferred (the prose-vs-table choice was the
+    # carryback's #3b bug surface).
+    assert "MUST call give_answer with shape='table'" in prompt
     # Fail-closed is a correct outcome, and the loop is bounded.
     assert "Refusing is a correct outcome" in prompt
     assert "at most 6 steps" in prompt
+    # Protocol hardening: both observed violation classes are named
+    # and priced in the step budget.
+    assert "tool calls only" in prompt
+    assert "costs one of your steps" in prompt
 
 
 def test_router_prompt_renders_data_coverage_only_when_given():

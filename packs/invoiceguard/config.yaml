@@ -109,7 +109,11 @@ tool_settings:
     coverage_grace_days: 7
 
 harness:
-  max_router_iterations: 6
+  # 8, not 6: the acceptance L3 run was refused with evidence in hand
+  # after nudges ate the budget. Two extra steps cost seconds and
+  # cents on pathological turns only; refusing correct work costs the
+  # answer.
+  max_router_iterations: 8
   max_draft_retries: 2
   max_rows_in_context: 30
 

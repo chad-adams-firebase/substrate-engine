@@ -173,3 +173,18 @@ def test_unknown_entry_is_an_error_with_a_component_hint(tool_pack):
     )
     assert component_as_node.status == "error"
     assert "members" in component_as_node.error
+
+
+def test_members_with_a_function_name_steers_to_node_hop(tool_pack):
+    # The acceptance L3 flail: hop='members' with a function name got
+    # a dump of all component ids — steering the wrong way. The error
+    # now names the node and the hop that works.
+    registry, _ = build_tool_registry(tool_pack)
+    invocation = registry.invoke(
+        "traverse_code_knowledge_graph",
+        {"entry": RUN_RULES, "hop": "members"},
+    )
+    assert invocation.status == "error"
+    assert "hop='node'" in invocation.error
+    assert RUN_RULES in invocation.error
+    assert "Components:" not in invocation.error  # no component dump

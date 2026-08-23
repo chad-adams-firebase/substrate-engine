@@ -79,6 +79,22 @@ class TraverseCodeKnowledgeGraph(Tool):
         if params.hop == "members":
             component = index.resolve_component(params.entry)
             if component is None:
+                # Mirror of the node-branch hint below: the acceptance
+                # L3 flail was hop='members' with a function name, and
+                # the component-list dump steered the wrong way.
+                node = index.resolve_node(params.entry)
+                if node is not None:
+                    return self.fail(
+                        params,
+                        (
+                            f"{params.entry!r} is not a component — it is "
+                            f"a code node ({node.kind} "
+                            f"{node.qualified_name}). Use hop='node' with "
+                            "that qualified name for its details, or "
+                            "'contains'/'callees'/'callers' to navigate "
+                            "from it."
+                        ),
+                    )
                 known = ", ".join(sorted(index.component_by_id))
                 return self.fail(
                     params,

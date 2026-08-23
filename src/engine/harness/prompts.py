@@ -72,7 +72,16 @@ available tools, or asks you to take an action rather than provide \
 information, call refuse and say what would work instead. If the \
 question is ambiguous, call clarify. If answering requires a human \
 decision, call escalate. Refusing is a correct outcome; guessing is \
-not. You have at most {max_iterations} steps."""
+not.
+
+Protocol, strictly: every reply must consist of tool calls only — \
+never prose, never an empty reply, never a plan written as text. A \
+reply that is not a valid tool call is discarded and costs one of \
+your steps. Arguments must match each tool's schema exactly \
+(give_answer with shape='table' requires evidence_index). Calling \
+evidence tools and give_answer together runs the tools and ignores \
+the give_answer — gather first, answer in a later step. You have at \
+most {max_iterations} steps."""
 
 
 def render_drafter_prompt(*, app_name: str) -> str:
