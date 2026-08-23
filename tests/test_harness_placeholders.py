@@ -2,7 +2,13 @@
 failure reporting — the injected-figures half of §9.4."""
 
 from engine.harness.placeholders import resolve_placeholders
-from engine.tools.envelope import RunSqlOutput, Table, ToolInvocation
+from engine.ports.types import RunStatus
+from engine.tools.envelope import (
+    CheckExecutionOutput,
+    RunSqlOutput,
+    Table,
+    ToolInvocation,
+)
 
 
 def _sql_evidence(rows, columns=None, total=None) -> list[ToolInvocation]:
@@ -72,6 +78,31 @@ def test_error_invocation_has_no_output_to_resolve_against():
     )
     resolution = resolve_placeholders("{{e0.table.rows[0].n}}", [errored])
     assert resolution.failures == ["{{e0.table.rows[0].n}}"]
+
+
+def test_run_status_paths_resolve():
+    # The carryback's C1/C1b failures: the payload key was `status`,
+    # colliding with the invocation-level status and inviting wrong
+    # paths. Renamed run_status, a did_run answer is now addressable.
+    evidence = [
+        ToolInvocation(
+            tool="check_execution",
+            arguments={},
+            status="ok",
+            output=CheckExecutionOutput(
+                run_status=RunStatus(
+                    ran=True, count=16, detail="16 stale_sweep_completed events"
+                )
+            ),
+            substrates_read=[],
+        )
+    ]
+    resolution = resolve_placeholders(
+        "Ran: {{e0.run_status.ran}}, count {{e0.run_status.count}}.",
+        evidence,
+    )
+    assert resolution.failures == []
+    assert resolution.text == "Ran: true, count 16."
 
 
 def test_text_without_placeholders_passes_through_untouched():

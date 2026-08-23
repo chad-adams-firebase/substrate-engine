@@ -19,7 +19,7 @@ def test_did_run_answers_from_the_real_slice(tool_pack):
         "check_execution", {"component": "stale_sweep", **_day(11)}
     )
     assert invocation.status == "ok", invocation.error
-    status = invocation.output.status
+    status = invocation.output.run_status
     assert status.ran is True and status.count == 1
     # Receipts live in evidence, not in the LLM-visible output.
     assert status.matched_lines == []
@@ -33,7 +33,7 @@ def test_did_run_false_outside_the_window(tool_pack):
     invocation = registry.invoke(
         "check_execution", {"component": "stale_sweep", **_day(13)}
     )
-    assert invocation.output.status.ran is False
+    assert invocation.output.run_status.ran is False
 
 
 def test_recent_errors_returns_parsed_rows_and_raw_lines(tool_pack):

@@ -76,7 +76,7 @@ class CheckExecution(Tool):
                 return self.ok(
                     params,
                     CheckExecutionOutput(
-                        status=status.model_copy(update={"matched_lines": []})
+                        run_status=status.model_copy(update={"matched_lines": []})
                     ),
                     evidence=CheckExecutionEvidence(
                         lines=status.matched_lines,

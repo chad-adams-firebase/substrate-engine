@@ -98,7 +98,9 @@ def _check_execution_invocation() -> ToolInvocation:
         arguments={"component": "stale_sweep", "mode": "did_run"},
         status="ok",
         output=CheckExecutionOutput(
-            status=RunStatus(ran=True, count=2, detail="2 stale_sweep_completed events")
+            run_status=RunStatus(
+                ran=True, count=2, detail="2 stale_sweep_completed events"
+            )
         ),
         evidence=CheckExecutionEvidence(
             lines=["ts=2026-03-11T18:00:00+00:00 level=INFO ..."]

@@ -25,17 +25,20 @@ class ExecutionCheck(SubstrateCheck):
         assert isinstance(output, CheckExecutionOutput)
         contribution = EvidenceContribution()
 
-        if output.status is not None:
+        if output.run_status is not None:
             contribution.numbers.append(
                 EvidenceValue(
-                    value=float(output.status.count),
-                    ref=f"{ref}.status.count",
+                    value=float(output.run_status.count),
+                    ref=f"{ref}.run_status.count",
                     salience="count",
                 )
             )
-            contribution.vocabulary |= identifier_tokens(output.status.detail)
+            contribution.vocabulary |= identifier_tokens(output.run_status.detail)
             contribution.quote_corpus.append(
-                CorpusText(text=output.status.detail, ref=f"{ref}.status.detail")
+                CorpusText(
+                    text=output.run_status.detail,
+                    ref=f"{ref}.run_status.detail",
+                )
             )
 
         for index, error in enumerate(output.errors or []):

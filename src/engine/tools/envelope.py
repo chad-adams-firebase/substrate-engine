@@ -148,13 +148,16 @@ class DocSearchOutput(BaseModel):
 
 
 class CheckExecutionOutput(BaseModel):
-    """did_run fills status; recent_errors fills errors (name-keyed
-    parsed log fields). The unused field stays None."""
+    """did_run fills run_status; recent_errors fills errors (name-keyed
+    parsed log fields). The unused field stays None. The key is named
+    run_status, not status: the invocation-level envelope already has a
+    status, and two keys spelled the same at different depths invited
+    drafters to write the wrong placeholder path."""
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["check_execution"] = "check_execution"
-    status: RunStatus | None = None
+    run_status: RunStatus | None = None
     errors: list[dict[str, JsonValue]] | None = None
 
 

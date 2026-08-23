@@ -164,8 +164,8 @@ def test_check_execution_answers_did_the_stale_sweep_run_on_day_n():
         "check_execution", {"component": "stale_sweep", **day_10}
     )
     assert invocation.status == "ok", invocation.error
-    assert invocation.output.status.ran is True
-    assert invocation.output.status.count == 1
+    assert invocation.output.run_status.ran is True
+    assert invocation.output.run_status.count == 1
     assert "stale_sweep_completed" in invocation.evidence.lines[0]
 
     # And the planted outage: 30 benchmark fallbacks on day 10, none
