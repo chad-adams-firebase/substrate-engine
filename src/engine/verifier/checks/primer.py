@@ -22,10 +22,20 @@ class PrimerCheck(SubstrateCheck):
         contribution.quote_corpus.append(
             CorpusText(text=output.primer, ref=f"{ref}.primer")
         )
-        for component in output.components:
+        for index, component in enumerate(output.components):
             contribution.vocabulary.add(component.id)
             contribution.vocabulary |= identifier_tokens(component.name)
             contribution.vocabulary |= identifier_tokens(
                 component.description
+            )
+            # The pack-authored display name, verbatim: a backticked
+            # `Rules engine` in a draft must be able to match the
+            # structured field, not only prose that happens to start a
+            # sentence with it (carryback #1b).
+            contribution.quote_corpus.append(
+                CorpusText(
+                    text=component.name,
+                    ref=f"{ref}.components[{index}].name",
+                )
             )
         return contribution

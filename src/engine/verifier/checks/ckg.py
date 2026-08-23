@@ -73,6 +73,12 @@ class CkgCheck(SubstrateCheck):
             contribution.vocabulary |= identifier_tokens(
                 output.entry_component.name
             )
+            contribution.quote_corpus.append(
+                CorpusText(
+                    text=output.entry_component.name,
+                    ref=f"{ref}.entry_component.name",
+                )
+            )
 
         for index, edge in enumerate(output.edges):
             if edge.target_table is not None:

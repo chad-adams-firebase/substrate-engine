@@ -11,7 +11,7 @@ unmatched (entities, quotes, dates — never judged).
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, PrivateAttr
 
 from engine.config.models import VerifierSettings
 from engine.verifier.models import (
@@ -34,6 +34,17 @@ class EvidencePools(BaseModel):
     vocabulary: set[str] = set()
     strings: set[str] = set()
     quote_corpus: list[CorpusText] = []
+
+    _folded_vocabulary: set[str] | None = PrivateAttr(default=None)
+
+    def folded_vocabulary(self) -> set[str]:
+        """Casefolded vocabulary, built once per verify — pools are
+        constructed fresh per verify() call, so no invalidation."""
+        if self._folded_vocabulary is None:
+            self._folded_vocabulary = {
+                name.casefold() for name in self.vocabulary
+            }
+        return self._folded_vocabulary
 
 
 def merge_contributions(
@@ -225,6 +236,16 @@ def _match_entity(claim: EntityClaim, pools: EvidencePools) -> MatchOutcome:
 
     if claim.entity in pools.vocabulary:
         return MatchOutcome(status="matched_exact", method="vocabulary")
+    # Case-folding policy: an entity claim asserts its referent exists
+    # in this turn's evidence; sentence-case prose variance does not
+    # change the referent, so the fold is a sanctioned derivation —
+    # reported as matched_derived, never matched_exact. Quotes stay
+    # case-sensitive (case is meaning in code), and entities still
+    # never reach the judge.
+    if claim.entity.casefold() in pools.folded_vocabulary():
+        return MatchOutcome(
+            status="matched_derived", method="vocabulary-casefold"
+        )
     return MatchOutcome(
         status="unmatched",
         reason="name not present in this turn's evidence",

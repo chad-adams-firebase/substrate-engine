@@ -125,6 +125,75 @@ def test_part_of_total_percent_and_count_difference():
     assert by_surface["15"].status in ("matched_derived", "unmatched", "fuzzy")
 
 
+def _primer_invocation() -> ToolInvocation:
+    from engine.substrates.models import Component
+    from engine.tools.envelope import PrimerOutput
+    from tests.verifier_support import MACHINE
+
+    return ToolInvocation(
+        tool="app_primer",
+        arguments={},
+        status="ok",
+        output=PrimerOutput(
+            primer="The rules engine scores each invoice against rules.",
+            components=[
+                Component(
+                    id="ig.spine.rules-engine",
+                    name="Rules engine",
+                    description="Scores invoices.",
+                    provenance=MACHINE,
+                ),
+                Component(
+                    id="ig.spine.invoice-parse",
+                    name="Invoice parse",
+                    description="Parses invoice files.",
+                    provenance=MACHINE,
+                ),
+            ],
+        ),
+        substrates_read=[],
+    )
+
+
+def test_hyphenated_component_id_matches_vocabulary():
+    # Carryback #1a end to end: the whole id is in the pool (it always
+    # was); extraction no longer truncates it on the way there.
+    matches = _match("Parsing is `ig.spine.invoice-parse`.", _primer_invocation())
+    [(claim, outcome)] = matches
+    assert claim.kind == "entity"
+    assert outcome.status == "matched_exact"
+    assert outcome.method == "vocabulary"
+
+
+def test_component_name_quote_matches_via_structured_field():
+    # Carryback #1b: `Rules engine` sat verbatim in the components
+    # JSON while the primer prose said "rules engine" mid-sentence.
+    # The structured name field is now quote corpus.
+    matches = _match("The `Rules engine` runs first.", _primer_invocation())
+    [(claim, outcome)] = matches
+    assert claim.kind == "quote"
+    assert outcome.status == "matched_exact"
+    assert outcome.evidence_ref == "e0.components[0].name"
+
+
+def test_entity_matching_casefolds_as_a_derivation():
+    inv = sql_invocation("SELECT rule_name FROM findings", [{"rule_name": "x"}])
+    [(_, exact)] = _match("The `rule_name` column.", inv)
+    assert exact.status == "matched_exact" and exact.method == "vocabulary"
+
+    [(_, folded)] = _match("The `Rule_name` column.", inv)
+    assert folded.status == "matched_derived"
+    assert folded.method == "vocabulary-casefold"
+
+
+def test_quote_matching_stays_case_sensitive():
+    # The ruling: case is meaning in code. Only entities fold.
+    matches = _match("It says `RULES ENGINE` somewhere.", _primer_invocation())
+    [(claim, outcome)] = matches
+    assert claim.kind == "quote"
+    assert outcome.status == "unmatched"
+
+
 def test_quotes_never_reach_the_judge():
     source = ToolInvocation(
         tool="read_source",
