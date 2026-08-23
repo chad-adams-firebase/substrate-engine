@@ -32,12 +32,22 @@ class ToolCall(BaseModel):
     arguments: dict[str, Any]
 
 
+class TokenUsage(BaseModel):
+    """Provider-reported token counts for one completion call.
+    Consumer: the Phase 4b eval harness's cost accounting."""
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+
 class LLMResponse(BaseModel):
     """The result of one completion call."""
 
     content: str
     tool_calls: list[ToolCall] = []
     model: str
+    # None when the provider reports no usage (and in test stubs).
+    usage: TokenUsage | None = None
 
 
 class User(BaseModel):

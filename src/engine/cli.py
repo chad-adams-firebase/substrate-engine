@@ -161,6 +161,46 @@ def main(argv: list[str] | None = None) -> int:
         help="With --turn: also print the resolved evidence bundle.",
     )
 
+    eval_cmd = subparsers.add_parser(
+        "eval",
+        help="Phase 4b answer-verification harness: run the bank live, "
+        "grade the report offline.",
+    )
+    eval_sub = eval_cmd.add_subparsers(dest="eval_command", required=True)
+
+    eval_run = eval_sub.add_parser(
+        "run",
+        help="Execute bank rows through the real ask path (needs "
+        "OPENROUTER_API_KEY); emits a JSONL report.",
+        epilog="Appends one record per (row, rep) as it completes; "
+        "interrupt freely and continue with --resume.",
+    )
+    eval_run.add_argument(
+        "--bank", required=True, help="Bank root (e.g. evals/invoiceguard)."
+    )
+    eval_run.add_argument(
+        "--pack",
+        help="Pack directory; defaults to the pack path in the bank's "
+        "eval.yaml.",
+    )
+    eval_run.add_argument(
+        "--out", required=True, type=_cwd_path, help="Report JSONL path."
+    )
+    eval_run.add_argument(
+        "--runs", type=int, help="Repetitions per row (default: eval.yaml)."
+    )
+    eval_run.add_argument(
+        "--rows",
+        help="Comma-separated row ids; trailing * globs allowed "
+        "(e.g. B5,C1,MT*).",
+    )
+    eval_run.add_argument(
+        "--resume",
+        action="store_true",
+        help="Continue an interrupted report, skipping recorded "
+        "(row, rep) keys.",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "info":
@@ -184,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "turns":
             return _turns(args.pack, args.conversation, args.turn, args.evidence)
+        if args.command == "eval" and args.eval_command == "run":
+            return _eval_run(args)
     except (PackLoadError, UnknownAdapterError, AdapterBuildError, CliError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -446,13 +488,27 @@ def _tool(pack_dir: str, name: str, args_json: str, show_evidence: bool) -> int:
     return 0 if invocation.status == "ok" else 1
 
 
-_OUTCOME_EXIT_CODES = {
-    ("answer", "verified"): 0,
-    ("answer", "unverified"): 2,
-    ("refuse", None): 3,
-    ("clarify", None): 4,
-    ("escalate", None): 5,
-}
+def _eval_run(args) -> int:
+    from engine.eval.bank import BankLoadError, load_bank
+    from engine.eval.runner import RunnerError, run_bank
+
+    try:
+        bank = load_bank(args.bank)
+        pack_dir = (
+            Path(args.pack)
+            if args.pack
+            else (bank.root / bank.config.pack).resolve()
+        )
+        return run_bank(
+            bank,
+            pack_dir,
+            Path(args.out),
+            runs=args.runs,
+            rows=args.rows.split(",") if args.rows else None,
+            resume=args.resume,
+        )
+    except (BankLoadError, RunnerError) as exc:
+        raise CliError(str(exc))
 
 
 def _build_session(pack_dir: str, listener):
@@ -508,6 +564,7 @@ def _ask(
 ) -> int:
     import json
 
+    from engine.harness.outcomes import exit_code_of
     from engine.harness.session import UnknownConversationError
 
     session, ports = _build_session(pack_dir, _print_status)
@@ -521,12 +578,7 @@ def _ask(
         file=sys.stderr,
     )
     outcome = result.outcome
-    exit_code = _OUTCOME_EXIT_CODES[
-        (
-            outcome.kind,
-            outcome.verification if outcome.kind == "answer" else None,
-        )
-    ]
+    exit_code = exit_code_of(outcome)
 
     if as_json:
         print(json.dumps(result.model_dump(mode="json"), indent=2))

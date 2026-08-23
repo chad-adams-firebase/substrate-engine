@@ -146,3 +146,27 @@ def test_missing_key_fails_at_first_call_not_construction(monkeypatch):
 
     with pytest.raises(RuntimeError, match=API_KEY_ENV_VAR):
         llm.complete([Message(role="user", content="Hi.")])
+
+
+def test_usage_is_captured_when_reported(adapter):
+    """The eval harness's cost accounting reads LLMResponse.usage;
+    the adapter must not discard what the provider reports."""
+    with_usage = _completion_json()
+    with_usage["usage"] = {
+        "prompt_tokens": 120,
+        "completion_tokens": 34,
+        "total_tokens": 154,
+    }
+
+    response = adapter(with_usage).complete(
+        [Message(role="user", content="Hi.")]
+    )
+
+    assert response.usage is not None
+    assert response.usage.prompt_tokens == 120
+    assert response.usage.completion_tokens == 34
+
+
+def test_usage_defaults_to_none_when_absent(adapter):
+    response = adapter().complete([Message(role="user", content="Hi.")])
+    assert response.usage is None

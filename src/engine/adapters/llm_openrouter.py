@@ -18,7 +18,7 @@ import httpx2
 from openai import NOT_GIVEN, OpenAI
 from pydantic import BaseModel, ConfigDict
 
-from engine.ports.types import LLMResponse, Message, ToolCall, ToolSpec
+from engine.ports.types import LLMResponse, Message, TokenUsage, ToolCall, ToolSpec
 
 API_KEY_ENV_VAR = "OPENROUTER_API_KEY"
 
@@ -72,6 +72,14 @@ class OpenRouterLLM:
                 for call in (choice.tool_calls or [])
             ],
             model=response.model,
+            usage=(
+                TokenUsage(
+                    prompt_tokens=response.usage.prompt_tokens or 0,
+                    completion_tokens=response.usage.completion_tokens or 0,
+                )
+                if response.usage is not None
+                else None
+            ),
         )
 
     def _connect(self) -> OpenAI:

@@ -75,6 +75,26 @@ TurnOutcome = Annotated[
     Field(discriminator="kind"),
 ]
 
+# The outcome ladder as exit-code equivalents — outcome semantics, so
+# it lives with the outcomes: the CLI exits with these, and the eval
+# harness records them per run (1 is reserved for errors).
+EXIT_CODES = {
+    ("answer", "verified"): 0,
+    ("answer", "unverified"): 2,
+    ("refuse", None): 3,
+    ("clarify", None): 4,
+    ("escalate", None): 5,
+}
+
+
+def exit_code_of(outcome: "TurnOutcome") -> int:
+    return EXIT_CODES[
+        (
+            outcome.kind,
+            outcome.verification if outcome.kind == "answer" else None,
+        )
+    ]
+
 
 class TurnResult(BaseModel):
     """What AskSession returns per turn — outcome plus the provenance
