@@ -1,0 +1,83 @@
+Eval grade — pack: invoiceguard · report: baseline-4b.jsonl
+engine c8b8ea75acaf(dirty) · target 761a18e9b925 · seed 42 · model openai/gpt-4o · bank ae0c70f5cbfaf436
+
+warning: the run's engine working tree was dirty
+
+INVARIANT BREACH — wrong-but-verified (14 occurrence(s)):
+  !! MT2 rep 2 turn 1: numeric_from_gold — gold 254 absent from answer numerics [1065.0] [evidence ece88161f5341335]
+  !! C4 rep 1 turn 0: numeric_from_gold — gold 692 absent from answer numerics [662.0, 2026.0, 4.0, 29.0, 0.0, 0.0, 0.0, 2026.0]… [evidence 5bd11c1a4d08dc3d]
+  !! C4 rep 2 turn 0: numeric_from_gold — gold 692 absent from answer numerics [662.0, 2026.0, 4.0, 29.0, 0.0, 0.0, 0.0, 2026.0]… [evidence 5bd11c1a4d08dc3d]
+  !! C4 rep 3 turn 0: numeric_from_gold — gold 692 absent from answer numerics [662.0, 2026.0, 4.0, 29.0, 0.0, 0.0, 0.0, 2026.0]… [evidence d16006e10175d284]
+  !! C4 rep 4 turn 0: numeric_from_gold — gold 692 absent from answer numerics [662.0, 2026.0, 4.0, 29.0, 0.0, 0.0, 0.0, 2026.0]… [evidence 5bd11c1a4d08dc3d]
+  !! C4 rep 5 turn 0: numeric_from_gold — gold 692 absent from answer numerics [662.0, 2026.0, 4.0, 29.0, 0.0, 0.0, 0.0, 2026.0]… [evidence 5bd11c1a4d08dc3d]
+  !! S4 rep 5 turn 0: numeric_from_gold — gold 114 absent from answer numerics [0.0, 0.0, 0.01, 1.0] [evidence ba7cabb7b49562f3]
+  !! S6 rep 1 turn 0: numeric_from_gold — gold 120.0 absent from answer numerics [] [evidence 6981bfbaa9145930]
+  !! S6 rep 2 turn 0: numeric_from_gold — gold 120.0 absent from answer numerics [2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0]… [evidence 1549d63abd12aebf]
+  !! S6 rep 3 turn 0: numeric_from_gold — gold 120.0 absent from answer numerics [] [evidence 6981bfbaa9145930]
+  !! S6 rep 4 turn 0: numeric_from_gold — gold 120.0 absent from answer numerics [] [evidence 6981bfbaa9145930]
+  !! S7 rep 2 turn 0: name_from_gold — gold name 'mona' absent from the answer [evidence 77f714e0287b7290]
+  !! U5 rep 3 turn 0: name_from_gold — gold name 'quantity_spike' absent from the answer [evidence c72ea30b19767dcc]
+  !! U5 rep 3 turn 0: numeric_from_gold — gold 610768.51 absent from answer numerics [11004.730000000001, 0.0, 0.0, 1.0] [evidence c72ea30b19767dcc]
+
+[XFAIL] AMB1       0/5  threshold 1.00 (clarify-open)  failures: exit(0 not in [4])
+[XFAIL] AMB2       0/5  threshold 1.00 (clarify-open)  failures: exit(0 not in [4])
+[   ok] HN-DIDRUN  5/5  threshold 0.80
+[XFAIL] HN-ERRORS  0/5  threshold 1.00 (N12)  failures: exit(3 not in [0]), contains, exit(2 not in [0]), not_contains
+[   ok] MT1        5/5  threshold 0.80
+[ FAIL] MT2        4/5  threshold 1.00  failures: numeric_from_gold
+[XPASS] MT3        5/5  threshold 1.00 (N9)
+        - flip candidate: the fix appears to have landed; delete the row's xfail block deliberately
+[XFAIL] P-N11      0/5  threshold 1.00 (N11)  failures: exit(2 not in [0]), not_contains, exit(3 not in [0]), contains
+[XPASS] P-L3Q      5/5  threshold 1.00 (N9)
+        - flip candidate: the fix appears to have landed; delete the row's xfail block deliberately
+[   ok] REC-SQL    5/5  threshold 0.60
+[   ok] REC-CKG    4/5  threshold 0.60  failures: exit(4 not in [0, 2]), retry_count, contains
+        - fails exactly when word_numbers emitted (1 with, 4 without)
+[   ok] RT-fires   5/5  threshold 1.00
+[   ok] B1         5/5  threshold 1.00
+[   ok] B2         5/5  threshold 0.80
+[   ok] B3         5/5  threshold 1.00
+[XFAIL] B4         0/5  threshold 1.00 (N9)  failures: exit(2 not in [0])
+[   ok] B5         5/5  threshold 1.00
+[   ok] B6         5/5  threshold 1.00
+[XFAIL] C1         0/5  threshold 1.00 (N10)  failures: exit(2 not in [0]), contains
+[XFAIL] C1b        3/5  threshold 1.00 (N10)  failures: exit(2 not in [0])
+        - fails exactly when iso_dates emitted (2 with, 3 without)
+[   ok] C2         4/5  threshold 0.80  failures: exit(2 not in [0])
+        - fails exactly when backticked emitted (1 with, 4 without)
+[   ok] C3         5/5  threshold 1.00
+[ FAIL] C4         0/5  threshold 1.00  failures: numeric_from_gold
+[   ok] C5         5/5  threshold 1.00
+[   ok] S2         5/5  threshold 0.80
+[   ok] S3         5/5  threshold 0.80
+[ FAIL] S4         4/5  threshold 1.00  failures: numeric_from_gold
+[ FAIL] S5         0/5  threshold 0.60  failures: exit(3 not in [0]), contains
+[ FAIL] S6         0/5  threshold 0.60  failures: numeric_from_gold, exit(3 not in [0]), contains
+[ FAIL] S7         0/5  threshold 0.80  failures: exit(3 not in [0]), name_from_gold
+[   ok] NP1        5/5  threshold 1.00
+[   ok] NP2        5/5  threshold 1.00
+[ FAIL] NP3        0/5  threshold 1.00  failures: currency_format
+[   ok] NP4        5/5  threshold 1.00
+[   ok] NP5        5/5  threshold 1.00
+[ FAIL] NP6        0/5  threshold 0.60  failures: exit(2 not in [0])
+[   ok] NP7        5/5  threshold 1.00
+[   ok] R1         5/5  threshold 1.00
+[   ok] R2         5/5  threshold 0.80
+[   ok] A1         5/5  threshold 1.00
+[   ok] SEN-MONTH  5/5  threshold 1.00
+[   ok] U5         4/5  threshold 0.80  failures: name_from_gold, numeric_from_gold
+[   ok] U6         5/5  threshold 0.80
+[   ok] U-WHO      5/5  threshold 0.80
+[   ok] U-META     5/5  threshold 0.80
+
+Route pairs (first-decision tool must agree):
+  rule_metric [RT-fires, U5, U6]: run_sql ×15 — consistent
+
+Xfail ledger:
+  N10: C1, C1b
+  N11: P-N11
+  N12: HN-ERRORS
+  N9: MT3, P-L3Q, B4
+  clarify-open: AMB1, AMB2
+
+RESULT: FAIL (INVARIANT BREACH)
