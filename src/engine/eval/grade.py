@@ -58,6 +58,8 @@ class GradeError(Exception):
 # stated a competing value (the catastrophic shape); "unsupported"
 # means the gold token is simply absent — an omission, possibly a
 # right-but-incomplete answer, possibly an assertion-shape mismatch.
+# A window whose literals merely differ from the gold's never gets
+# here: only a wall-clock anchor is the window breach (_alarm_worthy).
 BreachSeverity = Literal["contradicted", "unsupported"]
 
 
@@ -283,7 +285,18 @@ def evaluate(
         return True, ""
 
     if kind == "window_data_anchored":
-        return _check_window(assertion, view, gold)
+        forbidden, missing, problem = _window_findings(assertion, view, gold)
+        if problem:
+            return False, problem
+        details = []
+        if forbidden:
+            details.append(f"wall-clock anchor(s) {forbidden} in executed SQL")
+        if missing:
+            details.append(
+                f"window literal(s) {missing} absent from executed SQL "
+                "(convention mismatch; gates the rep, not a breach)"
+            )
+        return not details, "; ".join(details)
 
     if kind == "route":
         return _check_route(assertion, view.record.tools_used)
@@ -340,10 +353,19 @@ def _contains(
     return re.search(re.escape(pattern), text, flags) is not None
 
 
-def _check_window(assertion, view: _TurnView, gold) -> tuple[bool, str]:
+def _window_findings(
+    assertion, view: _TurnView, gold
+) -> tuple[list[str], list[str], str | None]:
+    """(forbidden anchors, missing gold literals, problem). The two
+    halves of the window assertion do different jobs: a wall-clock
+    anchor is the invariant (a verified count through a real-today
+    window); a missing literal is a convention mismatch — the fp3
+    re-run's A1 answered the right count over a calendar week, which
+    must fail the rep and must not sound the alarm. A problem (no
+    gold, no windowed SQL) is reported as-is and gates only."""
     literals = _gold_value(gold, assertion.field)
     if literals is None:
-        return False, f"gold field {assertion.field} missing"
+        return [], [], f"gold field {assertion.field} missing"
     if not isinstance(literals, list):
         literals = [literals]
     corpus_parts = []
@@ -359,15 +381,11 @@ def _check_window(assertion, view: _TurnView, gold) -> tuple[bool, str]:
             corpus_parts.append(json.dumps(invocation.arguments))
     corpus = "\n".join(corpus_parts)
     if not corpus:
-        return False, "no windowed-tool SQL/arguments in evidence"
-    missing = [str(lit) for lit in literals if str(lit) not in corpus]
-    if missing:
-        return False, f"window literal(s) {missing} absent from executed SQL"
+        return [], [], "no windowed-tool SQL/arguments in evidence"
     lowered = corpus.lower()
     forbidden = [tok for tok in assertion.forbid if tok.lower() in lowered]
-    if forbidden:
-        return False, f"wall-clock anchor(s) {forbidden} in executed SQL"
-    return True, ""
+    missing = [str(lit) for lit in literals if str(lit) not in corpus]
+    return forbidden, missing, None
 
 
 def _check_route(assertion, tools_used: list[str]) -> tuple[bool, str]:
@@ -531,6 +549,7 @@ def _grade_rep(
                 type(assertion).content
                 and assertion.breach
                 and turn.exit_equiv == 0
+                and _alarm_worthy(assertion, view, gold)
             ):
                 breaches.append(
                     BreachRecord(
@@ -549,10 +568,26 @@ def _grade_rep(
     return not failures, failures
 
 
+def _alarm_worthy(assertion: Assertion, view: _TurnView, gold) -> bool:
+    """Whether a content assertion's failure at exit 0 is the
+    wrong-but-verified breach. Every kind is, except a window whose
+    only fault is a convention mismatch: the invariant there is
+    double-guarded already (a wrong window that changes the count
+    breaches via numeric_from_gold; a wall-clock window breaches
+    here), so a right, data-anchored count over a different window
+    fails the rep and nothing more."""
+    if assertion.kind != "window_data_anchored":
+        return True
+    forbidden, _, _ = _window_findings(assertion, view, gold)
+    return bool(forbidden)
+
+
 def _severity(assertion: Assertion, view: _TurnView) -> BreachSeverity:
     """Contradicted when the answer holds a competing value the gold
     disagrees with; unsupported when the gold token is merely absent.
-    Reporting only — the exit code does not depend on this."""
+    A window breach is always a wall-clock anchor (the missing-literal
+    half never alarms), hence contradicted. Reporting only — the exit
+    code does not depend on this."""
     if assertion.kind == "numeric_from_gold":
         return "contradicted" if extract_numbers(view.body) else "unsupported"
     if assertion.kind in ("not_contains", "window_data_anchored"):

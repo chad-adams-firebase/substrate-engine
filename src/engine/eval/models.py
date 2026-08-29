@@ -158,7 +158,12 @@ class WindowDataAnchoredAssertion(_AssertionBase):
     arguments) in evidence contains the gold window's date literals
     and none of the forbidden wall-clock anchors. Read the window, not
     the count — a verified 0 through a real-today window is exactly
-    what this catches."""
+    what this catches.
+
+    Two jobs, two weights: a forbidden anchor present is the breach;
+    a gold literal absent is a convention mismatch that fails the rep
+    only (the fp3 re-run's A1: the right count over a calendar week
+    is not a wrong-but-verified answer)."""
 
     content: ClassVar[bool] = True
 

@@ -475,7 +475,36 @@ def test_window_assertion_reads_the_sql_not_the_count(tmp_path):
     trapped = [make_record("A1", 1, make_turn(payload=wall_clock))]
     result = grade(bank, header, trapped, world, pack_root=pack)
     assert result.exit_code() == 4  # verified answer over a wrong window
-    assert "window_data_anchored" in result.breaches[0].assertion
+    breach = result.breaches[0]
+    assert breach.assertion == "window_data_anchored"
+    assert breach.severity == "contradicted"
+    # The anchor is named first, even though the literals are absent too.
+    assert breach.detail.startswith("wall-clock anchor(s) ['CURRENT_DATE']")
+
+
+def test_window_convention_mismatch_gates_without_the_alarm(tmp_path):
+    """The fp3 re-run's A1: the right count, data-anchored, over a
+    calendar week instead of the gold's trailing seven days. That is
+    a convention mismatch — the rep fails, the row fails its
+    threshold, and the wrong-but-verified alarm stays silent: the
+    invariant is guarded by numeric_from_gold (a window that changes
+    the count) and by the forbid half (a wall-clock window)."""
+    bank, header, world, pack = make_env(tmp_path, ROW_WINDOW)
+
+    calendar_week = sql_payload(
+        "SELECT COUNT(*) AS n FROM invoices WHERE received_at >= "
+        "'2026-05-24' AND received_at < '2026-05-31'"
+    )
+    records = [make_record("A1", 1, make_turn(payload=calendar_week))]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.exit_code() == 2
+    assert result.breaches == []
+    row = result.rows[0]
+    assert row.status == "fail"
+    assert "window_data_anchored" in row.failure_classes
+    text = render(result)
+    assert "INVARIANT: ok" in text
+    assert "RESULT: FAIL (thresholds)" in text
 
 
 def test_gold_rot_aborts_the_row(tmp_path):
