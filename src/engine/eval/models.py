@@ -25,9 +25,16 @@ from engine.verifier.models import VerifierVerdict
 
 # The open-backlog anomaly refs an expected-fail row may carry
 # (docs/phase4-gate-verdict.md §6 condition of closure), plus the
-# clarify open question (§7.8). Flipping a row to expected-pass is a
-# deliberate bank edit: delete the xfail block when the fix lands.
-XfailRef = Literal["N9", "N10", "N11", "N12", "O1", "clarify-open"]
+# clarify open question (§7.8), plus the 4b baseline's five
+# wrong-but-verified rows (docs/phase4b-baseline-findings.md §2) —
+# ledger honesty while fix pass 3 is graded: breach detection pierces
+# xfail by design, so the before-picture stays loud. Flipping a row to
+# expected-pass is a deliberate bank edit: delete the xfail block when
+# the fix lands.
+XfailRef = Literal[
+    "N9", "N10", "N11", "N12", "O1", "clarify-open",
+    "WBV-S4", "WBV-S7", "WBV-C4", "WBV-MT2", "WBV-U5",
+]
 
 
 class Xfail(BaseModel):

@@ -1,0 +1,39 @@
+# Fix-pass-3 mechanism rows: the plausibility fixes graded beyond
+# their discovery sites (docs/phase4b-baseline-findings.md §7). Each
+# trap's naive SQL is plausible and wrong; each gold is executed.
+
+- id: ZT-CR147
+  provenance: scripted
+  category: data
+  question: "How many findings did compliance rule CR-147 produce?"
+  gold: gold/zt_cr147.py
+  expected_gold: {value: 449, naive: 0}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+  note: >-
+    Zero trap #2, on findings (S4 was invoices, S7 invoice_history):
+    the compliance_ prefix must be ADDED here, where NP5 only needed
+    LIKE 'compliance_%'. The naive rule_name = 'CR-147' returns 0 —
+    never verified after fix pass 3; the correct 449 verifies.
+
+- id: FO-EXCEPT
+  provenance: scripted
+  category: data
+  question: "How many invoices have at least one finding marked a valid exception?"
+  gold: gold/fo_except.py
+  expected_gold: {value: 536, naive: 739}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: value}
+  note: >-
+    Fan-out trap #2 on invoices -> findings -> finding_feedback (MT2's
+    pair was findings x compliance): COUNT(*) over the join counts
+    excepted findings (739); the question counts invoices (536). The
+    lint's repair round names COUNT(DISTINCT invoices.id).
