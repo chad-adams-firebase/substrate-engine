@@ -66,6 +66,11 @@ echo $?
 # 4 wrong-but-verified INVARIANT BREACH (dominates everything).
 ```
 
+Open item: whether `unsupported`-class breaches (gold token merely
+absent) should exit 2 instead of 4 is deferred until after a clean
+full-bank run — S4/S7's catastrophic baseline shapes graded as
+unsupported, so demotion is not safe on current evidence.
+
 ## Reading the grade
 
 - **The INVARIANT line comes first.** Any rep that exited 0 while a
