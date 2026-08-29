@@ -302,7 +302,36 @@ def test_xfail_and_xpass_do_not_gate(tmp_path):
     result = grade(bank, header, passing, world, pack_root=pack)
     assert result.exit_code() == 0
     assert result.rows[0].status == "xpass"
-    assert "flip candidate" in render(result)
+    text = render(result)
+    assert "passed its threshold despite the xfail annotation" in text
+    assert "observes pass rates, not code" in text
+    assert "appears to have landed" not in text  # it cannot know that
+
+
+def test_omission_tolerant_assertion_gates_without_the_alarm(tmp_path):
+    """Finding 4b §2 (S6): a value a correct answer need not state
+    fails the rep but rings no alarm. breach: false is per-assertion
+    and deliberate; the sibling assertion on the same row still
+    breaches."""
+    rows = ROW_DATA.replace(
+        "      - {kind: numeric_from_gold, field: value}\n",
+        "      - {kind: numeric_from_gold, field: value, breach: false}\n"
+        "      - {kind: name_from_gold, field: name}\n",
+    )
+    bank, header, world, pack = make_env(tmp_path, rows)
+
+    omitted = [make_record("B5", 1, make_turn("nova closed the most."))]
+    result = grade(bank, header, omitted, world, pack_root=pack)
+    assert result.exit_code() == 2
+    assert result.breaches == []
+    assert result.rows[0].status == "fail"
+    assert "numeric_from_gold" in result.rows[0].failure_classes
+
+    wrong_name = [make_record("B5", 1, make_turn("mona closed 146."))]
+    result = grade(bank, header, wrong_name, world, pack_root=pack)
+    assert result.exit_code() == 4
+    (breach,) = result.breaches
+    assert breach.assertion == "name_from_gold"
 
 
 ROW_SENTINEL = """\

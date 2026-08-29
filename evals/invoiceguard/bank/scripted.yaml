@@ -299,8 +299,13 @@
     assertions:
       - {kind: nonempty}
       - {kind: contains, pattern: '(creepback|creep)', regex: true}
-      - {kind: numeric_from_gold, field: amount}
-  note: Story 6 — the creepback chain, $120.00 = (92-80) x 10.
+      - {kind: numeric_from_gold, field: amount, breach: false}
+  note: >-
+    Story 6 — the creepback chain, $120.00 = (92-80) x 10. The amount
+    is omission-tolerant (4b findings §2): the question asks which
+    supplier, and the baseline's four correct "Crestpoint Mechanical"
+    answers rang the alarm for not stating a figure they had no
+    reason to state. It still gates the threshold.
 
 - id: S7
   provenance: scripted

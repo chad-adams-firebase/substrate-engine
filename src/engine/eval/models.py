@@ -51,6 +51,13 @@ class _AssertionBase(BaseModel):
     # other assertions must still gate). Row-level xfail covers the
     # common case; this covers one assertion on an otherwise-green row.
     xfail_ref: XfailRef | None = None
+    # False: an omission-tolerant content assertion — it still gates the
+    # rep's pass/fail, but its failure at exit 0 is not a breach. For
+    # values a correct answer has no obligation to state (S6's amount
+    # when the question asks which supplier). Applied deliberately, per
+    # assertion, where a findings document justifies it; never a row
+    # default.
+    breach: bool = True
 
 
 class NonEmptyAssertion(_AssertionBase):

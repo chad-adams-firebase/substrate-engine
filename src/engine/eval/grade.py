@@ -518,7 +518,11 @@ def _grade_rep(
             passed, detail = evaluate(assertion, view, gold)
             if passed:
                 continue
-            if type(assertion).content and turn.exit_equiv == 0:
+            if (
+                type(assertion).content
+                and assertion.breach
+                and turn.exit_equiv == 0
+            ):
                 breaches.append(
                     BreachRecord(
                         row_id=row.id,
