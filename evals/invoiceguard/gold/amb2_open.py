@@ -1,5 +1,6 @@
 """AMB2 gold: 'open' has no status — READY (78) vs everything not
-CLOSED (965) are both defensible readings."""
+CLOSED (965) are both defensible readings; the row accepts either
+and breaches on a verified number matching neither."""
 
 
 def gold(world):

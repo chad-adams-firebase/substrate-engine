@@ -24,15 +24,16 @@ from engine.harness.outcomes import TurnOutcome
 from engine.verifier.models import VerifierVerdict
 
 # The open-backlog anomaly refs an expected-fail row may carry
-# (docs/phase4-gate-verdict.md §6 condition of closure), plus the
-# clarify open question (§7.8), plus the 4b baseline's five
-# wrong-but-verified rows (docs/phase4b-baseline-findings.md §2) —
-# ledger honesty while fix pass 3 is graded: breach detection pierces
-# xfail by design, so the before-picture stays loud. Flipping a row to
-# expected-pass is a deliberate bank edit: delete the xfail block when
-# the fix lands.
+# (docs/phase4-gate-verdict.md §6 condition of closure), plus the 4b
+# baseline's five wrong-but-verified rows
+# (docs/phase4b-baseline-findings.md §2) — ledger honesty while fix
+# pass 3 is graded: breach detection pierces xfail by design, so the
+# before-picture stays loud. Flipping a row to expected-pass is a
+# deliberate bank edit: delete the xfail block when the fix lands.
+# (clarify-open, the §7.8 question, was retired after 522 live turns
+# without a clarify: the ambiguity rows now test a named reading.)
 XfailRef = Literal[
-    "N9", "N10", "N11", "N12", "O1", "clarify-open",
+    "N9", "N10", "N11", "N12", "O1",
     "WBV-S4", "WBV-S7", "WBV-C4", "WBV-MT2", "WBV-U5",
 ]
 
@@ -80,12 +81,27 @@ class NumericFromGoldAssertion(_AssertionBase):
     $,%, commas stripped; word-numbers one..twenty mapped). A gold
     ratio in [0,1] also matches its percent form. A table's caption
     (the SQL) is not in the pool — its literals are not stated
-    values."""
+    values.
+
+    `field` may list several gold fields, any of which satisfies the
+    assertion — for ambiguity rows whose gold computes every
+    documented reading (AMB2: READY or not-CLOSED). A number matching
+    no listed reading is wrong content; the duality is declared per
+    row, never inferred."""
 
     content: ClassVar[bool] = True
 
     kind: Literal["numeric_from_gold"] = "numeric_from_gold"
-    field: str  # key into the gold script's returned dict
+    field: str | list[str]  # key(s) into the gold script's returned dict
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> "NumericFromGoldAssertion":
+        if isinstance(self.field, list) and not self.field:
+            raise ValueError("numeric_from_gold needs at least one gold field")
+        return self
+
+    def fields(self) -> list[str]:
+        return [self.field] if isinstance(self.field, str) else self.field
 
 
 class NameFromGoldAssertion(_AssertionBase):

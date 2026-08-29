@@ -695,3 +695,41 @@ def test_name_from_gold_accepts_any_listed_field(tmp_path):
     assert result.exit_code() == 4
     detail = result.breaches[0].detail
     assert "RVX01" in detail and "Ravenswood Extrusion" in detail
+
+
+GOLD_READINGS = """\
+def gold(world):
+    return {"ready": 78, "not_closed": 965}
+"""
+
+ROW_AMBIGUITY = """\
+- id: AMB2
+  provenance: scripted
+  category: ambiguity
+  question: "How many invoices are open?"
+  gold: gold/g.py
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: numeric_from_gold, field: [ready, not_closed]}
+"""
+
+
+def test_numeric_from_gold_accepts_any_listed_field(tmp_path):
+    """The retired clarify expectation's replacement: an ambiguity row
+    accepts any documented reading's value, and a verified number
+    matching none of them is still the breach."""
+    bank, header, world, pack = make_env(
+        tmp_path, ROW_AMBIGUITY, gold_body=GOLD_READINGS
+    )
+
+    for text in ("78 invoices are READY.", "965 are not CLOSED."):
+        records = [make_record("AMB2", 1, make_turn(text))]
+        assert grade(bank, header, records, world, pack_root=pack).exit_code() == 0
+
+    wrong = [make_record("AMB2", 1, make_turn("There are 400 open invoices."))]
+    result = grade(bank, header, wrong, world, pack_root=pack)
+    assert result.exit_code() == 4
+    breach = result.breaches[0]
+    assert breach.severity == "contradicted"
+    assert "any of [78, 965]" in breach.detail

@@ -178,3 +178,13 @@ def test_name_from_gold_rejects_an_empty_field_list(tmp_path):
     write_bank(tmp_path, rows=rows)
     with pytest.raises(BankLoadError, match="at least one gold field"):
         load_bank(tmp_path)
+
+
+def test_numeric_from_gold_rejects_an_empty_field_list(tmp_path):
+    rows = ROW_B5.replace(
+        "{kind: numeric_from_gold, field: value}",
+        "{kind: numeric_from_gold, field: []}",
+    )
+    write_bank(tmp_path, rows=rows)
+    with pytest.raises(BankLoadError, match="at least one gold field"):
+        load_bank(tmp_path)

@@ -211,14 +211,24 @@ def evaluate(
         return bool(view.text.strip()), "answer is empty"
 
     if kind == "numeric_from_gold":
-        want = _gold_value(gold, assertion.field)
-        if not isinstance(want, (int, float)) or isinstance(want, bool):
-            return False, f"gold field {assertion.field} is not numeric"
+        wants = []
+        for field in assertion.fields():
+            want = _gold_value(gold, field)
+            if not isinstance(want, (int, float)) or isinstance(want, bool):
+                return False, f"gold field {field} is not numeric"
+            wants.append(want)
         stated = extract_numbers(view.body)
-        if any(_numbers_match(value, float(want)) for value in stated):
+        # Any listed reading satisfies the row (AMB2: READY or
+        # not-CLOSED); for most rows the single field is the answer.
+        if any(
+            _numbers_match(value, float(want))
+            for value in stated
+            for want in wants
+        ):
             return True, ""
+        label = str(wants[0]) if len(wants) == 1 else f"any of {wants!r}"
         detail = (
-            f"gold {want} absent from answer ({view.envelope}) numerics "
+            f"gold {label} absent from answer ({view.envelope}) numerics "
             f"{_head(stated)}"
         )
         if view.caption:

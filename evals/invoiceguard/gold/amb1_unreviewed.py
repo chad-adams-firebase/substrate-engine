@@ -1,6 +1,6 @@
-"""U3 gold: both readings of 'go unreviewed per day' — the
-current-backlog reading and the never-reviewed LAPSED reading. The
-row expects clarify; the readings prove the ambiguity is real."""
+"""U3 gold: both total readings of 'go unreviewed per day' — the
+current-backlog reading and the never-reviewed LAPSED reading. They
+prove the ambiguity is real; the row asserts a named reading."""
 
 
 def gold(world):
