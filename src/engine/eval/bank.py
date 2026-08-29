@@ -1,17 +1,23 @@
 """Load the question bank from a bank root (evals/<name>/).
 
 Layout: <root>/eval.yaml + <root>/bank/*.yaml (each file a YAML list
-of rows) + <root>/gold/*.py. Files load in sorted order so the bank
-hash — sha256 over the canonical dump of config + rows — is stable
-across filesystems; the hash is what ties a run report to the exact
-bank that produced it.
+of rows) + <root>/gold/*.py. Files load in sorted order.
+
+The bank hash — what ties a run report to the exact bank that
+produced it — is sha256 over the raw bytes of those files (sorted
+relative paths + contents), NOT over their parsed form. Hashing
+parsed rows meant every assertion-schema evolution (a new defaulted
+field) changed every row's normalized dump and silently orphaned all
+historical reports. Raw bytes still catch an edited assertion, gold
+script, or config; file layout is part of the identity now, so
+renaming or splitting a bank file is a bank edit. No line-ending
+normalization: .gitattributes pins eol=lf on every machine.
 
 Every failure message names the file and row: bank authors debug from
 the error text (CLAUDE.md style law).
 """
 
 import hashlib
-import json
 from pathlib import Path
 
 import yaml
@@ -35,7 +41,7 @@ class LoadedBank:
         self.root = root
         self.config = config
         self.rows = rows
-        self.bank_hash = _bank_hash(config, rows)
+        self.bank_hash = _bank_hash(root)
 
     def row_ids(self) -> list[str]:
         return [row.id for row in self.rows]
@@ -160,18 +166,28 @@ def _validate(root: Path, rows: list[BankRow]) -> None:
         )
 
 
-def _bank_hash(config: EvalConfig, rows: list[BankRow]) -> str:
-    payload = {
-        "config": config.model_dump(mode="json"),
-        "rows": [
-            row.model_dump(mode="json")
-            for row in sorted(rows, key=lambda r: r.id)
-        ],
-    }
-    canonical = json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    )
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+GOLD_DIRNAME = "gold"
+
+
+def _hashed_files(root: Path) -> list[Path]:
+    """eval.yaml, bank/*.yaml, gold/*.py — everything that decides what
+    a row asks, expects, or referees against."""
+    files = [root / CONFIG_FILENAME]
+    files.extend((root / BANK_DIRNAME).glob("*.yaml"))
+    files.extend((root / GOLD_DIRNAME).glob("*.py"))
+    return sorted(files, key=lambda p: p.relative_to(root).as_posix())
+
+
+def _bank_hash(root: Path) -> str:
+    digest = hashlib.sha256()
+    for path in _hashed_files(root):
+        content = path.read_bytes()
+        digest.update(path.relative_to(root).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(str(len(content)).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(content)
+    return digest.hexdigest()[:16]
 
 
 def _read_yaml(path: Path):

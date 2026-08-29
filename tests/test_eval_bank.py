@@ -117,17 +117,48 @@ def test_unknown_tool_name_fails(tmp_path):
         load_bank(tmp_path)
 
 
-def test_bank_hash_ignores_file_layout(tmp_path):
+def test_bank_hash_pins_file_bytes(tmp_path):
+    """The hash is over the bank's files as committed: rows, gold
+    scripts and config all count; the same files always agree."""
     one = load_bank(write_bank(tmp_path / "one", rows=ROW_B5 + ROW_MT))
-    split_root = write_bank(tmp_path / "two", rows=ROW_MT)
-    (split_root / "bank" / "zz.yaml").write_text(ROW_B5, encoding="utf-8")
-    two = load_bank(split_root)
-    assert one.bank_hash == two.bank_hash
+    same = load_bank(write_bank(tmp_path / "same", rows=ROW_B5 + ROW_MT))
+    assert one.bank_hash == same.bank_hash
 
-    changed = write_bank(
-        tmp_path / "three", rows=(ROW_B5 + ROW_MT).replace("146", "147")
+    rows_edit = write_bank(
+        tmp_path / "rows", rows=(ROW_B5 + ROW_MT).replace("146", "147")
     )
-    assert load_bank(changed).bank_hash != one.bank_hash
+    assert load_bank(rows_edit).bank_hash != one.bank_hash
+
+    gold_edit = write_bank(tmp_path / "gold", rows=ROW_B5 + ROW_MT)
+    (gold_edit / "gold" / "b5.py").write_text(
+        "def gold(world):\n    return {'value': 147}\n", encoding="utf-8"
+    )
+    assert load_bank(gold_edit).bank_hash != one.bank_hash
+
+    config_edit = write_bank(
+        tmp_path / "config", rows=ROW_B5 + ROW_MT,
+        config=EVAL_YAML.replace("default_runs: 2", "default_runs: 3"),
+    )
+    assert load_bank(config_edit).bank_hash != one.bank_hash
+
+
+def test_bank_hash_survives_a_schema_default_addition(tmp_path, monkeypatch):
+    """Adding a defaulted field to the row schema must not change the
+    hash — the old parsed-form hash orphaned every historical report
+    on exactly that kind of change (fix pass 3's `breach: bool`)."""
+    import engine.eval.bank as bank_module
+    from engine.eval.models import BankRow
+
+    root = write_bank(tmp_path, rows=ROW_B5 + ROW_MT)
+    before = load_bank(root).bank_hash
+
+    class WiderRow(BankRow):
+        fabricated_default: bool = True
+
+    monkeypatch.setattr(bank_module, "BankRow", WiderRow)
+    after = load_bank(root)
+    assert all(isinstance(row, WiderRow) for row in after.rows)
+    assert after.bank_hash == before
 
 
 def test_select_globs_and_rejects_unmatched(tmp_path):
