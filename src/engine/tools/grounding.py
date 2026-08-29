@@ -64,7 +64,10 @@ def render_grounding(
         "end on the data's final day, inclusive, as a half-open range:",
         "column >= last_day - N + 1 days AND column < last_day + 1 day,",
         "with last_day taken from the data (see data_coverage below),",
-        "never from CURRENT_DATE.",
+        "never from CURRENT_DATE. A week is always that trailing window,",
+        "never a calendar week (the data's last day is not a week end and",
+        "week-start conventions differ); \"this month\" is the calendar",
+        "month containing last_day, the reporting unit.",
     ]
 
     # A question that names a canonical metric gets that metric's

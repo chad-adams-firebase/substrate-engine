@@ -267,15 +267,24 @@ gotchas:
       2026-05-30 and nothing is newer. Relative phrases like "last
       week" anchor to the data's end (the last received_at day is
       2026-05-29; scheduled tasks run through 2026-05-30), not to
-      today. A relative window of N days ends on that last day,
-      inclusive, as a half-open range [last_day - N + 1, last_day + 1):
-      "last 7 days" / "last week" is received_at >= '2026-05-23
-      00:00:00' AND received_at < '2026-05-30 00:00:00'; "last 30
-      days" is received_at >= '2026-04-30 00:00:00' AND received_at <
-      '2026-05-30 00:00:00'. Windows on invoice_history.at and
-      compliance_reports.issued_at anchor the same way. Invoices
-      arrive on business days only — weekends have no received_at
-      values, though daily sweeps still log.
+      today. For received_at windows last_day is 2026-05-29 (the
+      05-30 in the coverage line is scheduled-task activity). A
+      relative window of N days ends on that last day, inclusive, as
+      a half-open range [last_day - N + 1, last_day + 1): "last 7
+      days" / "last week" / "this week" are all received_at >=
+      '2026-05-23 00:00:00' AND received_at < '2026-05-30 00:00:00'
+      — a week is always this trailing window, never a calendar
+      (Sun–Sat or Mon–Sun) week, because the last day falls mid-week
+      and week-start conventions differ; "last 30 days" is
+      received_at >= '2026-04-30 00:00:00' AND received_at <
+      '2026-05-30 00:00:00'. "This month" is the calendar month
+      containing the last day — the reporting unit, and complete,
+      since 2026-05-29 is May's last business day: received_at >=
+      '2026-05-01 00:00:00' AND received_at < '2026-06-01 00:00:00'.
+      Windows on invoice_history.at and compliance_reports.issued_at
+      anchor the same way. Invoices arrive on business days only —
+      weekends have no received_at values, though daily sweeps still
+      log.
     tables: [invoices, findings, invoice_history]
   - name: naive_datetime_strings
     summary: >-
