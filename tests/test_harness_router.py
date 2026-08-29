@@ -172,6 +172,10 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     # surrender; one retry after a steering error is licensed, in
     # tool-call form only — no violation class reopened.
     assert "retrying once with a corrected tool call" in prompt
+    # Fix pass 3: clarify has a concrete trigger — 287 live turns
+    # without a firing settled that "if ambiguous" alone never does.
+    assert "two materially different readings" in prompt
+    assert "rather than choosing a reading silently" in prompt
 
 
 def test_dictionary_terms_resolve_from_the_real_pack(tool_pack):
