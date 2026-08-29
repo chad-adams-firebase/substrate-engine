@@ -173,6 +173,7 @@ join_paths:
   - name: findings_to_feedback
     steps:
       - {from_table: findings, from_column: id, to_table: finding_feedback, to_column: finding_id}
+    cardinality: one_to_one
     notes: At most one feedback row per finding (finding_id is unique).
   - name: invoices_to_suppliers
     steps:
@@ -198,6 +199,12 @@ join_paths:
     steps:
       - {from_table: invoices, from_column: id, to_table: compliance_reports, to_column: invoice_id}
       - {from_table: compliance_reports, from_column: id, to_table: compliance_rules, to_column: compliance_report_id}
+    notes: >-
+      Compliance findings (rule_name compliance_<code>) correspond
+      one-to-one to compliance_rules rows, whose severity is the
+      authority. Joining findings to compliance_rules through
+      invoice_id pairs every finding with every rule on the invoice —
+      count compliance_rules directly for severity questions.
 
 gotchas:
   - name: adjustment_totals

@@ -299,6 +299,10 @@ class JoinPath(BaseModel):
     name: str
     steps: list[JoinStep]
     notes: str = ""
+    # Declared row multiplicity — consumer: run_sql's fan-out lint,
+    # which exempts a one_to_one path from the COUNT/SUM-over-join
+    # challenge. Absent means unknown, and unknown is challenged.
+    cardinality: Literal["one_to_one"] | None = None
 
 
 class Gotcha(BaseModel):

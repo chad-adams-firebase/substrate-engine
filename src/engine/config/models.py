@@ -113,6 +113,9 @@ class RunSqlSettings(BaseModel):
     # Named in the grounding prompt so generated SQL targets the
     # dialect the pack's SqlPort adapter actually speaks.
     dialect: str = "duckdb"
+    # A COUNT/SUM over a join that can multiply rows draws one repair
+    # round (fix pass 3, MT2's fan-out); the model may resend unchanged.
+    fan_out_lint: bool = True
 
 
 class SearchBusinessDocsSettings(BaseModel):

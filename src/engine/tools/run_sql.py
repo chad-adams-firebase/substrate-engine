@@ -37,6 +37,7 @@ from engine.tools.envelope import (
     ToolInvocation,
 )
 from engine.tools.grounding import render_grounding
+from engine.tools.sql_lint import lint_fan_out
 
 _SQL_FENCE = re.compile(r"```(?:sql)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
 
@@ -161,6 +162,10 @@ class RunSql(Tool):
         user = self._identity.current_user()
         manifest_ids = manifest_ids_of(dictionary + stats)
         attempts: list[SqlAttempt] = []
+        # The fan-out lint fires at most once per call: its word is a
+        # repair round with an explicit license to resend unchanged,
+        # so the second submission is the model's considered answer.
+        fan_out_challenged = False
 
         for _ in range(self._settings.max_repair_attempts + 1):
             response = self._llm.complete(messages, temperature=0.0)
@@ -173,6 +178,14 @@ class RunSql(Tool):
                 )
             elif (guard_error := guard_select_only(sql)) is not None:
                 error = guard_error
+            elif (
+                self._settings.fan_out_lint
+                and not fan_out_challenged
+                and (lint := lint_fan_out(sql, dictionary, dictionary_map))
+                is not None
+            ):
+                fan_out_challenged = True
+                error = lint
             else:
                 try:
                     rows = self._sql.run_sql(sql, user)

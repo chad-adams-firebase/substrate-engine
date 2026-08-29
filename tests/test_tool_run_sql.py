@@ -68,6 +68,52 @@ def test_unaliased_aggregate_triggers_a_repair_round(tool_pack):
     assert attempts[0].error in stub.calls[1]["messages"][-1].content
 
 
+FANOUT = LLMResponse(
+    content=(
+        "```sql\nSELECT COUNT(*) AS n FROM invoices i "
+        "JOIN findings f ON f.invoice_id = i.id\n```"
+    ),
+    model="scripted",
+)
+DISTINCT = LLMResponse(
+    content=(
+        "```sql\nSELECT COUNT(DISTINCT i.id) AS n FROM invoices i "
+        "JOIN findings f ON f.invoice_id = i.id\n```"
+    ),
+    model="scripted",
+)
+
+
+def test_fan_out_lint_draws_one_repair_round_before_execution(tool_pack):
+    """Fix pass 3 (4b baseline MT2): COUNT(*) over a join to the many
+    side is challenged before it runs; the corrected statement
+    executes. The lint's error text reaches the LLM verbatim."""
+    registry, ports = build_tool_registry(tool_pack, [FANOUT, DISTINCT])
+    invocation = registry.invoke("run_sql", {"question": "how many flagged?"})
+
+    assert invocation.status == "ok", invocation.error
+    assert invocation.output.sql.startswith("SELECT COUNT(DISTINCT i.id)")
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert attempts[0].error.startswith("Fan-out check:")
+    assert attempts[0].row_count is None  # never executed
+    assert attempts[1].error is None
+    stub = ports.get(PortName.LLM)
+    assert attempts[0].error in stub.calls[1]["messages"][-1].content
+
+
+def test_fan_out_lint_fires_once_and_licenses_resend_unchanged(tool_pack):
+    """The lint's word is a repair round, not a verdict: the same
+    statement resent is the model's considered answer and runs."""
+    registry, _ = build_tool_registry(tool_pack, [FANOUT, FANOUT])
+    invocation = registry.invoke("run_sql", {"question": "how many flagged?"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert attempts[0].error.startswith("Fan-out check:")
+    assert attempts[1].error is None and attempts[1].row_count == 1
+
+
 def test_zero_row_results_skip_the_alias_guard(tool_pack):
     empty = LLMResponse(
         content="```sql\nSELECT id + 1 FROM invoices WHERE 1 = 0\n```",
