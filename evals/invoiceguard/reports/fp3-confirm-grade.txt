@@ -1,0 +1,75 @@
+Eval grade — pack: invoiceguard · report: fp3-confirm.jsonl
+engine 9ddc7fbff839 · target 761a18e9b925 · seed 42 · model openai/gpt-4o · bank 8d29e1ea37dea1f9
+
+INVARIANT: ok — no wrong-but-verified occurrence
+
+[   ok] AMB1       5/5  threshold 1.00
+[   ok] AMB2       5/5  threshold 1.00
+[   ok] HN-DIDRUN  5/5  threshold 0.80
+[XFAIL] HN-ERRORS  0/5  threshold 1.00 (N12)  failures: exit(3 not in [0]), contains
+[   ok] ZT-CR147   5/5  threshold 1.00
+[   ok] FO-EXCEPT  5/5  threshold 1.00
+[   ok] MT1        5/5  threshold 0.80
+[XPASS] MT2        5/5  threshold 1.00 (WBV-MT2)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[XPASS] MT3        5/5  threshold 1.00 (N9)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[XFAIL] P-N11      0/5  threshold 1.00 (N11)  failures: exit(2 not in [0]), exit(3 not in [0]), contains
+[ FAIL] P-L3Q      4/5  threshold 1.00  failures: exit(2 not in [0])
+[   ok] REC-SQL    5/5  threshold 0.60
+[   ok] REC-CKG    5/5  threshold 0.60
+[   ok] RT-fires   5/5  threshold 1.00
+[   ok] B1         5/5  threshold 1.00
+[   ok] B2         4/5  threshold 0.80  failures: exit(3 not in [0])
+[   ok] B3         5/5  threshold 1.00
+[XFAIL] B4         0/5  threshold 1.00 (N9)  failures: exit(2 not in [0])
+[   ok] B5         5/5  threshold 1.00
+[   ok] B6         5/5  threshold 1.00
+[XFAIL] C1         2/5  threshold 1.00 (N10)  failures: exit(2 not in [0])
+        - fails exactly when prose_dates emitted (3 with, 2 without)
+[XPASS] C1b        5/5  threshold 1.00 (N10)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[   ok] C2         5/5  threshold 0.80
+[   ok] C3         5/5  threshold 1.00
+[XPASS] C4         5/5  threshold 1.00 (WBV-C4)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[   ok] C5         5/5  threshold 1.00
+[   ok] S2         5/5  threshold 0.80
+[   ok] S3         5/5  threshold 0.80
+[XFAIL] S4         3/5  threshold 1.00 (WBV-S4)  failures: exit(2 not in [0]), numeric_from_gold
+[ FAIL] S5         0/5  threshold 0.60  failures: exit(3 not in [0]), contains, exit(2 not in [0])
+[ FAIL] S6         0/5  threshold 0.60  failures: numeric_from_gold, exit(2 not in [0]), exit(3 not in [0]), contains
+[XPASS] S7         5/5  threshold 0.80 (WBV-S7)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[   ok] NP1        5/5  threshold 1.00
+[   ok] NP2        5/5  threshold 1.00
+[ FAIL] NP3        0/5  threshold 1.00  failures: currency_format
+[   ok] NP4        5/5  threshold 1.00
+[   ok] NP5        5/5  threshold 1.00
+[ FAIL] NP6        1/5  threshold 0.60  failures: exit(2 not in [0])
+[   ok] NP7        5/5  threshold 1.00
+[   ok] R1         5/5  threshold 1.00
+[   ok] R2         5/5  threshold 0.80
+[   ok] A1         5/5  threshold 1.00
+[   ok] SEN-MONTH  5/5  threshold 1.00
+[XPASS] U5         5/5  threshold 0.80 (WBV-U5)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[   ok] U6         5/5  threshold 0.80
+[   ok] U-WHO      5/5  threshold 0.80
+[   ok] U-META     5/5  threshold 0.80
+
+Route pairs (first-decision tool must agree):
+  rule_metric [RT-fires, U5, U6]: run_sql ×15 — consistent
+
+Xfail ledger:
+  N10: C1, C1b
+  N11: P-N11
+  N12: HN-ERRORS
+  N9: MT3, B4
+  WBV-C4: C4
+  WBV-MT2: MT2
+  WBV-S4: S4
+  WBV-S7: S7
+  WBV-U5: U5
+
+RESULT: FAIL (thresholds)
