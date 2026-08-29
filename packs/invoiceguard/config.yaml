@@ -134,6 +134,9 @@ verifier:
     enforce_date_bounds: true
     date_bound_grace_days: 7
     rate_column_suffixes: ["_rate", "_pct", "_ratio"]
+    # A 0 or empty run_sql result ships unverified, never verified —
+    # S4's 0-for-114 and S7's empty-for-mona were both verified.
+    challenge_zero_results: true
 
 generation:
   source_sqlite: ../../../invoice-guard/simout/invoiceguard.db

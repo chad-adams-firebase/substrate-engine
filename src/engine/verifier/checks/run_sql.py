@@ -1,5 +1,6 @@
-"""run_sql check: the richest harvest and the only plausibility suite
-in v1 (§9.3) — result values sanity-checked against Univariate Stats.
+"""run_sql check: the richest harvest and the plausibility suite
+(§9.3) — result values sanity-checked against Univariate Stats, plus
+the zero challenge.
 
 Known limitations, documented rather than hidden:
 - Table extraction is FROM/JOIN tokenization; result columns map to
@@ -9,15 +10,23 @@ Known limitations, documented rather than hidden:
 - The aggregate guard is a coarse token scan; an aggregate the scan
   misses could trigger a spurious min/max finding (visible, not
   silent).
-- THE VERIFIED-ZERO GAP (Phase 4b eval target): if the generating LLM
-  ignores the grounding gotcha and anchors "last week" to the real
-  today instead of the data, the query returns 0 rows. "0 invoices"
-  is then faithfully drafted, and nothing here can object — an empty
-  result carries no date cells, and 0 sits under every bound. Wrong-
-  but-verified via wrong window. Grounding (the Dictionary Map's
-  data-coverage gotcha) is the mitigation; the eval harness measures
-  the residue. When reading a run_sql answer, read the SQL's date
-  window, not just the number.
+- THE ZERO CHALLENGE (fix pass 3, from the 4b baseline): a query that
+  answers the wrong question most often returns nothing — S4 counted
+  0 where the truth was 114 (two inverted predicates), S7 returned an
+  empty table where the truth was one reactivation (a filter on the
+  current status excluded exactly the population asked about). Both
+  verified: faithfulness held, the evidence was wrong, and nothing
+  here could object — an empty result carries no cells, and 0 sits
+  under every bound. So an empty result, or a single scalar cell of
+  0/NULL/false, now draws a plausibility WARN: the answer ships
+  capped at [UNVERIFIED], never verified, for prose and table
+  pass-through alike. Accepted cost: a legitimately-zero answer also
+  arrives unverified — a true zero deserves the second look — and one
+  zero-result invocation among several caps the whole turn. Honest
+  negatives with count receipts live in check_execution, which this
+  does not touch. What remains uncaught is a wrong-but-nonzero
+  result; the fan-out lint and canonical-metric grounding in run_sql
+  address the shapes the baseline found (MT2, U5, C4).
 """
 
 import re
@@ -61,6 +70,45 @@ def _as_date(text: str | None) -> date | None:
         return date.fromisoformat(match.group(0))
     except ValueError:
         return None
+
+
+def _zero_findings(table) -> list[PlausibilityFinding]:
+    """An empty result set, or a lone scalar of 0/NULL/false, is the
+    shape a wrong-question query most often takes. Warn: the ladder
+    caps a warn at unverified (never refuses — a true zero is a
+    legitimate answer that merely needs a second look)."""
+    if table.total_row_count == 0 or not table.rows:
+        return [
+            PlausibilityFinding(
+                check="run_sql.empty_result",
+                severity="warn",
+                detail=(
+                    "the query returned no rows — a wrong-question query "
+                    "most often answers 'nothing'; treat as unverified "
+                    "until the predicates are checked"
+                ),
+            )
+        ]
+    if len(table.rows) == 1 and len(table.columns) == 1:
+        cell = table.rows[0].get(table.columns[0])
+        zero_like = cell is None or cell is False or (
+            isinstance(cell, (int, float))
+            and not isinstance(cell, bool)
+            and float(cell) == 0.0
+        )
+        if zero_like:
+            return [
+                PlausibilityFinding(
+                    check="run_sql.zero_scalar",
+                    severity="warn",
+                    detail=(
+                        f"the single result value is {cell!r} — a zero "
+                        "answer is unverified until the predicates are "
+                        "checked"
+                    ),
+                )
+            ]
+    return []
 
 
 class RunSqlCheck(SubstrateCheck):
@@ -140,6 +188,10 @@ class RunSqlCheck(SubstrateCheck):
 
         findings: list[PlausibilityFinding] = []
         tolerance = settings.row_count_tolerance_pct / 100.0
+
+        # 0: the zero challenge — see the module docstring.
+        if settings.challenge_zero_results:
+            findings.extend(_zero_findings(table))
 
         # 1 & 2: COUNT sanity against known table sizes.
         is_single_count = (

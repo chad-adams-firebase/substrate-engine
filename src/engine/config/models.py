@@ -206,6 +206,10 @@ class PlausibilitySettings(BaseModel):
     date_bound_grace_days: int = 7
     # Columns with these suffixes must hold values in [0,1] or [0,100].
     rate_column_suffixes: list[str] = ["_rate", "_pct", "_ratio"]
+    # An empty result or a lone 0/NULL/false scalar caps the answer at
+    # unverified (fix pass 3: the wrong-question shape the 4b baseline
+    # found). Off only for a pack whose zero answers are routine.
+    challenge_zero_results: bool = True
 
 
 class VerifierSettings(BaseModel):

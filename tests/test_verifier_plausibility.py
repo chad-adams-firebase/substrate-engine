@@ -206,3 +206,71 @@ def test_no_stats_substrate_means_no_plausibility_reference():
     )
     assert result.disposition == "verified"
     assert result.plausibility == []
+
+
+def test_empty_result_caps_at_unverified_never_verified():
+    """Fix pass 3 (4b baseline S7): the wrong-question query returned
+    an empty table and verified. Now an empty result is a warn — the
+    ladder caps at unverified — for a table pass-through whose caption
+    carries no claims at all."""
+    sql = "SELECT actor FROM invoice_history WHERE from_status = 'X'"
+    empty = sql_invocation(sql, [])
+    verifier, llm = make_verifier(stats=INVOICE_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="table_passthrough", text=sql),
+        evidence=[empty],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    assert llm.calls == []
+    (finding,) = result.plausibility
+    assert (finding.check, finding.severity) == ("run_sql.empty_result", "warn")
+
+
+def test_zero_scalar_caps_at_unverified_and_nonzero_still_verifies():
+    """Fix pass 3 (4b baseline S4): 0 where the truth was 114 verified
+    — faithfully. A lone zero scalar now ships unverified; the same
+    shape with a nonzero cell is untouched."""
+    sql = "SELECT COUNT(*) AS n FROM invoices WHERE adjustment_flag = 1"
+    verifier, _ = make_verifier(stats=INVOICE_STATS)
+    zero = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 0 such invoices."),
+        evidence=[sql_invocation(sql, [{"n": 0}])],
+        attempt=1,
+    )
+    assert zero.disposition == "unverified"
+    (finding,) = zero.plausibility
+    assert finding.check == "run_sql.zero_scalar"
+    assert "unverified" in finding.detail
+
+    nonzero = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 114 such invoices."),
+        evidence=[sql_invocation(sql, [{"n": 114}])],
+        attempt=1,
+    )
+    assert nonzero.disposition == "verified"
+    assert nonzero.plausibility == []
+
+    null_sum = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="table_passthrough", text=sql),
+        evidence=[sql_invocation(sql, [{"n": None}])],
+        attempt=1,
+    )
+    assert null_sum.disposition == "unverified"
+
+
+def test_zero_challenge_is_pack_config():
+    settings = VerifierSettings()
+    settings.plausibility.challenge_zero_results = False
+    verifier, _ = make_verifier(settings=settings, stats=INVOICE_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="Zero."),
+        evidence=[sql_invocation("SELECT COUNT(*) AS n FROM invoices WHERE rush_flag = 1", [{"n": 0}])],
+        attempt=1,
+    )
+    assert result.plausibility == []
