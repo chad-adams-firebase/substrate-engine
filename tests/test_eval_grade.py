@@ -628,3 +628,41 @@ def test_token_stratification_note(tmp_path):
     result = grade(bank, header, records, world, pack_root=pack)
     (row,) = result.rows
     assert any("file_paths" in note for note in row.notes)
+
+
+ROW_SUPPLIER = """\
+- id: C5
+  provenance: scripted
+  category: data
+  question: "Which supplier gets flagged most often for rate variance?"
+  gold: gold/g.py
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: name_from_gold, field: [supplier, supplier_name]}
+"""
+
+GOLD_SUPPLIER = """\
+def gold(world):
+    return {"supplier": "RVX01", "supplier_name": "Ravenswood Extrusion"}
+"""
+
+
+def test_name_from_gold_accepts_any_listed_field(tmp_path):
+    """The code/name duality is explicit per row: a listed field's
+    value satisfies the assertion, an unrelated label is still a
+    breach — the grounding mandate changed correct answers' surface
+    form, and the row says which forms are correct."""
+    bank, header, world, pack = make_env(
+        tmp_path, ROW_SUPPLIER, gold_body=GOLD_SUPPLIER
+    )
+
+    for text in ("RVX01, 257 findings.", "Ravenswood Extrusion, 257."):
+        records = [make_record("C5", 1, make_turn(text))]
+        assert grade(bank, header, records, world, pack_root=pack).exit_code() == 0
+
+    wrong = [make_record("C5", 1, make_turn("Quill Fasteners, 257."))]
+    result = grade(bank, header, wrong, world, pack_root=pack)
+    assert result.exit_code() == 4
+    detail = result.breaches[0].detail
+    assert "RVX01" in detail and "Ravenswood Extrusion" in detail

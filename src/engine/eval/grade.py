@@ -226,14 +226,23 @@ def evaluate(
         return False, detail
 
     if kind == "name_from_gold":
-        want = _gold_value(gold, assertion.field)
-        if not isinstance(want, str) or not want:
-            return False, f"gold field {assertion.field} is not a name"
-        if re.search(rf"\b{re.escape(want)}\b", view.text, re.IGNORECASE):
+        wants = []
+        for field in assertion.fields():
+            want = _gold_value(gold, field)
+            if not isinstance(want, str) or not want:
+                return False, f"gold field {field} is not a name"
+            wants.append(want)
+        # Any listed form satisfies the row: the code and the joined
+        # display name are both the right answer where a row says so.
+        if any(
+            re.search(rf"\b{re.escape(want)}\b", view.text, re.IGNORECASE)
+            for want in wants
+        ):
             return True, ""
+        label = repr(wants[0]) if len(wants) == 1 else f"any of {wants!r}"
         if assertion.forbid_bare_ids and _BARE_ID.search(view.text):
-            return False, f"answer names an id, not the person {want!r}"
-        return False, f"gold name {want!r} absent from the answer"
+            return False, f"answer names an id, not the person {label}"
+        return False, f"gold name {label} absent from the answer"
 
     if kind == "contains":
         return _contains(view.text, assertion.pattern, assertion.regex,

@@ -137,3 +137,13 @@ def test_select_globs_and_rejects_unmatched(tmp_path):
     assert [r.id for r in bank.select(["B5", "MT1"])] == ["B5", "MT1"]
     with pytest.raises(BankLoadError, match="match nothing: C9"):
         bank.select(["B5", "C9"])
+
+
+def test_name_from_gold_rejects_an_empty_field_list(tmp_path):
+    rows = ROW_B5.replace(
+        "{kind: numeric_from_gold, field: value}",
+        "{kind: name_from_gold, field: []}",
+    )
+    write_bank(tmp_path, rows=rows)
+    with pytest.raises(BankLoadError, match="at least one gold field"):
+        load_bank(tmp_path)

@@ -91,13 +91,29 @@ class NumericFromGoldAssertion(_AssertionBase):
 class NameFromGoldAssertion(_AssertionBase):
     """Who-questions return people, not ids: the gold name (from an
     executed roster query) appears word-bounded and case-folded, and
-    the answer does not present a bare id as the person."""
+    the answer does not present a bare id as the person.
+
+    `field` may list several gold fields, any of which satisfies the
+    assertion — for entities the grounding mandate (f709d9c) renders
+    under a joined display name, where the code and the name are both
+    correct (C5/MT3: supplier RVX01 is Ravenswood Extrusion). The
+    duality is declared per row, never inferred: for most rows the
+    single field IS the only right label."""
 
     content: ClassVar[bool] = True
 
     kind: Literal["name_from_gold"] = "name_from_gold"
-    field: str = "name"
+    field: str | list[str] = "name"
     forbid_bare_ids: bool = True
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self) -> "NameFromGoldAssertion":
+        if isinstance(self.field, list) and not self.field:
+            raise ValueError("name_from_gold needs at least one gold field")
+        return self
+
+    def fields(self) -> list[str]:
+        return [self.field] if isinstance(self.field, str) else self.field
 
 
 class ContainsAssertion(_AssertionBase):

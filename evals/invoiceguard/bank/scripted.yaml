@@ -214,14 +214,21 @@
   category: data
   question: "Which supplier gets flagged most often for rate variance?"
   gold: gold/c5_rate_variance_supplier.py
-  expected_gold: {supplier: RVX01, count: 257, runner_up: QUILL8}
+  expected_gold:
+    supplier: RVX01
+    supplier_name: Ravenswood Extrusion
+    count: 257
+    runner_up: QUILL8
   expect:
     exit: [0]
     assertions:
       - {kind: nonempty}
       - {kind: route, mode: must_include, tools: [run_sql]}
-      - {kind: name_from_gold, field: supplier}
-  note: Story 1 — RVX01 at 23x the runner-up.
+      - {kind: name_from_gold, field: [supplier, supplier_name]}
+  note: >-
+    Story 1 — RVX01 at 23x the runner-up. Code or display name both
+    pass: the grounding mandate (f709d9c) joins ids to names, so the
+    engine may say "Ravenswood Extrusion" where it once said RVX01.
 
 - id: S2
   provenance: scripted

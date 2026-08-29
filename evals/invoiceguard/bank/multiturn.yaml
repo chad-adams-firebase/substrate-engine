@@ -63,14 +63,17 @@
   provenance: scripted
   category: multiturn
   gold: gold/mt3_switch.py
-  expected_gold: {supplier: RVX01, start_line: 116}
+  expected_gold:
+    supplier: RVX01
+    supplier_name: Ravenswood Extrusion
+    start_line: 116
   turns:
     - question: "Which supplier gets flagged most often for rate variance?"
       expect:
         exit: [0]
         assertions:
           - {kind: nonempty}
-          - {kind: name_from_gold, field: supplier}
+          - {kind: name_from_gold, field: [supplier, supplier_name]}
     - question: "Show me the source of the rule that flags it"
       expect:
         exit: [0]
