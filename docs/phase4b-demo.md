@@ -10,7 +10,7 @@ the rendered grade is what a human reads.
 
 The bank lives at `evals/invoiceguard/` — outside `packs/`, so no
 engine tool can ever read its own exam. Expected-fail rows carry the
-gate verdict's opening backlog (N9–N12, O1, clarify-open) with
+gate verdict's opening backlog (N9–N12, O1, clarify-open, WBV-*) with
 root-cause notes; they flip to expected-pass by deleting their
 `xfail` block when a fix lands, a deliberate reviewed bank edit.
 
@@ -76,8 +76,10 @@ echo $?
   threshold, xfail, and sentinel. Zero such occurrences across three
   human sessions is the record this harness now defends.
 - **`[XFAIL]` rows are the opening backlog behaving as documented**
-  (C1/C1b → N10, B4/P-L3Q/MT3 → N9, P-N11 → N11, HN-ERRORS → N12,
-  AMB1/AMB2 → clarify-open). They do not gate.
+  (C1/C1b → N10, B4 → N9, P-N11 → N11, HN-ERRORS → N12, AMB1/AMB2 →
+  clarify-open), plus the 4b baseline's five wrong-but-verified rows
+  (S4/S7/C4/MT2/U5 → WBV-*) while fix pass 3 is graded. They do not
+  gate — but a breach on any of them still exits 4.
 - **`[XPASS]` is good news needing a decision:** the fix appears to
   have landed — delete the row's xfail block in its own commit.
 - **Token-stratified notes** name drafting-habit coin-flips: "fails
