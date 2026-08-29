@@ -89,8 +89,14 @@ def _build_session(pack_dir: Path, work_db: Path, listener):
     return session, metered_ports, meter
 
 
-def _engine_sha() -> tuple[str, bool]:
-    root = Path(__file__).resolve().parents[3]
+def _engine_sha(root: Path | None = None) -> tuple[str, bool]:
+    """(HEAD sha, dirty). Dirty means modified tracked content —
+    untracked files are ignored on purpose: the runner writes its own
+    report into the repo, so counting them made every run permanently
+    dirty and the flag carried no information (4b findings, provenance
+    note). Uncommitted engine edits still flip it."""
+    if root is None:
+        root = Path(__file__).resolve().parents[3]
     try:
         sha = subprocess.run(
             ["git", "-C", str(root), "rev-parse", "HEAD"],
@@ -99,7 +105,10 @@ def _engine_sha() -> tuple[str, bool]:
             check=True,
         ).stdout.strip()
         porcelain = subprocess.run(
-            ["git", "-C", str(root), "status", "--porcelain"],
+            [
+                "git", "-C", str(root), "status", "--porcelain",
+                "--untracked-files=no",
+            ],
             capture_output=True,
             text=True,
             check=True,

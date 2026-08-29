@@ -4,6 +4,7 @@ that mark a rep without sinking the sweep. All offline: the session
 is a scripted fake injected through the _build_session seam."""
 
 import json
+import subprocess
 
 import pytest
 import yaml
@@ -291,3 +292,29 @@ def test_metering_llm_counts_calls_and_usage():
 
     meter.reset()
     assert meter.stats().calls == 0
+
+
+def test_engine_dirty_means_modified_tracked_content(tmp_path):
+    """4b findings, provenance note: the runner writes its report into
+    the repo, so an untracked-file-counting flag was permanently true
+    and carried no information. Untracked files are clean; a modified
+    tracked file is dirty."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git = ["git", "-C", str(repo)]
+    subprocess.run(git + ["init", "-q"], check=True)
+    subprocess.run(git + ["config", "user.email", "t@t"], check=True)
+    subprocess.run(git + ["config", "user.name", "t"], check=True)
+    (repo / "tracked.txt").write_text("v1\n", encoding="utf-8")
+    subprocess.run(git + ["add", "tracked.txt"], check=True)
+    subprocess.run(git + ["commit", "-q", "-m", "one"], check=True)
+
+    sha, dirty = runner._engine_sha(repo)
+    assert len(sha) == 40 and dirty is False
+
+    (repo / "reports").mkdir()
+    (repo / "reports" / "run.jsonl").write_text("{}\n", encoding="utf-8")
+    assert runner._engine_sha(repo) == (sha, False)  # untracked: clean
+
+    (repo / "tracked.txt").write_text("v2\n", encoding="utf-8")
+    assert runner._engine_sha(repo) == (sha, True)  # modified: dirty
