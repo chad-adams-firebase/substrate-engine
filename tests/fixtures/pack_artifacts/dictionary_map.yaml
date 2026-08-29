@@ -16,8 +16,12 @@ metrics:
   - name: flag_rate
     description: Share of invoices with at least one finding.
     tables: [invoices, findings]
+    synonyms: [flagged share, share flagged]
     aggregation_sql: >-
       COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices)
+    template_sql: |
+      SELECT COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices) AS flag_rate
+      FROM findings f
     notes: Join findings f on f.invoice_id = invoices.id.
 
 join_paths:

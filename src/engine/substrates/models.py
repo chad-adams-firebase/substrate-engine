@@ -277,6 +277,15 @@ class CanonicalMetric(BaseModel):
     filter_sql: str = ""
     aggregation_sql: str
     notes: str = ""
+    # Business phrasings that name this metric. Consumers: run_sql's
+    # grounding, which renders a matched metric as the statement
+    # template at the top of the prompt (fix pass 3: retrieval beats
+    # exhortation), and the router's data vocabulary.
+    synonyms: list[str] = []
+    # The full canonical statement, when the fragments alone leave the
+    # join shape to the model (U5: the LEFT JOIN that must not become
+    # an INNER JOIN). Rendered verbatim as the template.
+    template_sql: str = ""
 
 
 class JoinStep(BaseModel):

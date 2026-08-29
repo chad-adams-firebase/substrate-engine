@@ -8,7 +8,12 @@ from engine.ports.types import LLMResponse
 from engine.tools.run_sql import extract_sql, guard_select_only
 
 from tests.conftest import build_tool_registry
-from tests.golden_grounding import GOLDEN, render_snapshot_grounding
+from tests.golden_grounding import (
+    GOLDEN,
+    GOLDEN_METRIC,
+    METRIC_QUESTION,
+    render_snapshot_grounding,
+)
 
 BROKEN = LLMResponse(
     content="```sql\nSELECT COUNT(*) AS n FROM invoces\n```", model="scripted"
@@ -156,6 +161,32 @@ def test_grounding_carries_map_gotchas_and_metrics(snapshot_outputs):
     assert "adjustment_totals" in rendered  # the planted-story gotcha
     assert "flag_rate" in rendered
     assert "invoices.id = findings.invoice_id" in rendered
+    assert "half-open range" in rendered  # the window convention (C4)
+
+
+def test_a_question_naming_a_metric_gets_its_template_first(
+    tool_pack, snapshot_outputs
+):
+    """Fix pass 3 (4b baseline U5): the right prose sat in the prompt
+    and was ignored, so a matched metric's definition now leads the
+    prompt as the statement template — pinned by its own golden
+    (uv run python -m tests.golden_grounding --write). A question
+    naming no metric renders exactly as before."""
+    rendered = render_snapshot_grounding(snapshot_outputs, METRIC_QUESTION)
+    assert rendered == GOLDEN_METRIC.read_text(encoding="utf-8")
+    head, _, rest = rendered.partition("## Tables and columns")
+    assert "## Canonical template for this question — metric flag_rate" in head
+    assert "COUNT(DISTINCT f.invoice_id) * 1.0" in head
+    assert "adapt only the WHERE filters" in head
+    assert "## Canonical template" not in rest
+    assert render_snapshot_grounding(snapshot_outputs, "how many invoices?") == (
+        GOLDEN.read_text(encoding="utf-8")
+    )
+
+    registry, ports = build_tool_registry(tool_pack, [REPAIRED])
+    registry.invoke("run_sql", {"question": METRIC_QUESTION})
+    stub = ports.get(PortName.LLM)
+    assert stub.calls[0]["messages"][0].content == rendered
 
 
 def test_exhausted_repairs_return_error_with_full_evidence(tool_pack):

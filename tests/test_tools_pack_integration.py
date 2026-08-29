@@ -112,6 +112,41 @@ def test_run_sql_answers_last_week_through_the_repair_loop():
     assert "date('now')" in invocation.evidence.grounding_prompt
 
 
+def test_savings_question_grounds_the_rule_savings_template():
+    """U5's live shape on the real pack: the question names the
+    rule_savings metric, and its LEFT-JOIN-zeroing statement leads
+    the grounding prompt. The template is what the gold script
+    executes (evals/invoiceguard/gold/u5_rule_savings.py)."""
+    registry, ports = real_pack_registry(
+        [
+            LLMResponse(
+                content=(
+                    "```sql\nSELECT f.rule_name, SUM(CASE WHEN "
+                    "ff.valid_exception = 1 THEN 0 ELSE COALESCE(f.amount, 0) "
+                    "END) AS effective_savings FROM findings f LEFT JOIN "
+                    "finding_feedback ff ON ff.finding_id = f.id GROUP BY "
+                    "f.rule_name ORDER BY effective_savings DESC LIMIT 1\n```"
+                ),
+                model="scripted",
+            )
+        ]
+    )
+    invocation = registry.invoke(
+        "run_sql", {"question": "Which rule produces the most savings?"}
+    )
+    assert invocation.status == "ok", invocation.error
+    prompt = invocation.evidence.grounding_prompt
+    head = prompt.partition("## Tables and columns")[0]
+    assert "metric rule_savings" in head
+    assert "LEFT JOIN finding_feedback ff ON ff.finding_id = f.id" in head
+    assert "status_is_current" in prompt
+    # No fan-out round: the map declares findings_to_feedback one_to_one.
+    assert len(invocation.evidence.attempts) == 1
+    (row,) = invocation.output.table.rows
+    assert row["rule_name"] == "quantity_spike"
+    assert round(row["effective_savings"], 2) == 610768.51
+
+
 def test_ckg_answers_the_ordered_calls_question_on_the_real_graph():
     registry, _ = real_pack_registry()
     invocation = registry.invoke(

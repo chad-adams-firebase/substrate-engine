@@ -140,7 +140,9 @@ def resolve_data_terms(
     for concept in mapping.concepts:
         terms.append(concept.name)
         terms.extend(concept.synonyms)
-    terms.extend(metric.name for metric in mapping.metrics)
+    for metric in mapping.metrics:
+        terms.append(metric.name)
+        terms.extend(metric.synonyms)
     deduped = list(dict.fromkeys(terms))
     return deduped or None
 

@@ -125,6 +125,37 @@ metrics:
       invoices ON invoices.id = invoice_history.invoice_id; GROUP BY
       users.team, DATE(invoice_history.at). This mirrors the app's
       PRODUCTION_ROLLUP_SQL (platform/api/teams.py).
+  - name: rule_savings
+    description: >-
+      Effective savings each rule has produced — finding amounts with
+      valid exceptions zeroed, the app's own accounting. Engine-
+      defined; the "which rule saves the most / is most productive"
+      question.
+    tables: [findings, finding_feedback]
+    synonyms:
+      - savings
+      - most savings
+      - savings by rule
+      - productive
+      - most productive
+      - opportunity by rule
+      - recovery by rule
+    filter_sql: ""
+    aggregation_sql: >-
+      SUM(CASE WHEN ff.valid_exception = 1 THEN 0 ELSE COALESCE(f.amount, 0) END)
+    template_sql: |
+      SELECT f.rule_name,
+             SUM(CASE WHEN ff.valid_exception = 1 THEN 0 ELSE COALESCE(f.amount, 0) END) AS effective_savings
+      FROM findings f
+      LEFT JOIN finding_feedback ff ON ff.finding_id = f.id
+      GROUP BY f.rule_name
+      ORDER BY effective_savings DESC
+    notes: >-
+      The LEFT JOIN is mandatory: filtering ff.valid_exception in the
+      WHERE clause turns it into an INNER JOIN and drops every finding
+      without a feedback row — the inversion the 4b baseline caught
+      (duplicate_line $11K instead of quantity_spike $610K). Zero the
+      excepted rows inside the SUM, never in WHERE.
   - name: queue_backlog
     description: >-
       The READY backlog awaiting audit: count, total opportunity,
@@ -236,8 +267,15 @@ gotchas:
       2026-05-30 and nothing is newer. Relative phrases like "last
       week" anchor to the data's end (the last received_at day is
       2026-05-29; scheduled tasks run through 2026-05-30), not to
-      today. Invoices arrive on business days only — weekends have no
-      received_at values, though daily sweeps still log.
+      today. A relative window of N days ends on that last day,
+      inclusive, as a half-open range [last_day - N + 1, last_day + 1):
+      "last 7 days" / "last week" is received_at >= '2026-05-23
+      00:00:00' AND received_at < '2026-05-30 00:00:00'; "last 30
+      days" is received_at >= '2026-04-30 00:00:00' AND received_at <
+      '2026-05-30 00:00:00'. Windows on invoice_history.at and
+      compliance_reports.issued_at anchor the same way. Invoices
+      arrive on business days only — weekends have no received_at
+      values, though daily sweeps still log.
     tables: [invoices, findings, invoice_history]
   - name: naive_datetime_strings
     summary: >-
@@ -287,6 +325,23 @@ gotchas:
       invoice_history and filter to_status ('CLAIMED', 'CLOSED',
       'NO_REVIEW_NEEDED') using invoice_history.at. received_at and
       scored_at are the only timestamps on invoices.
+    tables: [invoices, invoice_history]
+  - name: status_is_current
+    summary: >-
+      invoices.status is the current state only — past states and
+      reactivations live in invoice_history.
+    detail: >-
+      An invoice that was LAPSED and later reactivated is no longer
+      LAPSED: its status now reads CLAIMED, IN_REVIEW, or CLOSED.
+      Filtering invoices.status = 'LAPSED' therefore excludes exactly
+      the reactivated population. "Has an invoice ever been X" or
+      "was reactivated / moved out of X" is a transition question:
+      SELECT invoice_history.actor, invoices.invoice_number FROM
+      invoice_history JOIN invoices ON invoices.id =
+      invoice_history.invoice_id WHERE invoice_history.from_status =
+      'LAPSED' — no filter on the current status. The sanctioned
+      reactivation is performed by an audit manager (users.role =
+      'audit_manager'); actor holds the user's short_name.
     tables: [invoices, invoice_history]
   - name: rule_name_prefixes
     summary: >-

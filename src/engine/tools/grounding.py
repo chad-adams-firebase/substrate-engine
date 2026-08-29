@@ -7,10 +7,34 @@ Pinned by a golden fixture: changing this rendering changes generated
 SQL everywhere, so it changes fixtures deliberately or not at all.
 """
 
-from engine.substrates.models import DictionaryMap, DictionaryRow, StatsRow
+import re
+
+from engine.substrates.models import CanonicalMetric, DictionaryMap, DictionaryRow, StatsRow
 
 # Top values are shown only for genuinely enum-ish columns.
 _TOP_VALUES_MAX_DISTINCT = 12
+
+
+def match_metrics(
+    question: str | None, dictionary_map: DictionaryMap
+) -> list[CanonicalMetric]:
+    """The canonical metrics the question names — by metric name (with
+    underscores read as spaces) or any synonym, whole-phrase and
+    case-folded. Deterministic: no model decides what a question is
+    about."""
+    if not question:
+        return []
+    text = question.casefold()
+    matched = []
+    for metric in dictionary_map.metrics:
+        phrases = [metric.name.replace("_", " "), *metric.synonyms]
+        if any(
+            re.search(rf"\b{re.escape(phrase.casefold())}\b", text)
+            for phrase in phrases
+            if phrase
+        ):
+            matched.append(metric)
+    return matched
 
 
 def render_grounding(
@@ -19,6 +43,7 @@ def render_grounding(
     stats: list[StatsRow],
     *,
     dialect: str,
+    question: str | None = None,
 ) -> str:
     # Renders the full dictionary and map verbatim — right at this
     # reference pack's size; an enterprise-scale pack may need
@@ -35,9 +60,42 @@ def render_grounding(
         "When the question asks who, join id columns to their",
         "human-readable name columns via the join paths below, so the",
         "result names people and suppliers rather than bare ids.",
-        "",
-        "## Tables and columns",
+        "Relative windows (\"last N days\", \"last week\", \"this week\")",
+        "end on the data's final day, inclusive, as a half-open range:",
+        "column >= last_day - N + 1 days AND column < last_day + 1 day,",
+        "with last_day taken from the data (see data_coverage below),",
+        "never from CURRENT_DATE.",
     ]
+
+    # A question that names a canonical metric gets that metric's
+    # definition as the template, first — the 4b baseline showed the
+    # right prose warning further down the prompt being ignored
+    # (retrieval beats exhortation).
+    for metric in match_metrics(question, dictionary_map):
+        lines.append("")
+        lines.append(
+            f"## Canonical template for this question — metric {metric.name}"
+        )
+        lines.append(metric.description)
+        lines.append(
+            "Use this definition as written: adapt only the WHERE filters, "
+            "ordering, and limit. Never re-derive the aggregation or the "
+            "join shape."
+        )
+        if metric.template_sql:
+            lines.append("```sql")
+            lines.append(metric.template_sql.strip())
+            lines.append("```")
+        else:
+            lines.append(f"tables: {', '.join(metric.tables)}")
+            if metric.filter_sql:
+                lines.append(f"filter: {metric.filter_sql}")
+            lines.append(f"aggregation: {metric.aggregation_sql}")
+        if metric.notes:
+            lines.append(f"notes: {metric.notes}")
+
+    lines.append("")
+    lines.append("## Tables and columns")
 
     stats_by_column = {(row.table_name, row.column_name): row for row in stats}
     row_counts = {row.table_name: row.row_count for row in stats}

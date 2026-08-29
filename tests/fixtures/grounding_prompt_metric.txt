@@ -15,6 +15,15 @@ column >= last_day - N + 1 days AND column < last_day + 1 day,
 with last_day taken from the data (see data_coverage below),
 never from CURRENT_DATE.
 
+## Canonical template for this question — metric flag_rate
+Share of invoices with at least one finding.
+Use this definition as written: adapt only the WHERE filters, ordering, and limit. Never re-derive the aggregation or the join shape.
+```sql
+SELECT COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices) AS flag_rate
+FROM findings f
+```
+notes: Join findings f on f.invoice_id = invoices.id.
+
 ## Tables and columns
 
 ### compliance_reports — 0 rows

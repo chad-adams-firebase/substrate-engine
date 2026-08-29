@@ -153,7 +153,11 @@ class RunSql(Tool):
             return self.fail(params, str(exc))
 
         prompt = render_grounding(
-            dictionary, dictionary_map, stats, dialect=self._settings.dialect
+            dictionary,
+            dictionary_map,
+            stats,
+            dialect=self._settings.dialect,
+            question=params.question,
         )
         messages = [
             Message(role="system", content=prompt),

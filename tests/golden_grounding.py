@@ -18,15 +18,20 @@ from engine.tools.grounding import render_grounding
 from tests.fixture_generation import build_snapshot_duckdb, generate_all
 
 GOLDEN = Path(__file__).parent / "fixtures" / "grounding_prompt.txt"
+# The same rendering for a question that names a canonical metric: the
+# metric's template leads the prompt (fix pass 3).
+GOLDEN_METRIC = Path(__file__).parent / "fixtures" / "grounding_prompt_metric.txt"
+METRIC_QUESTION = "What is the flagged share of invoices?"
 ARTIFACTS = Path(__file__).parent / "fixtures" / "pack_artifacts"
 
 
-def render_snapshot_grounding(outputs: dict) -> str:
+def render_snapshot_grounding(outputs: dict, question: str | None = None) -> str:
     return render_grounding(
         outputs["dictionary"],
         load_dictionary_map(ARTIFACTS / "dictionary_map.yaml"),
         outputs["univariate_stats"],
         dialect=RunSqlSettings().dialect,
+        question=question,
     )
 
 
@@ -42,6 +47,12 @@ def main() -> int:
         render_snapshot_grounding(outputs), encoding="utf-8", newline="\n"
     )
     print(f"wrote {GOLDEN} ({GOLDEN.stat().st_size} bytes)")
+    GOLDEN_METRIC.write_text(
+        render_snapshot_grounding(outputs, METRIC_QUESTION),
+        encoding="utf-8",
+        newline="\n",
+    )
+    print(f"wrote {GOLDEN_METRIC} ({GOLDEN_METRIC.stat().st_size} bytes)")
     return 0
 
 
