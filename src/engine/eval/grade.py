@@ -29,7 +29,15 @@ from engine.eval.models import (
     RunReportHeader,
     TurnRecord,
 )
-from engine.eval.tokens import FLOAT_TAILS, MONEY, extract_numbers, flatten_answer
+from engine.eval.tokens import (
+    FLOAT_TAILS,
+    MONEY,
+    answer_body,
+    answer_caption,
+    answer_envelope,
+    extract_numbers,
+    flatten_answer,
+)
 from engine.eval.world import World
 from engine.tools.envelope import ToolInvocation, loads_turn_evidence
 
@@ -45,6 +53,14 @@ class GradeError(Exception):
 # --- Result models ------------------------------------------------------
 
 
+# Both severities exit 4 — a breach is a breach. The label exists so
+# the next reader diagnoses in minutes: "contradicted" means the answer
+# stated a competing value (the catastrophic shape); "unsupported"
+# means the gold token is simply absent — an omission, possibly a
+# right-but-incomplete answer, possibly an assertion-shape mismatch.
+BreachSeverity = Literal["contradicted", "unsupported"]
+
+
 class BreachRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -52,6 +68,7 @@ class BreachRecord(BaseModel):
     rep: int
     turn_index: int
     assertion: str
+    severity: BreachSeverity
     detail: str
     evidence_ref: str | None = None
 
@@ -167,6 +184,9 @@ class _TurnView:
     def __init__(self, record: TurnRecord) -> None:
         self.record = record
         self.text = flatten_answer(record.outcome)
+        self.body = answer_body(record.outcome)
+        self.caption = answer_caption(record.outcome)
+        self.envelope = answer_envelope(record.outcome)
         self._invocations: list[ToolInvocation] | None = None
 
     @property
@@ -192,13 +212,18 @@ def evaluate(
         want = _gold_value(gold, assertion.field)
         if not isinstance(want, (int, float)) or isinstance(want, bool):
             return False, f"gold field {assertion.field} is not numeric"
-        stated = extract_numbers(view.text)
+        stated = extract_numbers(view.body)
         if any(_numbers_match(value, float(want)) for value in stated):
             return True, ""
-        return False, (
-            f"gold {want} absent from answer numerics "
-            f"{stated[:8]}{'…' if len(stated) > 8 else ''}"
+        detail = (
+            f"gold {want} absent from answer ({view.envelope}) numerics "
+            f"{_head(stated)}"
         )
+        if view.caption:
+            detail += (
+                f"; caption literals {_head(extract_numbers(view.caption))}"
+            )
+        return False, detail
 
     if kind == "name_from_gold":
         want = _gold_value(gold, assertion.field)
@@ -273,6 +298,10 @@ def evaluate(
         return _check_verdict(assertion, view.record)
 
     raise GradeError(f"unknown assertion kind {kind!r}")  # unreachable
+
+
+def _head(values: list[float]) -> str:
+    return f"{values[:8]}{'…' if len(values) > 8 else ''}"
 
 
 def _gold_value(gold: dict[str, Any] | None, field: str):
@@ -496,6 +525,7 @@ def _grade_rep(
                         rep=record.rep,
                         turn_index=index,
                         assertion=assertion.kind,
+                        severity=_severity(assertion, view),
                         detail=detail,
                         evidence_ref=turn.evidence_ref,
                     )
@@ -504,6 +534,17 @@ def _grade_rep(
                 continue  # expected-fail assertion: never gates the rep
             failures.append(assertion.kind)
     return not failures, failures
+
+
+def _severity(assertion: Assertion, view: _TurnView) -> BreachSeverity:
+    """Contradicted when the answer holds a competing value the gold
+    disagrees with; unsupported when the gold token is merely absent.
+    Reporting only — the exit code does not depend on this."""
+    if assertion.kind == "numeric_from_gold":
+        return "contradicted" if extract_numbers(view.body) else "unsupported"
+    if assertion.kind in ("not_contains", "window_data_anchored"):
+        return "contradicted"
+    return "unsupported"
 
 
 def _token_notes(

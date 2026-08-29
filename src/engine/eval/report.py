@@ -33,14 +33,20 @@ def render(report: GradeReport) -> str:
         lines.append("")
 
     if report.breaches:
+        contradicted = sum(
+            breach.severity == "contradicted" for breach in report.breaches
+        )
         lines.append(
             "INVARIANT BREACH — wrong-but-verified "
-            f"({len(report.breaches)} occurrence(s)):"
+            f"({len(report.breaches)} occurrence(s): {contradicted} "
+            f"contradicted, {len(report.breaches) - contradicted} "
+            "unsupported):"
         )
         for breach in report.breaches:
             lines.append(
                 f"  !! {breach.row_id} rep {breach.rep} turn "
-                f"{breach.turn_index}: {breach.assertion} — {breach.detail}"
+                f"{breach.turn_index} [{breach.severity}]: "
+                f"{breach.assertion} — {breach.detail}"
                 + (
                     f" [evidence {breach.evidence_ref}]"
                     if breach.evidence_ref

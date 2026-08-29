@@ -61,10 +61,12 @@ class NonEmptyAssertion(_AssertionBase):
 
 
 class NumericFromGoldAssertion(_AssertionBase):
-    """The gold script's value appears in the answer: any table cell,
-    or any numeric extracted from the prose (digit groups with $,%,
-    commas stripped; word-numbers one..twenty mapped). A gold ratio in
-    [0,1] also matches its percent form."""
+    """The gold script's value appears in the answer body: any table
+    cell, or any numeric extracted from the prose (digit groups with
+    $,%, commas stripped; word-numbers one..twenty mapped). A gold
+    ratio in [0,1] also matches its percent form. A table's caption
+    (the SQL) is not in the pool — its literals are not stated
+    values."""
 
     content: ClassVar[bool] = True
 

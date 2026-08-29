@@ -4,7 +4,14 @@ three acceptance sessions' actual failure surfaces."""
 
 import pytest
 
-from engine.eval.tokens import detect, extract_numbers, flatten_answer
+from engine.eval.tokens import (
+    answer_body,
+    answer_caption,
+    answer_envelope,
+    detect,
+    extract_numbers,
+    flatten_answer,
+)
 from engine.harness.outcomes import (
     ClarifyOutcome,
     MarkdownAnswer,
@@ -67,6 +74,11 @@ def test_flatten_answer_shapes():
     assert "RVX01 257" in flat and "SELECT ..." in flat
 
     refuse = RefuseOutcome(reason="no", what_would_work="ask counts")
+    assert answer_body(table) == "supplier n\nRVX01 257"
+    assert answer_caption(table) == "SELECT ..."
+    assert answer_envelope(table) == "table"
+    assert answer_envelope(prose) == "markdown"
+    assert answer_envelope(refuse) == "refuse"
     assert flatten_answer(refuse) == "no\nask counts"
     assert flatten_answer(ClarifyOutcome(question="which day?")) == "which day?"
     assert flatten_answer(None) == ""

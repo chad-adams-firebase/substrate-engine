@@ -19,6 +19,7 @@ from engine.harness.outcomes import (
     AnswerOutcome,
     MarkdownAnswer,
     RefuseOutcome,
+    TableAnswer,
 )
 from engine.tools.envelope import (
     RunSqlOutput,
@@ -121,6 +122,30 @@ def make_turn(
     )
 
 
+def make_table_turn(
+    columns: list[str], rows: list[dict], caption: str, index: int = 0
+) -> TurnRecord:
+    """A verified table pass-through — the envelope the router MUST
+    use for result sets, whose cells are the answer."""
+    outcome = AnswerOutcome(
+        body=TableAnswer(
+            table=Table(columns=columns, rows=rows, total_row_count=len(rows)),
+            caption=caption,
+        ),
+        verification="verified",
+    )
+    return TurnRecord(
+        turn_index=index,
+        question="q",
+        outcome=outcome,
+        exit_equiv=0,
+        tools_used=["run_sql"],
+        evidence_ref="abcd1234abcd1234",
+        evidence_payload=sql_payload(caption),
+        emitted_tokens=detect(caption),
+    )
+
+
 def make_record(row_id: str, rep: int, *turns: TurnRecord) -> RunRecord:
     return RunRecord(
         row_id=row_id, rep=rep, started_at=datetime.now(UTC), turns=list(turns)
@@ -189,6 +214,68 @@ def test_wrong_but_verified_trips_the_alarm(tmp_path):
     text = render(result)
     assert "INVARIANT BREACH — wrong-but-verified" in text
     assert "RESULT: FAIL (INVARIANT BREACH)" in text
+
+
+def test_breach_severity_labels_contradicted_and_unsupported(tmp_path):
+    """Finding 4b §6: a competing value present (contradicted) reads
+    differently from a gold token merely absent (unsupported). Both
+    still exit 4 — the label is for the diagnosis, never the verdict."""
+    rows = ROW_DATA.replace(
+        "      - {kind: numeric_from_gold, field: value}\n",
+        "      - {kind: numeric_from_gold, field: value}\n"
+        "      - {kind: name_from_gold, field: name}\n",
+    )
+    bank, header, world, pack = make_env(tmp_path, rows)
+    records = [
+        make_record("B5", 1, make_turn("nova handled 9,999 of them.")),
+        make_record("B5", 2, make_turn("The supplier was Crestpoint.")),
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.exit_code() == 4
+    by_key = {
+        (b.rep, b.assertion): b.severity for b in result.breaches
+    }
+    assert by_key == {
+        (1, "numeric_from_gold"): "contradicted",
+        (2, "numeric_from_gold"): "unsupported",
+        (2, "name_from_gold"): "unsupported",
+    }
+    text = render(result)
+    assert "(3 occurrence(s): 1 contradicted, 2 unsupported)" in text
+    assert "B5 rep 1 turn 0 [contradicted]: numeric_from_gold" in text
+    assert "B5 rep 2 turn 0 [unsupported]: name_from_gold" in text
+
+
+def test_table_numerics_read_cells_not_the_caption(tmp_path):
+    """Finding 4b §6: the caption is the SQL that produced the table.
+    Its literals are not stated values — a gold that appears only
+    there must not pass, and the detail line names the envelope so a
+    string-valued table's [] reads as what it is."""
+    bank, header, world, pack = make_env(tmp_path, ROW_DATA)
+    sql = "SELECT COUNT(*) AS n FROM invoices WHERE received_at >= '2026-05-23' LIMIT 146"
+    caption_only = [
+        make_record("B5", 1, make_table_turn(["n"], [{"n": 161}], sql))
+    ]
+    result = grade(bank, header, caption_only, world, pack_root=pack)
+    assert result.exit_code() == 4
+    (breach,) = result.breaches
+    assert breach.severity == "contradicted"
+    assert "answer (table) numerics [161.0]" in breach.detail
+    assert "caption literals [2026.0, 5.0, 23.0, 146.0]" in breach.detail
+
+    names_only = [
+        make_record(
+            "B5", 1,
+            make_table_turn(["supplier"], [{"supplier": "Crestpoint"}], sql),
+        )
+    ]
+    result = grade(bank, header, names_only, world, pack_root=pack)
+    (breach,) = result.breaches
+    assert breach.severity == "unsupported"
+    assert "answer (table) numerics []" in breach.detail
+
+    cells = [make_record("B5", 1, make_table_turn(["n"], [{"n": 146}], sql))]
+    assert grade(bank, header, cells, world, pack_root=pack).exit_code() == 0
 
 
 def test_breach_outranks_xfail_annotation(tmp_path):

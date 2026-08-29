@@ -54,10 +54,24 @@ def detect(text: str) -> EmittedTokens:
     )
 
 
-def flatten_answer(outcome: TurnOutcome | None) -> str:
-    """The answer as one searchable text: markdown as-is; tables as
-    their cells plus caption (numbers travel store to screen, so cells
-    ARE the answer); refuse/clarify/escalate as their message text."""
+def answer_envelope(outcome: TurnOutcome | None) -> str:
+    """What shape the answer took — "markdown", "table", or the
+    non-answer outcome kind — so a grade detail line can say which
+    text it read (a string-valued table has no numerics, honestly)."""
+    if outcome is None:
+        return "none"
+    if outcome.kind == "answer":
+        return outcome.body.kind
+    return outcome.kind
+
+
+def answer_body(outcome: TurnOutcome | None) -> str:
+    """The answer proper, without a table's caption: markdown as-is;
+    tables as their header and cells (numbers travel store to screen,
+    so cells ARE the answer); refuse/clarify/escalate as their message
+    text. This is the numeric pool for numeric_from_gold — the caption
+    is the SQL that produced the table, and its literals (a year, a
+    LIMIT, a 0 in a CASE) are not values the answer stated."""
     if outcome is None:
         return ""
     if outcome.kind == "answer":
@@ -69,12 +83,28 @@ def flatten_answer(outcome: TurnOutcome | None) -> str:
             for row in table.rows
         )
         header = " ".join(table.columns)
-        return "\n".join(part for part in (header, cells, outcome.body.caption) if part)
+        return "\n".join(part for part in (header, cells) if part)
     if outcome.kind == "refuse":
         return f"{outcome.reason}\n{outcome.what_would_work}".strip()
     if outcome.kind == "clarify":
         return outcome.question
     return outcome.reason
+
+
+def answer_caption(outcome: TurnOutcome | None) -> str:
+    if outcome is not None and outcome.kind == "answer":
+        if outcome.body.kind == "table":
+            return outcome.body.caption
+    return ""
+
+
+def flatten_answer(outcome: TurnOutcome | None) -> str:
+    """The answer as one searchable text: the body plus, for tables,
+    the caption — the pool for pattern assertions and the dump guard,
+    where the SQL shown to the user is part of what was said."""
+    body = answer_body(outcome)
+    caption = answer_caption(outcome)
+    return "\n".join(part for part in (body, caption) if part)
 
 
 def extract_numbers(text: str) -> list[float]:
