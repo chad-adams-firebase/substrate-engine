@@ -101,3 +101,5 @@ The scope has changed. N9–N12 are verification *recall* gaps — correct answe
 ---
 
 *This report is the "before" picture. Every row that failed here is a row fix-pass-3 gets graded against, and the nine breaches are the first entries in a class the project had not previously observed in itself.*
+
+*Amended 2026-08-29:* the "after" picture exists — `fp3-rerun.jsonl` (engine `bf7a3e1`, 47 rows × 5, uncommitted pending the confirmation run). None of the nine breaches recurred: C4/MT2/S7/U5 XPASSed 5/5, S4 sat at 2/5 with every miss capped at exit 2 by the zero-challenge. The run's one exit 4 was a false alarm — A1 answered the right count over a calendar week, which the grader read as contradicted — and it exposed a real latent bug: "this week" had no stated reading. `39e3562` splits the window assertion's two jobs (only a wall-clock anchor breaches), `bc02522` states the reading. MT3 went back on N9 (`a0b88eb`) and the clarify expectation was retired (`7318cba`).
