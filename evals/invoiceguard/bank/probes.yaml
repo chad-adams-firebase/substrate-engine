@@ -38,12 +38,6 @@
     file_path: src/invoiceguard/spine/rules_engine.py
     start_line: 116
     end_line: 149
-  xfail:
-    ref: N9
-    note: >-
-      The qualified-name control passed in session 2 only because
-      that draft omitted the file path — the coin-flip N9 rows exist
-      to expose. Token stratification (file_paths) shows it.
   expect:
     exit: [0]
     assertions:

@@ -69,8 +69,10 @@ def render(report: GradeReport) -> str:
         lines.append(summary)
         if row.status == "xpass":
             lines.append(
-                "        - flip candidate: the fix appears to have landed; "
-                "delete the row's xfail block deliberately"
+                "        - passed its threshold despite the xfail "
+                "annotation. This grader observes pass rates, not code: "
+                "confirm the fix landed, then delete the xfail block "
+                "deliberately"
             )
         for note in row.notes:
             lines.append(f"        - {note}")

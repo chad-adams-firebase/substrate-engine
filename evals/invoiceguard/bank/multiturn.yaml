@@ -55,13 +55,6 @@
   category: multiturn
   gold: gold/mt3_switch.py
   expected_gold: {supplier: RVX01, start_line: 116}
-  xfail:
-    ref: N9
-    note: >-
-      Turn 2 shares B4's exposure: read_source drafts that state the
-      file path get downgraded. The row's real cargo — pronoun
-      resolution across a run_sql→CKG/read_source tool switch — is
-      untested territory; measure before promising.
   turns:
     - question: "Which supplier gets flagged most often for rate variance?"
       expect:
