@@ -16,3 +16,5 @@ dist/
 
 # OS noise
 .DS_Store
+*.db-shm
+*.db-wal
