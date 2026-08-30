@@ -1,0 +1,18 @@
+Eval grade — pack: invoiceguard · report: n13-witnesses.jsonl
+engine 17429b4a28d3 · target 761a18e9b925 · seed 42 · model openai/gpt-4o · bank f57627c9255c7f64
+
+INVARIANT BREACH — wrong-but-verified (5 occurrence(s): 0 contradicted, 5 unsupported):
+  !! HN-ERRORS rep 3 turn 0 [unsupported]: contains — pattern '\\b(no|none|zero|clean)\\b' absent [evidence db9a9b55709b5bda]
+  !! HN-ERRORS rep 4 turn 0 [unsupported]: contains — pattern '\\b(no|none|zero|clean)\\b' absent [evidence db9a9b55709b5bda]
+  !! HN-ERRORS rep 5 turn 0 [unsupported]: contains — pattern '\\b(no|none|zero|clean)\\b' absent [evidence db9a9b55709b5bda]
+  !! NP6 rep 3 turn 0 [unsupported]: contains — pattern 'NO_REVIEW_NEEDED' absent [evidence 16db17f815b7f60d]
+  !! NP6 rep 3 turn 0 [unsupported]: contains — pattern 'READY' absent [evidence 16db17f815b7f60d]
+
+[XFAIL] HN-ERRORS  2/5  threshold 1.00 (N13)  failures: contains
+[INCON] P-N11      1/1  threshold 1.00 (N13)  reached 1/5
+[   ok] NP6        4/5  threshold 0.60  failures: contains
+
+Xfail ledger:
+  N13: HN-ERRORS, P-N11
+
+RESULT: FAIL (INVARIANT BREACH)
