@@ -1,4 +1,4 @@
-# Fix pass 4 — residual triage (S5, S6, NP6)
+# Fix pass 4 — residual triage (S5, S6, NP6; P-N11 post-slice)
 
 The confirmation run (`fp3-confirm.jsonl`) carried three unattributed
 failing rows. Attributed here from their inlined evidence so none of
@@ -38,6 +38,25 @@ re-run.
    working on wrong SQL). **Queued:** a creepback /
    `prior_revision_id` grounding gotcha strong enough that the model
    stops adding acceptance predicates.
+
+## P-N11 (0/5 on fp4-slice) — split residuals, neither is N11
+
+The follow-up run's holdout, attributed from `fp4-slice.jsonl`:
+
+1. Reps 1–2 never reached the e0-error/e1-recovery scenario: the
+   informal name errored, the error named all seven valid
+   components, and the licensed retry didn't fire — an **N5
+   early-surrender** instance. Recorded as stochastic N5 residual
+   data, **not actioned**; the row's new `setup` block excludes
+   unreached reps from the denominator instead.
+2. Reps 3–5 reached the scenario and prove the N11 fix working (the
+   draft cites e1's `error_count` via placeholder). They fail on two
+   other classes: an appended date-disclaimer ("The date 2026-04-15
+   is not supported by the tool evidence" — the drafting-attention
+   family, disclaiming a value that sits in the evidence arguments)
+   and the backticked poolless `error_count` identifier — **N13's
+   class** (envelope field names, above). Recorded; queued
+   mechanisms unchanged.
 
 ## NP6 (1/5) — N13, newly assigned
 

@@ -11,13 +11,18 @@
   xfail:
     ref: N11
     note: >-
-      The informal component name errors first (e0); the drafter
-      anchors on the errored invocation and ships "no information"
-      while the clean answer sits in e1 — session 3's only
-      non-safe-direction miss. Render errored invocations collapsed,
-      or draft from status:ok evidence only.
+      The anchoring mechanism is fixed: fp4-slice reps 3-5 reached
+      the e0-error/e1-recovery scenario and drafted from the clean
+      e1, citing error_count via placeholder. The in-scenario
+      residual is different — an appended date-disclaimer ("The date
+      ... is not supported by the tool evidence") and the backticked
+      poolless error_count identifier (N13's class) leave the answer
+      unverified at exit 2. Reps 1-2 never reached the scenario (N5
+      early-surrender, no licensed retry); the setup block excludes
+      those from the denominator.
   expect:
     exit: [0]
+    setup: {min_invocations: 2, min_errored: 1, min_ok: 1}
     assertions:
       - {kind: nonempty}
       - {kind: contains, pattern: '\b(no|none|zero|clean)\b', regex: true}
