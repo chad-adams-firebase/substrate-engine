@@ -708,3 +708,67 @@ def test_holdout_drafts_verify_on_the_clean_day_without_a_judge():
         )
         assert result.disposition == "verified", text
         assert llm.calls == []
+
+
+def test_stats_top_values_ground_backticked_enum_claims():
+    """n13-witnesses NP6 rep 3: the attempt-1 draft enumerated all four
+    statuses, but backticked `NO_REVIEW_NEEDED` and `READY` shopped
+    vocabulary while the stats harvest had put top_values into
+    strings only — the redraft deleted two correct values. Identifier-
+    shaped top values now reach vocabulary; free-text ones stay
+    strings."""
+    from tests.verifier_support import stats_row
+    from engine.tools.envelope import StatsOutput
+    from engine.substrates.models import TopValue
+
+    inv = ToolInvocation(
+        tool="query_univariate_stats",
+        arguments={"table": "invoices", "column": "status"},
+        status="ok",
+        output=StatsOutput(
+            rows=[
+                stats_row(
+                    "invoices",
+                    "status",
+                    data_type="VARCHAR",
+                    distinct_count=4,
+                    top_values=[
+                        TopValue(value="CLOSED", count=1025),
+                        TopValue(value="LAPSED", count=679),
+                        TopValue(value="NO_REVIEW_NEEDED", count=208),
+                        TopValue(value="READY", count=78),
+                        TopValue(value="Crestpoint Mechanical", count=3),
+                    ],
+                )
+            ]
+        ),
+        substrates_read=["univariate_statistics"],
+    )
+    matches = _match(
+        "The possible values of `status` are `CLOSED`, `LAPSED`, "
+        "`NO_REVIEW_NEEDED` and `READY`.",
+        inv,
+    )
+    entities = {c.entity: o for c, o in matches if c.kind == "entity"}
+    for name in ("CLOSED", "LAPSED", "NO_REVIEW_NEEDED", "READY"):
+        assert entities[name].status == "matched_exact", name
+        assert entities[name].method == "vocabulary"
+    assert "Crestpoint Mechanical" not in _pools(inv).vocabulary
+    assert "Crestpoint Mechanical" in _pools(inv).strings
+
+    verifier, llm = make_verifier([])
+    result = verifier.verify(
+        question="possible values of invoices.status?",
+        draft=DraftAnswer(
+            kind="prose",
+            # The row's `invoices.status` composite (3(a), still queued)
+            # grounded live via the dictionary lookup's term argument;
+            # this replay pins only the enum values.
+            text="The possible values of `status` in `invoices` are:\n\n"
+            "- `CLOSED`\n- `LAPSED`\n- `NO_REVIEW_NEEDED`\n- `READY`\n",
+        ),
+        evidence=[inv],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+    assert llm.calls == []

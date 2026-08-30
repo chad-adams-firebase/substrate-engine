@@ -4,6 +4,7 @@ the plausibility reference, so it gets no plausibility check itself."""
 from engine.config.models import ToolName
 from engine.tools.envelope import StatsOutput, ToolInvocation
 from engine.verifier.checks.base import SubstrateCheck
+from engine.verifier.claims import IDENTIFIER_SHAPED
 from engine.verifier.models import EvidenceContribution, EvidenceValue
 
 
@@ -69,6 +70,13 @@ class StatsCheck(SubstrateCheck):
                     contribution.strings.add(bound)
             for top_index, top in enumerate(row.top_values):
                 contribution.strings.add(top.value)
+                # An identifier-shaped top value (an enum literal such
+                # as NO_REVIEW_NEEDED) is cited backticked, which
+                # extracts as an entity claim shopping vocabulary only;
+                # strings alone left it unmatched (n13-witnesses NP6
+                # rep 3). Same shape gate as the invocation harvest.
+                if IDENTIFIER_SHAPED.match(top.value):
+                    contribution.vocabulary.add(top.value)
                 contribution.numbers.append(
                     EvidenceValue(
                         value=float(top.count),
