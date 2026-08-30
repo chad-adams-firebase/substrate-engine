@@ -257,6 +257,18 @@ class MoneySettings(BaseModel):
     ]
 
 
+class UiSettings(BaseModel):
+    """What the web layer shows that is the pack's, not the engine's
+    (Brief §10.1): name, accent, starter prompts. Empty app_name falls
+    back to the pack name; empty accent keeps the stylesheet's neutral."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    app_name: str = ""
+    accent_color: str = ""
+    starter_prompts: list[str] = []
+
+
 class DisplaySettings(BaseModel):
     """Presentation knobs shared by every surface that renders an
     answer (CLI text, eval flattening, the browser)."""
@@ -280,4 +292,5 @@ class PackConfig(BaseModel):
     harness: HarnessSettings = HarnessSettings()
     verifier: VerifierSettings = VerifierSettings()
     display: DisplaySettings = DisplaySettings()
+    ui: UiSettings = UiSettings()
     generation: GenerationConfig | None = None

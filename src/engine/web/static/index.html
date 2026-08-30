@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Knowledge Engine</title>
+  <link rel="stylesheet" href="/static/vendor/highlight-github.min.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <span class="brand" id="app-name">…</span>
+    <span class="user" id="user-name"></span>
+  </header>
+
+  <main class="transcript" id="transcript">
+    <section class="empty" id="empty-state">
+      <p class="hint">Ask a plain-English question about the application. Every answer is checked against its evidence before it reaches you.</p>
+      <div class="starters" id="starters"></div>
+    </section>
+  </main>
+
+  <form class="composer" id="composer">
+    <input id="question" type="text" autocomplete="off" placeholder="Ask a question…" aria-label="Question">
+    <button id="send" type="submit">Ask</button>
+  </form>
+
+  <script src="/static/vendor/marked.min.js"></script>
+  <script src="/static/vendor/highlight.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

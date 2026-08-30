@@ -138,6 +138,16 @@ verifier:
     # S4's 0-for-114 and S7's empty-for-mona were both verified.
     challenge_zero_results: true
 
+ui:
+  app_name: InvoiceGuard Knowledge
+  accent_color: "#2f6f5e"
+  starter_prompts:
+    - How many invoices received last week had findings?
+    - Which supplier gets flagged most often for rate variance?
+    - What's in the READY backlog right now — count and total opportunity?
+    - Show me the source of rule_rate_variance
+    - What does this application do?
+
 display:
   money:
     symbol: "$"

@@ -143,6 +143,15 @@ def main(argv: list[str] | None = None) -> int:
         "answer.",
     )
 
+    serve = subparsers.add_parser(
+        "serve",
+        help="Serve the chat UI: the Flask shell over the same ask path "
+        "(status trail streams live; the outcome arrives verified).",
+    )
+    serve.add_argument("--pack", required=True)
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=5000)
+
     turns = subparsers.add_parser(
         "turns",
         help="Inspect turn provenance: conversations, per-turn §12 rows, "
@@ -259,6 +268,8 @@ def main(argv: list[str] | None = None) -> int:
                 show_evidence=args.show_evidence,
                 show_verdict=args.show_verdict,
             )
+        if args.command == "serve":
+            return _serve(args.pack, args.host, args.port)
         if args.command == "turns":
             return _turns(args.pack, args.conversation, args.turn, args.evidence)
         if args.command == "eval" and args.eval_command == "run":
@@ -704,6 +715,29 @@ def _ask(
         print(f"\n--- evidence {result.evidence_bundle_ref} ---")
         print(payload)
     return exit_code
+
+
+def _serve(pack_dir: str, host: str, port: int) -> int:
+    """The web layer gets the same four-line composition the CLI's ask
+    path uses — load, build ports, build tools, build harness — and
+    only the resolved objects; it never sees an adapter."""
+    from engine.web.app import create_app
+
+    session, ports = _build_session(pack_dir, None)
+    pack = load_pack(pack_dir)
+    app = create_app(
+        session,
+        ports.get(PortName.WORK_STORE),
+        ports.get(PortName.IDENTITY),
+        ui=pack.config.ui,
+        pack_name=pack.config.name,
+    )
+    print(f"serving {pack.config.name} on http://{host}:{port}", file=sys.stderr)
+    # threaded: the turn runs on a worker thread while the request
+    # thread streams. No reloader: it forks two processes, i.e. two
+    # sessions over one work.db.
+    app.run(host=host, port=port, threaded=True, use_reloader=False)
+    return 0
 
 
 def _turns(
