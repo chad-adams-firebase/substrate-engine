@@ -27,17 +27,17 @@
   gold: gold/p_benchmark_clean_day.py
   expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
   xfail:
-    ref: N12
+    ref: N13
     note: >-
-      error_count landed (e2f1417) and the refusal became a draft —
-      fp4-slice is 5/5 exit 2, the envelope half of the fix working.
-      The residual is drafting attention: shown {error_count: 0,
-      errors: [], run_status: null}, the drafter disclaims present
-      fields ("does not specify... an error_count") or types the 0
-      instead of the placeholder; run_status: null visually
-      corroborates the emptiness misreading. Flips when None fields
-      are suppressed from the rendered view and the zero-count
-      prompt rule holds.
+      N12 is proven: fp4b-holdouts rep 3 verified at exit 0 — this
+      row's first delivered answer, the 0 injected from error_count.
+      The residual on reps 1,2,4,5 is the argument-borne
+      benchmark_scoring name and the window date 2026-04-15, both
+      restated correctly and harvested into no pool on a clean day
+      (errors [] yields no vocabulary, no log lines yield no ISO
+      strings); backticked and iso_dates co-occur on exactly those
+      reps, so neither token note isolates a cause. The block now
+      tracks N13.
   expect:
     exit: [0]
     assertions:

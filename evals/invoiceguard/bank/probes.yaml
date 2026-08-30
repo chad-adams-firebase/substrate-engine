@@ -9,17 +9,16 @@
   gold: gold/p_benchmark_clean_day.py
   expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
   xfail:
-    ref: N11
+    ref: N13
     note: >-
-      The anchoring mechanism is fixed: fp4-slice reps 3-5 reached
-      the e0-error/e1-recovery scenario and drafted from the clean
-      e1, citing error_count via placeholder. The in-scenario
-      residual is different — an appended date-disclaimer ("The date
-      ... is not supported by the tool evidence") and the backticked
-      poolless error_count identifier (N13's class) leave the answer
-      unverified at exit 2. Reps 1-2 never reached the scenario (N5
-      early-surrender, no licensed retry); the setup block excludes
-      those from the denominator.
+      N11 is proven: fp4b-holdouts reached the e0-error/e1-recovery
+      scenario on all five reps (setup 5/5) and every draft cited
+      e1's error_count via placeholder, 3/5 at exit 0. The residual
+      is the backticked poolless error_count field name — fails
+      exactly when backticked emitted (2 with, 3 without); the
+      fp4-slice date-disclaimer did not recur. The block now tracks
+      N13: the envelope's own field names were rendered to the
+      drafter but harvested into no pool.
   expect:
     exit: [0]
     setup: {min_invocations: 2, min_errored: 1, min_ok: 1}

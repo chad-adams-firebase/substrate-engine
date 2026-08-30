@@ -84,6 +84,45 @@ matcher semantics and deserves its own regression surface):
 are matchable vocabulary or non-claims. N13 joins `XfailRef` when a
 row first needs the annotation.
 
+## fp4b-holdouts — N13 confirmed, one fix landed
+
+The holdout re-run (`fp4b-holdouts.jsonl`, engine c19ac7c) proved
+N11 and N12 working — P-N11 3/5 with reached 5/5, every draft citing
+e1's `error_count` via placeholder; HN-ERRORS 1/5 with rep 3
+verified at exit 0, that row's first delivered answer — and left
+both rows failing on this class. Pool census of the clean-day
+`recent_errors` envelope: `errors: []` yields no vocabulary,
+`run_status: null` and no log lines yield no strings or corpus;
+only `numbers = [0, 0]` exists. The unmatched claims were
+`` `error_count` `` (P-N11 reps 2–3; "fails exactly when backticked
+emitted, 2 with 3 without" — the fp4-slice date-disclaimer did not
+recur) and `` `benchmark_scoring` `` plus `2026-04-15` (HN-ERRORS
+reps 1,2,4,5 — the `backticked` and `iso_dates` notes co-occur
+perfectly there, so neither isolates a cause; the verdict records
+show both unmatched). The three facts live in the invocation's
+*arguments* and the envelope's *field names*, which no check read.
+
+**Landed** (`checks/invocation.py`): a tool-agnostic harvest of every
+ok invocation's record — identifier-shaped argument values →
+vocabulary, whole ISO timestamps → strings, rendered field names →
+vocabulary (through the drafter's own None-suppressed view). That
+settles (c): envelope field names are matchable vocabulary, exactly
+as rendered. Mechanism (b) landed alongside (concept/metric/gotcha
+names reach the quote corpus). Mechanism (a) stays queued: no pool
+carries table→column structure, so matching the parts would ground
+cross-table composites.
+
+Both xfail blocks re-attributed to N13; N11/N12 retired by
+re-attribution with mechanisms proven (the third retirement shape).
+Next-run expectation: P-N11 and HN-ERRORS flip together (the N9
+acceptance pattern). **NP6 stays deliberately unannotated**: its
+misses mixed backticked dictionary field names (`enum_values`,
+`top_values`, `data_scan`), which the field-name harvest now covers,
+a concept name (b), and the composite (a) — so it may flip partially
+from (b)+(c) alone with only the composite case left behind. It sits
+in the re-run witness set precisely to measure that decomposition;
+an xfail block now would blur what the run is measuring.
+
 ---
 
 *Un-triaged and deliberately parked: NP3 (0/5, `currency_format`

@@ -37,8 +37,15 @@ from engine.verifier.models import VerifierVerdict
 # — a single run, but code-backed by fix pass 4 (unlike the 6c0e848
 # luck-flip), and N9's acceptance condition (all three sites 5/5
 # simultaneously) was met in full.
+# N11/N12 retired by re-attribution, not flip: fp4b-holdouts proved
+# both mechanisms (P-N11 reached 5/5 drafting e1's error_count via
+# placeholder; HN-ERRORS rep 3 verified at exit 0, the row's first
+# delivered answer) while the rows stayed XFAIL on a different
+# class — the poolless identifiers the same rows now track as N13.
+# A third retirement shape beside the XPASS flip and the 6c0e848
+# luck-flip reversal: the block keeps its row, the ref changes.
 XfailRef = Literal[
-    "N11", "N12", "O1",
+    "N13", "O1",
     "WBV-S4",
 ]
 

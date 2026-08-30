@@ -60,7 +60,7 @@ At the three name sites (concept `:51`, metric `:60`, gotcha `:85`) additionally
 
 ### Mechanism 3(a): dotted `table.column` fallback — **stays queued**
 
-Cannot be pinned tightly: no pool carries table→column structure, so "both parts in vocabulary" would ground `invoices.<column-of-another-table>`. That is precisely the semantic widening the residuals doc warns of. NP6 remains its witness; note this in the residuals doc. (NP6 carries no xfail block today and this plan does not add one — flag in the recap as a follow-on decision.)
+Cannot be pinned tightly: no pool carries table→column structure, so "both parts in vocabulary" would ground `invoices.<column-of-another-table>`. That is precisely the semantic widening the residuals doc warns of. NP6 remains its witness; note this in the residuals doc. NP6 stays deliberately unannotated: its misses included backticked dictionary field names, which the field-name harvest now covers, so it may partially flip from mechanisms 1–2 (with 3(b) helping) and only 3(a)'s composite case left behind — it is in the re-run witness set to measure that decomposition, and an xfail block now would blur it.
 
 ## Commit 2 — regression tests, pinned to the witness surfaces
 
@@ -86,7 +86,7 @@ Mirror `39ad640`'s shape:
 3. `evals/invoiceguard/bank/honest_negative.yaml:29-40` — HN-ERRORS `ref: N13`; note: N12 proven (rep 3 verified at exit 0, the row's first delivered answer); residual is the argument-borne `benchmark_scoring` name and the window date `2026-04-15`, neither harvested (backticked and iso_dates co-occur on reps 1,2,4,5).
 4. `evals/README.md:16` — ref range `(N13, O1, WBV-*)`.
 5. `tests/test_eval_grade.py:282,291,299,466,747` — fabricated rows repointed `N11`/`N12` → `N13`.
-6. `docs/fix-pass-4-residuals.md` — append a "fp4b-holdouts" section under P-N11/NP6: hypothesis confirmed with the pool census; mechanisms (b) and (c) resolved (field names are matchable vocabulary, as rendered); (a) still queued with NP6 as witness; the co-occurrence caveat. (`docs/phase4b-demo.md:83-86` still lists the retired N9/N10 mapping — stale since 39ad640; leave it, mention in recap.)
+6. `docs/fix-pass-4-residuals.md` — append a "fp4b-holdouts" section under P-N11/NP6: hypothesis confirmed with the pool census; mechanisms (b) and (c) resolved (field names are matchable vocabulary, as rendered); (a) still queued with NP6 as witness; the co-occurrence caveat. 7. `docs/phase4b-demo.md:83-86` — the stale N9/N10 mapping updated to the current ledger (N13, O1, WBV-S4).
 
 Commit message body says why: re-attribution, not flip; cites the exit-0 evidence.
 
@@ -95,7 +95,7 @@ Commit message body says why: re-attribution, not flip; cites the exit-0 evidenc
 1. `uv run pytest` — full suite green offline (482 + new).
 2. `uv run engine eval grade --bank evals/invoiceguard --check-gold` — every row ok, `RESULT: PASS`, exit 0 (the bank edits changed no gold).
 3. Offline replay sanity: build the HN-ERRORS and P-N11 envelopes from the report's `evidence_payload` in a scratch script and run the failing drafts through `Verifier` with `make_verifier([])` — expect `unmatched_count: 0`, `llm.calls == []`.
-4. Bank loads and re-grades the committed report with no error (only a drift warning, expected now that the bank changed): `uv run engine eval grade --bank evals/invoiceguard --report evals/invoiceguard/reports/fp4b-holdouts.jsonl`.
+4. Re-grading the committed report against the edited bank is refused (`bank hash mismatch` is a hard error, not a warning) — which is why commit 0's grade text had to be rendered first: it is the only grade this report can carry.
 5. The live flip itself is a work-machine re-run (P-N11 and HN-ERRORS 5/5 together per the N9 acceptance pattern) — out of this session's reach; record as the next-run expectation in the residuals doc.
 
 ## Scope fence (unchanged from the brief)
