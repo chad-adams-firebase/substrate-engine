@@ -87,6 +87,24 @@ def test_errored_invocations_render_collapsed_without_error_text():
     assert '"status":"ok"' in second and '"run_status"' in second
 
 
+def test_none_valued_fields_are_suppressed_from_the_rendered_view():
+    """Fix-pass-4 follow-up (HN-ERRORS): a mode's unused half rendered
+    as null visually corroborates an emptiness misreading — shown
+    {"error_count": 0, "errors": [], "run_status": null}, the drafter
+    disclaimed the count it had. None fields never render; a present
+    0 and an empty list do."""
+    clean = ToolInvocation(
+        tool="check_execution",
+        arguments={},
+        status="ok",
+        output=CheckExecutionOutput(error_count=0, errors=[]),
+    )
+    (line,) = render_evidence([clean]).splitlines()
+    assert '"run_status"' not in line
+    assert '"error_count":0' in line
+    assert '"errors":[]' in line
+
+
 def test_feedback_appends_previous_draft_and_instructions():
     messages = build_drafting_messages(
         "SYS",

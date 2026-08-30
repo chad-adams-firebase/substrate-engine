@@ -69,6 +69,47 @@ def test_draft_cites_the_clean_invocation_not_the_errored_one(tool_pack):
     assert '"note":"call failed; supports no citations or placeholders"' in sent
 
 
+def test_clean_day_zero_count_drafts_and_verifies(tool_pack):
+    """Fix-pass-4 follow-up (HN-ERRORS): clean-day recent_errors
+    evidence carries error_count 0 — an answer, not an absence. The
+    drafter's view holds no run_status:null to corroborate an
+    emptiness misreading, and a draft citing the 0 verifies."""
+    responses = [
+        tool_call(
+            "check_execution",
+            {
+                "component": "benchmark_scoring",
+                "mode": "recent_errors",
+                "window_start": "2026-03-13T00:00:00+00:00",
+                "window_end": "2026-03-14T00:00:00+00:00",
+            },
+        ),
+        GIVE_PROSE,
+        LLMResponse(
+            content=(
+                "Benchmark scoring logged {{e0.error_count}} errors in "
+                "that window — a clean day."
+            ),
+            model="s",
+        ),
+    ]
+    session, ports, _ = build_ask_session(
+        tool_pack, responses, real_verifier=True
+    )
+    result = session.ask("did benchmark scoring have any errors that day?")
+
+    assert result.outcome.kind == "answer"
+    assert result.outcome.verification == "verified"
+    assert "logged 0 errors" in result.outcome.body.text
+
+    from engine.config.models import PortName
+
+    stub = ports.get(PortName.LLM)
+    sent = stub.calls[-1]["messages"][1].content  # the drafter's evidence
+    assert '"error_count":0' in sent
+    assert '"run_status"' not in sent  # the mode's unused half, suppressed
+
+
 def test_a_verified_shrug_ships_as_a_refusal(tool_pack):
     # Addendum N7, the U6 twin pair: "the evidence does not provide…"
     # passed verification with zero claims and exited 0 while its twin

@@ -29,11 +29,15 @@
   xfail:
     ref: N12
     note: >-
-      recent_errors fills only errors: list; an empty list is a
-      non-scalar every placeholder legitimately fails to render, no
-      scalar count exists, table fallback finds no table — refuse.
-      Every component per-spec; the composition cannot say "no
-      errors." Flips when error_count lands on CheckExecutionOutput.
+      error_count landed (e2f1417) and the refusal became a draft —
+      fp4-slice is 5/5 exit 2, the envelope half of the fix working.
+      The residual is drafting attention: shown {error_count: 0,
+      errors: [], run_status: null}, the drafter disclaims present
+      fields ("does not specify... an error_count") or types the 0
+      instead of the placeholder; run_status: null visually
+      corroborates the emptiness misreading. Flips when None fields
+      are suppressed from the rendered view and the zero-count
+      prompt rule holds.
   expect:
     exit: [0]
     assertions:

@@ -121,6 +121,9 @@ them, in backticks.
 with status "error" is a failed call that supports nothing: never \
 cite it, quote it, or write a placeholder into it — at most note \
 that a call failed.
+- A count of 0 in the evidence is an answer ("zero errors \
+occurred"), not an absence of information. A field that is present \
+with value 0 must be used, never disclaimed.
 - If the evidence does not support part of the question, say so \
 plainly instead of filling the gap.
 - Answer in concise markdown; no preamble about being an assistant."""

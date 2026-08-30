@@ -33,7 +33,10 @@ def render_evidence(evidence: list[ToolInvocation]) -> str:
     collapsed — index, tool, status, and a fixed note, never the
     error text: the verifier harvests nothing from a non-ok
     invocation, so every token echoed from one is guaranteed
-    unmatched. The router already saw the error in its own loop."""
+    unmatched. The router already saw the error in its own loop.
+    None-valued fields are suppressed: a mode's unused half (e.g.
+    run_status on a recent_errors call) reads as emptiness and lures
+    the drafter into disclaiming fields that are present."""
     lines = []
     for index, invocation in enumerate(evidence):
         entry: dict = {
@@ -44,7 +47,9 @@ def render_evidence(evidence: list[ToolInvocation]) -> str:
         if invocation.status != "ok":
             entry["note"] = "call failed; supports no citations or placeholders"
         elif invocation.output is not None:
-            entry["output"] = invocation.output.model_dump(mode="json")
+            entry["output"] = invocation.output.model_dump(
+                mode="json", exclude_none=True
+            )
         lines.append(json.dumps(entry, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines)
 
