@@ -109,6 +109,29 @@ def _check_execution_invocation() -> ToolInvocation:
     )
 
 
+def test_recent_errors_output_round_trips_with_error_count():
+    """Fix pass 4 (gate verdict N12): the recent_errors scalar mirror
+    of run_status.count survives the codec byte-stably."""
+    turn = [
+        ToolInvocation(
+            tool=ToolName.CHECK_EXECUTION,
+            arguments={"component": "benchmark_scoring", "mode": "recent_errors"},
+            status="ok",
+            output=CheckExecutionOutput(
+                errors=[{"ts": "2026-03-11T08:00:00+00:00", "event": "x"}],
+                error_count=1,
+            ),
+            evidence=CheckExecutionEvidence(lines=["raw line"]),
+            substrates_read=[SubstrateName.APPLICATION_LOGS],
+        )
+    ]
+    text = dumps_turn_evidence(turn)
+    restored = loads_turn_evidence(text)
+    assert restored == turn
+    assert restored[0].output.error_count == 1
+    assert dumps_turn_evidence(restored) == text
+
+
 def test_turn_evidence_round_trips_identically():
     turn = [
         _stats_invocation(),

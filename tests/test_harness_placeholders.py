@@ -114,6 +114,27 @@ def test_run_status_paths_resolve():
     assert resolution.text == "Ran: true, count 16."
 
 
+def test_error_count_paths_resolve():
+    """Fix pass 4 (gate verdict N12): the clean day is now sayable —
+    error_count is a walkable scalar where errors: [] never was, in
+    both placeholder spellings (the run_status precedent)."""
+    evidence = [
+        ToolInvocation(
+            tool="check_execution",
+            arguments={},
+            status="ok",
+            output=CheckExecutionOutput(errors=[], error_count=0),
+            substrates_read=[],
+        )
+    ]
+    plain = resolve_placeholders("{{e0.error_count}} errors.", evidence)
+    prefixed = resolve_placeholders(
+        "{{e0.output.error_count}} errors.", evidence
+    )
+    assert plain.failures == [] and prefixed.failures == []
+    assert plain.text == prefixed.text == "0 errors."
+
+
 def test_output_prefixed_paths_resolve_identically():
     # Addendum N1: render_evidence shows the drafter the tool result
     # nested under "output", so drafters write {{e0.output.path}} and

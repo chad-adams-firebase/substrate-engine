@@ -149,16 +149,21 @@ class DocSearchOutput(BaseModel):
 
 class CheckExecutionOutput(BaseModel):
     """did_run fills run_status; recent_errors fills errors (name-keyed
-    parsed log fields). The unused field stays None. The key is named
-    run_status, not status: the invocation-level envelope already has a
-    status, and two keys spelled the same at different depths invited
-    drafters to write the wrong placeholder path."""
+    parsed log fields) and error_count. The unused fields stay None.
+    The key is named run_status, not status: the invocation-level
+    envelope already has a status, and two keys spelled the same at
+    different depths invited drafters to write the wrong placeholder
+    path. error_count is recent_errors' scalar mirror of
+    run_status.count — the pre-truncation total, so a clean day is a
+    placeholder-sayable 0 and a capped list still reports what
+    happened, not what was shown."""
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["check_execution"] = "check_execution"
     run_status: RunStatus | None = None
     errors: list[dict[str, JsonValue]] | None = None
+    error_count: int | None = None
 
 
 class KnownItemsOutput(BaseModel):

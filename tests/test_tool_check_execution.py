@@ -45,6 +45,7 @@ def test_recent_errors_returns_parsed_rows_and_raw_lines(tool_pack):
     assert invocation.status == "ok"
     errors = invocation.output.errors
     assert len(errors) == 30
+    assert invocation.output.error_count == 30  # fix pass 4, N12
     assert errors[0]["event"] == "benchmark_fallback"
     assert "Connection refused" in errors[0]["error"]
     assert len(invocation.evidence.lines) == 30
@@ -63,6 +64,25 @@ def test_recent_errors_cap_is_visible(tool_pack):
     )
     assert len(invocation.output.errors) == 10
     assert invocation.evidence.truncated is True
+    # Fix pass 4 (gate verdict N12): error_count is the pre-cap total
+    # — run_status.count semantics, what happened rather than what was
+    # shown.
+    assert invocation.output.error_count == 30
+
+
+def test_recent_errors_clean_day_reports_zero(tool_pack):
+    """Fix pass 4 (gate verdict N12): recent_errors could not express
+    a clean day — errors: [] is a non-scalar every placeholder
+    legitimately fails to render, and no scalar count existed. A clean
+    window now answers with error_count 0."""
+    registry, _ = build_tool_registry(tool_pack)
+    invocation = registry.invoke(
+        "check_execution",
+        {"component": "benchmark_scoring", "mode": "recent_errors", **_day(13)},
+    )
+    assert invocation.status == "ok", invocation.error
+    assert invocation.output.errors == []
+    assert invocation.output.error_count == 0
 
 
 def test_unknown_component_error_lists_known_ones(tool_pack):

@@ -80,6 +80,17 @@ class ExecutionCheck(SubstrateCheck):
                     salience="count",
                 )
             )
+        if output.error_count is not None:
+            # The walkable scalar's own harvest, mirroring
+            # run_status.count; len(errors) above stays — it grounds
+            # "the N errors shown" honestly when the list is capped.
+            contribution.numbers.append(
+                EvidenceValue(
+                    value=float(output.error_count),
+                    ref=f"{ref}.error_count",
+                    salience="count",
+                )
+            )
 
         if isinstance(invocation.evidence, CheckExecutionEvidence):
             for index, line in enumerate(invocation.evidence.lines):

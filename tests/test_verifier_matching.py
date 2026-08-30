@@ -458,6 +458,22 @@ def test_date_claims_never_match_bare_numerals_and_vice_versa():
     assert ok.status == "matched_exact"
 
 
+def test_error_count_grounds_a_no_errors_claim():
+    """Fix pass 4 (gate verdict N12): a clean day's 0 is a harvested
+    count the drafted figure can match — HN-ERRORS' surface."""
+    clean = ToolInvocation(
+        tool="check_execution",
+        arguments={},
+        status="ok",
+        output=CheckExecutionOutput(errors=[], error_count=0),
+    )
+    matches = _match("There were 0 errors that day.", clean)
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "numeric"]
+    # Both error_count and len(errors) truthfully carry 0; assert the
+    # match, not the winning ref.
+    assert outcome.status == "matched_exact"
+
+
 def test_dotted_logger_name_in_error_rows_grounds_entity_claims():
     """Fix pass 4 (gate verdict N10 fold-in; fp3-confirm S5 rep 4):
     identifier_tokens splits at dots, so a dotted logger name never

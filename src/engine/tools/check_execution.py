@@ -117,7 +117,10 @@ class CheckExecution(Tool):
         kept = events[: self._settings.max_errors]
         return self.ok(
             params,
-            CheckExecutionOutput(errors=[_event_row(event) for event in kept]),
+            CheckExecutionOutput(
+                errors=[_event_row(event) for event in kept],
+                error_count=len(events),
+            ),
             evidence=CheckExecutionEvidence(
                 lines=[event.raw for event in kept],
                 truncated=len(events) > len(kept),
