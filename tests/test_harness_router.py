@@ -169,9 +169,12 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     assert "tool calls only" in prompt
     assert "costs one of your steps" in prompt
     # Addendum N5: the hardened prompt over-corrected into early
-    # surrender; one retry after a steering error is licensed, in
-    # tool-call form only — no violation class reopened.
-    assert "retrying once with a corrected tool call" in prompt
+    # surrender. The retry after a steering error was a permission
+    # and fired 1/5 on n13-witnesses (P-N11); it is now an expectation,
+    # still bounded to exactly one, still tool-call form only — no
+    # violation class reopened.
+    assert "your next step MUST be one retry with a corrected tool call" in prompt
+    assert "Exactly one retry" in prompt
     # Fix pass 3: clarify has a concrete trigger — 287 live turns
     # without a firing settled that "if ambiguous" alone never does.
     assert "two materially different readings" in prompt

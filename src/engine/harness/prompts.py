@@ -97,9 +97,10 @@ your steps. Arguments must match each tool's schema exactly \
 evidence tools and give_answer together runs the tools and ignores \
 the give_answer — gather first, answer in a later step. When a tool \
 returns an error that names valid alternatives or tells you what to \
-send instead, spend a step retrying once with a corrected tool call \
-before you consider refusing. You have at most {max_iterations} \
-steps."""
+send instead, your next step MUST be one retry with a corrected tool \
+call — refusing without that retry is an early surrender. Exactly one \
+retry: if the corrected call also errors, refuse. You have at most \
+{max_iterations} steps."""
 
 
 def render_drafter_prompt(*, app_name: str) -> str:
