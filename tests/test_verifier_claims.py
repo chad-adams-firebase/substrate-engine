@@ -54,6 +54,23 @@ def test_dates_never_decompose():
     assert all(c.value is None for c in numerics)
 
 
+def test_yearless_month_day_is_a_date_token_not_a_numeral():
+    """Fix pass 4 (gate verdict N10): prose "May 29" extracted a bare
+    29 that shopped among counts and could never find a calendar. A
+    yearless month-name date is a date token (MM-DD); an impossible
+    day stays a numeral."""
+    claims = extract_claims("The sweep ran on May 29.")
+    (claim,) = _numeric(claims)
+    assert claim.surface == "May 29"
+    assert claim.date == "05-29"
+    assert claim.value is None
+
+    claims = extract_claims("Output reached March 45 units.")
+    (claim,) = _numeric(claims)
+    assert claim.date is None
+    assert claim.value == 45.0
+
+
 def test_line_references_are_location_entities():
     claims = extract_claims(
         "See rules_engine.py:116-149, i.e. lines 116-149 of that file."

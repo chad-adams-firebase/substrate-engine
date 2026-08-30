@@ -47,7 +47,7 @@ class NumericClaim(BaseModel):
     start: int
     end: int
     value: float | None = None  # None for date-form claims
-    date: str | None = None  # ISO, for date claims
+    date: str | None = None  # ISO YYYY-MM-DD; MM-DD for yearless prose
     is_percent: bool = False
     is_currency: bool = False
     is_approximate: bool = False

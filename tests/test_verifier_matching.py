@@ -2,7 +2,10 @@
 beyond it."""
 
 from engine.config.models import VerifierSettings
+from engine.ports.types import RunStatus
 from engine.tools.envelope import (
+    CheckExecutionEvidence,
+    CheckExecutionOutput,
     CkgTraversalOutput,
     ReadSourceOutput,
     ToolInvocation,
@@ -388,6 +391,99 @@ def test_backticked_file_path_quote_falls_back_to_vocabulary():
     )
     [(_, bad)] = [(c, o) for c, o in near if c.kind == "quote"]
     assert bad.status == "unmatched"
+
+
+def _did_run_invocation() -> ToolInvocation:
+    return ToolInvocation(
+        tool="check_execution",
+        arguments={},
+        status="ok",
+        output=CheckExecutionOutput(
+            run_status=RunStatus(
+                ran=True,
+                count=1,
+                detail=(
+                    "1 stale_sweep/stale_sweep_completed event(s) in "
+                    "[2026-05-29T00:00:00+00:00, 2026-05-30T00:00:00+00:00)"
+                ),
+            )
+        ),
+        evidence=CheckExecutionEvidence(
+            lines=[
+                "ts=2026-05-29T06:00:00+00:00 logger=stale_sweep "
+                "event=stale_sweep_completed"
+            ]
+        ),
+    )
+
+
+def test_prose_date_matches_harvested_iso_window():
+    """Fix pass 4 (gate verdict N10): C1's surface — "May 29" against
+    a did_run answer whose window stamps live only in run_status.detail
+    text. ISO dates harvest from the detail (and log lines) into the
+    strings pool; the yearless claim matches them as derived — the
+    year is context the claim didn't state."""
+    matches = _match("Yes — it ran on May 29.", _did_run_invocation())
+    [(claim, outcome)] = [(c, o) for c, o in matches if c.kind == "numeric"]
+    assert claim.date == "05-29"
+    assert outcome.status == "matched_derived"
+    assert outcome.method == "date-yearless"
+
+
+def test_iso_date_claim_matches_harvested_window():
+    """Fix pass 4 (gate verdict N10): C1b's surface — the ISO phrasing
+    control. The whole-date claim path already existed and rejected
+    mechanically; it needed a pool, not a new mechanism."""
+    matches = _match(
+        "The run window starts 2026-05-29.", _did_run_invocation()
+    )
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "numeric"]
+    assert outcome.status == "matched_exact"
+    assert outcome.method == "date"
+
+
+def test_date_claims_never_match_bare_numerals_and_vice_versa():
+    """Fix pass 4 (gate verdict N10): the constraint the mechanism
+    guarantees — date claims shop among date-shaped strings only, and
+    bare numerals never carry a date, so a day-29 can never ride an
+    unrelated count of 29 in either direction."""
+    inv = sql_invocation("SELECT n FROM t", [{"n": 29}])
+    dated = _match("It happened on May 29.", inv)
+    [(_, outcome)] = [(c, o) for c, o in dated if c.kind == "numeric"]
+    assert outcome.status == "unmatched"
+    assert outcome.reason == "date not present in evidence"
+
+    plain = _match("We found 29 rows.", inv)
+    [(_, ok)] = [(c, o) for c, o in plain if c.kind == "numeric"]
+    assert ok.status == "matched_exact"
+
+
+def test_dotted_logger_name_in_error_rows_grounds_entity_claims():
+    """Fix pass 4 (gate verdict N10 fold-in; fp3-confirm S5 rep 4):
+    identifier_tokens splits at dots, so a dotted logger name never
+    entered vocabulary whole and a drafted
+    `invoiceguard.benchmark_scoring` was unmatchable. Error-row
+    strings now harvest their dotted tokens too."""
+    errors_inv = ToolInvocation(
+        tool="check_execution",
+        arguments={},
+        status="ok",
+        output=CheckExecutionOutput(
+            errors=[
+                {
+                    "ts": "2026-03-11T08:00:00+00:00",
+                    "logger": "invoiceguard.benchmark_scoring",
+                    "event": "benchmark_fallback",
+                }
+            ],
+        ),
+    )
+    matches = _match(
+        "`invoiceguard.benchmark_scoring` emitted the warnings.", errors_inv
+    )
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "entity"]
+    assert outcome.status == "matched_exact"
+    assert outcome.method == "vocabulary"
 
 
 def test_exact_evidence_string_quote_falls_back_to_strings():

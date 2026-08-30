@@ -48,6 +48,12 @@ _MONTH_DATE = re.compile(
     r"\b(January|February|March|April|May|June|July|August|September|"
     r"October|November|December)\s+(\d{1,2}),\s+(\d{4})\b"
 )
+# Yearless prose dates ("May 29") extract as date tokens, not bare
+# numerals — a 29 that means a day must never shop among counts.
+_MONTH_DAY = re.compile(
+    r"\b(January|February|March|April|May|June|July|August|September|"
+    r"October|November|December)\s+(\d{1,2})\b"
+)
 
 _LINE_REF = re.compile(r"\b([\w./-]+\.py):(\d+)(?:\s*[-–]\s*(\d+))?")
 _LINE_RANGE = re.compile(r"\blines?\s+(\d+)\s*[-–]\s*(\d+)\b")
@@ -232,6 +238,21 @@ def extract_claims(text: str) -> list[Claim]:
                 start=match.start(),
                 end=match.end(),
                 date=iso,
+            )
+        )
+        _blank(masked, match.start(), match.end())
+    current = "".join(masked)
+    for match in _MONTH_DAY.finditer(current):
+        day = int(match.group(2))
+        if not 1 <= day <= 31:
+            continue  # "March 45" is a numeral, not a date
+        month = _MONTHS[match.group(1).lower()]
+        claims.append(
+            NumericClaim(
+                surface=match.group(0),
+                start=match.start(),
+                end=match.end(),
+                date=f"{month:02d}-{day:02d}",
             )
         )
         _blank(masked, match.start(), match.end())

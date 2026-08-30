@@ -1,5 +1,8 @@
 """check_execution check: the run count is quotable; logger/event
-names and error-row values ground entities and figures."""
+names and error-row values ground entities and figures; ISO dates in
+the answered window and log lines ground prose date claims."""
+
+import re
 
 from engine.config.models import ToolName
 from engine.tools.envelope import (
@@ -7,12 +10,18 @@ from engine.tools.envelope import (
     CheckExecutionOutput,
     ToolInvocation,
 )
-from engine.verifier.checks.base import SubstrateCheck, identifier_tokens
+from engine.verifier.checks.base import (
+    SubstrateCheck,
+    dotted_tokens,
+    identifier_tokens,
+)
 from engine.verifier.models import (
     CorpusText,
     EvidenceContribution,
     EvidenceValue,
 )
+
+_ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 class ExecutionCheck(SubstrateCheck):
@@ -34,6 +43,9 @@ class ExecutionCheck(SubstrateCheck):
                 )
             )
             contribution.vocabulary |= identifier_tokens(output.run_status.detail)
+            contribution.strings |= set(
+                _ISO_DATE.findall(output.run_status.detail)
+            )
             contribution.quote_corpus.append(
                 CorpusText(
                     text=output.run_status.detail,
@@ -59,6 +71,7 @@ class ExecutionCheck(SubstrateCheck):
                 elif isinstance(value, str):
                     contribution.strings.add(value)
                     contribution.vocabulary |= identifier_tokens(value)
+                    contribution.vocabulary |= dotted_tokens(value)
         if output.errors is not None:
             contribution.numbers.append(
                 EvidenceValue(
@@ -71,6 +84,7 @@ class ExecutionCheck(SubstrateCheck):
         if isinstance(invocation.evidence, CheckExecutionEvidence):
             for index, line in enumerate(invocation.evidence.lines):
                 contribution.vocabulary |= identifier_tokens(line)
+                contribution.strings |= set(_ISO_DATE.findall(line))
                 contribution.quote_corpus.append(
                     CorpusText(text=line, ref=f"{ref}.lines[{index}]")
                 )

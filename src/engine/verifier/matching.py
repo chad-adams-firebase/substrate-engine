@@ -71,6 +71,9 @@ class MatchOutcome(BaseModel):
     reason: str = ""
 
 
+_ISO_SHAPED = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
 def _comparable(claim: NumericClaim, value: EvidenceValue) -> list[float]:
     """The spaces a pool value may be compared in. The percent bridge
     (0.15 supports "15%") applies to stats and literals only — a
@@ -93,6 +96,9 @@ def _match_numeric(
     claim: NumericClaim, pools: EvidencePools, settings: VerifierSettings
 ) -> MatchOutcome:
     if claim.date is not None:
+        # Date claims shop among date-shaped strings only, never among
+        # pooled numbers — and bare numerals never carry a date — so a
+        # day-29 can never match an unrelated count of 29 either way.
         for candidate in pools.strings:
             if candidate == claim.date or candidate[:10] == claim.date:
                 return MatchOutcome(
@@ -100,6 +106,17 @@ def _match_numeric(
                     method="date",
                     matched_value=candidate,
                 )
+        if len(claim.date) == 5:  # MM-DD from a yearless prose date
+            for candidate in pools.strings:
+                head = candidate[:10]
+                if _ISO_SHAPED.fullmatch(head) and head[5:] == claim.date:
+                    # Derived, not exact: the year is context the
+                    # claim didn't state (the casefold policy).
+                    return MatchOutcome(
+                        status="matched_derived",
+                        method="date-yearless",
+                        matched_value=candidate,
+                    )
         return MatchOutcome(
             status="unmatched", reason="date not present in evidence"
         )

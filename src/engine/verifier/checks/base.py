@@ -50,12 +50,22 @@ class CheckRegistry:
 
 _IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
 _NUMBER = re.compile(r"(?<![\w.])-?\d+(?:\.\d+)?(?![\w])")
+# Harvest-side mirror of claims._DOTTED: identifier_tokens splits at
+# dots, so a dotted logger/component name never enters vocabulary
+# whole unless harvested whole.
+_DOTTED = re.compile(r"\b[A-Za-z_]\w*(?:-\w+)*(?:\.[A-Za-z_]\w*(?:-\w+)*)+\b")
 
 
 def identifier_tokens(text: str) -> set[str]:
     """Every identifier-shaped token of length >= 2 — the vocabulary a
     drafted entity name may cite."""
     return {t for t in _IDENTIFIER.findall(text) if len(t) >= 2}
+
+
+def dotted_tokens(text: str) -> set[str]:
+    """Dotted identifier-shaped tokens, whole — the exact strings a
+    drafted dotted name (invoiceguard.benchmark_scoring) may cite."""
+    return set(_DOTTED.findall(text))
 
 
 def numeric_literals(text: str) -> list[float]:
