@@ -13,7 +13,7 @@ Layout per bank (`evals/<name>/`):
   examined, so nothing eval-shaped may live in `packs/`.
 - `bank/*.yaml` — machine-readable rows (schema:
   `engine.eval.models.BankRow`). Expected-fail rows carry an `xfail`
-  block naming the anomaly (N13, O1, WBV-*) and its root
+  block naming the anomaly (N5, O1, WBV-*) and its root
   cause; flipping a row to expected-pass = deleting that block, a
   reviewed bank edit. Probe rows may carry a `setup` block on an
   expect (scenario preconditions over the rep's recorded

@@ -26,23 +26,11 @@
   question: "Did the benchmark_scoring component have any errors on 2026-04-15?"
   gold: gold/p_benchmark_clean_day.py
   expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
-  xfail:
-    ref: N13
-    note: >-
-      N12 is proven: fp4b-holdouts rep 3 verified at exit 0 — this
-      row's first delivered answer, the 0 injected from error_count.
-      The residual on reps 1,2,4,5 is the argument-borne
-      benchmark_scoring name and the window date 2026-04-15, both
-      restated correctly and harvested into no pool on a clean day
-      (errors [] yields no vocabulary, no log lines yield no ISO
-      strings); backticked and iso_dates co-occur on exactly those
-      reps, so neither token note isolates a cause. The block now
-      tracks N13.
   expect:
     exit: [0]
     assertions:
       - {kind: nonempty}
-      - {kind: contains, pattern: '\b(no|none|zero|clean)\b', regex: true}
+      - {kind: contains, pattern: '\b(no|none|zero|clean|0)\b', regex: true}
       - kind: not_contains
         pattern: '(does not provide|no information)'
         regex: true

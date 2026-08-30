@@ -82,9 +82,10 @@ unsupported, so demotion is not safe on current evidence.
   threshold, xfail, and sentinel. Zero such occurrences across three
   human sessions is the record this harness now defends.
 - **`[XFAIL]` rows are the opening backlog behaving as documented**
-  (P-N11 and HN-ERRORS → N13, B2's text-block assertion → O1, S4 →
-  WBV-S4 — the current `XfailRef`; N9–N12 and the other WBV rows
-  have retired, see the ledger comment in `engine/eval/models.py`).
+  (P-N11 → N5, B2's text-block assertion → O1, S4 → WBV-S4 — the
+  current `XfailRef`; N9–N13 and the other WBV rows have retired,
+  HN-ERRORS flipped on n13-witnesses, see the ledger comment in
+  `engine/eval/models.py`).
   They do not gate — but a breach on any of them still exits 4.
 - **`[XPASS]` is good news needing a decision:** the fix appears to
   have landed — delete the row's xfail block in its own commit. The

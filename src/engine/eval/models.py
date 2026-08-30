@@ -44,8 +44,14 @@ from engine.verifier.models import VerifierVerdict
 # class — the poolless identifiers the same rows now track as N13.
 # A third retirement shape beside the XPASS flip and the 6c0e848
 # luck-flip reversal: the block keeps its row, the ref changes.
+# N13 retired on n13-witnesses with no remaining rows: HN-ERRORS 5/5
+# verified at exit 0 (its block deleted — the contains pattern, not
+# the answers, was the defect), NP6 threshold-clearing, zero
+# backticked failures run-wide. P-N11's block re-attributed to N5:
+# N11 and N13 proven on its one reached rep; what it tracks now is
+# the licensed retry's firing rate (reached 1/5).
 XfailRef = Literal[
-    "N13", "O1",
+    "N5", "O1",
     "WBV-S4",
 ]
 

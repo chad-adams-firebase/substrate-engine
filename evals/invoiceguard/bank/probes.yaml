@@ -9,22 +9,24 @@
   gold: gold/p_benchmark_clean_day.py
   expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
   xfail:
-    ref: N13
+    ref: N5
     note: >-
-      N11 is proven: fp4b-holdouts reached the e0-error/e1-recovery
-      scenario on all five reps (setup 5/5) and every draft cited
-      e1's error_count via placeholder, 3/5 at exit 0. The residual
-      is the backticked poolless error_count field name — fails
-      exactly when backticked emitted (2 with, 3 without); the
-      fp4-slice date-disclaimer did not recur. The block now tracks
-      N13: the envelope's own field names were rendered to the
-      drafter but harvested into no pool.
+      N11 and N13 are both proven for this row: n13-witnesses rep 1
+      reached the e0-error/e1-recovery scenario and verified at exit
+      0 with the backticked error_count matched from the envelope's
+      field names. What the row measures now is the licensed retry's
+      firing rate: reps 2-5 surrendered after the one error that
+      named all seven valid components — reached 1/5, INCONCLUSIVE —
+      N5's early-surrender shape. The protocol prompt now states the
+      retry as an expectation, not a permission; the block tracks
+      whether that moves the reached rate. Setup block and floor
+      unchanged.
   expect:
     exit: [0]
     setup: {min_invocations: 2, min_errored: 1, min_ok: 1}
     assertions:
       - {kind: nonempty}
-      - {kind: contains, pattern: '\b(no|none|zero|clean)\b', regex: true}
+      - {kind: contains, pattern: '\b(no|none|zero|clean|0)\b', regex: true}
       - kind: not_contains
         pattern: '(does not provide|no information|cannot determine)'
         regex: true
