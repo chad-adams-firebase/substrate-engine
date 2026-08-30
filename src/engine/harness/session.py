@@ -8,6 +8,7 @@ touches WorkStore; this is the single writer.
 """
 
 import hashlib
+import threading
 from datetime import UTC, datetime
 
 from engine.harness.events import EventLog, StatusListener
@@ -24,6 +25,13 @@ SCRATCH_WORKSPACE = "scratch"
 
 class UnknownConversationError(Exception):
     pass
+
+
+class TurnInProgressError(Exception):
+    """A second ask() while one is running. One turn in flight per
+    session, by design: the graph's per-turn EventLog, the saver
+    connection, and the WorkStore connection are all singular, so the
+    web layer serializes (409) rather than interleaving."""
 
 
 def evidence_ref_of(payload: str) -> str:
@@ -46,6 +54,12 @@ class AskSession:
         self._identity = identity
         self._listener = listener
         self._graph = build_graph(deps, checkpointer=work_store.checkpointer())
+        self._turn_lock = threading.Lock()
+
+    @property
+    def busy(self) -> bool:
+        """True while a turn is running — the web route's 409 check."""
+        return self._turn_lock.locked()
 
     def _resolve_conversation(
         self, conversation_id: int | None, question: str
@@ -73,12 +87,35 @@ class AskSession:
         )
 
     def ask(
-        self, question: str, conversation_id: int | None = None
+        self,
+        question: str,
+        conversation_id: int | None = None,
+        *,
+        listener: StatusListener | None = None,
+    ) -> TurnResult:
+        """One turn. `listener` receives this call's status events live
+        (an SSE queue); omitted, the session's constructor listener
+        (the CLI's stderr trail) does. Raises TurnInProgressError
+        instead of waiting if another turn holds the session."""
+        if not self._turn_lock.acquire(blocking=False):
+            raise TurnInProgressError("A turn is already running.")
+        try:
+            return self._ask(question, conversation_id, listener or self._listener)
+        finally:
+            self._turn_lock.release()
+
+    def _ask(
+        self,
+        question: str,
+        conversation_id: int | None,
+        listener: StatusListener | None,
     ) -> TurnResult:
         self._work_store.ensure_schema()
         conversation = self._resolve_conversation(conversation_id, question)
 
-        events = EventLog(self._listener)
+        events = EventLog(listener)
+        # Assigned only under the turn lock: nodes read deps.events by
+        # closure, so two turns on one session would cross-wire trails.
         self._deps.events = events
         config = {"configurable": {"thread_id": str(conversation.id)}}
         raw_state = self._graph.invoke({"question": question}, config)

@@ -228,3 +228,45 @@ def test_search_matches_narrative_text_too(store):
     _seed_unit(store, "Supplier story", "The flag rate spiked in March.", "published")
     assert len(store.search_published_units("flag rate")) == 1
     assert store.search_published_units("nonexistent phrase") == []
+
+
+def test_one_store_serves_reads_and_writes_from_two_threads(store):
+    """The web layer writes turn_log from a worker thread while request
+    threads read (Phase 5): one shared connection, serialized."""
+    import threading
+
+    workspace = store.create_workspace("chad", "scratch")
+    conversation = store.create_conversation(workspace.id, "t")
+    errors: list[BaseException] = []
+
+    def writer():
+        try:
+            for turn in range(1, 21):
+                store.append_turn_log(
+                    TurnLogEntry(
+                        conversation_id=conversation.id,
+                        turn=turn,
+                        actor="chad",
+                        action="ask",
+                        created_at=datetime.now(UTC),
+                    )
+                )
+        except BaseException as exc:  # surfaced below
+            errors.append(exc)
+
+    def reader():
+        try:
+            for _ in range(20):
+                store.list_conversations(workspace.id)
+                store.list_turn_logs(conversation.id)
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [threading.Thread(target=writer), threading.Thread(target=reader)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(store.list_turn_logs(conversation.id)) == 20

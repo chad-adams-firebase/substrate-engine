@@ -12,6 +12,7 @@ them. Rows are read name-keyed via sqlite3.Row.
 
 import json
 import sqlite3
+import threading
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -100,10 +101,29 @@ class SqliteWorkStoreSettings(BaseModel):
     database: str
 
 
+def _locked(method):
+    """Serialize a store method on the instance lock (see __init__)."""
+
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    wrapper.__name__ = method.__name__
+    wrapper.__doc__ = method.__doc__
+    return wrapper
+
+
 class SqliteWorkStore:
     def __init__(self, settings: SqliteWorkStoreSettings) -> None:
         self._settings = settings
         self._lazy_connection: sqlite3.Connection | None = None
+        # The web layer runs ask() on a worker thread while request
+        # threads read conversations: one connection (a ":memory:"
+        # store cannot be per-thread — each thread would get its own
+        # empty database) shared across threads, every method holding
+        # this lock so statements inside one implicit transaction
+        # never interleave. sqlite3.threadsafety is 3 on this build.
+        self._lock = threading.RLock()
 
     @property
     def settings(self) -> SqliteWorkStoreSettings:
@@ -117,14 +137,18 @@ class SqliteWorkStore:
             database = self._settings.database
             if database != ":memory:":
                 Path(database).parent.mkdir(parents=True, exist_ok=True)
-            self._lazy_connection = sqlite3.connect(database)
+            self._lazy_connection = sqlite3.connect(
+                database, check_same_thread=False
+            )
             self._lazy_connection.row_factory = sqlite3.Row
         return self._lazy_connection
 
+    @_locked
     def ensure_schema(self) -> None:
         with self._connection:
             self._connection.executescript(_SCHEMA)
 
+    @_locked
     def create_workspace(self, owner: str, name: str) -> Workspace:
         created_at = datetime.now(UTC)
         with self._connection:
@@ -136,6 +160,7 @@ class SqliteWorkStore:
             id=cursor.lastrowid, owner=owner, name=name, created_at=created_at
         )
 
+    @_locked
     def create_conversation(self, workspace_id: int, title: str) -> Conversation:
         created_at = datetime.now(UTC)
         with self._connection:
@@ -151,6 +176,7 @@ class SqliteWorkStore:
             created_at=created_at,
         )
 
+    @_locked
     def get_conversation(self, conversation_id: int) -> Conversation | None:
         row = self._connection.execute(
             "SELECT id, workspace_id, title, created_at FROM conversation "
@@ -159,6 +185,7 @@ class SqliteWorkStore:
         ).fetchone()
         return self._conversation_from(row) if row else None
 
+    @_locked
     def list_conversations(self, workspace_id: int) -> list[Conversation]:
         rows = self._connection.execute(
             "SELECT id, workspace_id, title, created_at FROM conversation "
@@ -176,6 +203,7 @@ class SqliteWorkStore:
             created_at=datetime.fromisoformat(row["created_at"]),
         )
 
+    @_locked
     def append_turn_log(self, entry: TurnLogEntry) -> int:
         with self._connection:
             cursor = self._connection.execute(
@@ -199,6 +227,7 @@ class SqliteWorkStore:
             )
         return cursor.lastrowid
 
+    @_locked
     def list_turn_logs(self, conversation_id: int) -> list[TurnLogEntry]:
         rows = self._connection.execute(
             "SELECT conversation_id, turn, actor, action, tools_used, "
@@ -224,6 +253,7 @@ class SqliteWorkStore:
             for row in rows
         ]
 
+    @_locked
     def save_evidence_bundle(self, ref: str, payload: str) -> None:
         # Content-addressed, so a duplicate insert is the same bytes:
         # INSERT OR IGNORE makes the write idempotent.
@@ -234,6 +264,7 @@ class SqliteWorkStore:
                 (ref, payload, datetime.now(UTC).isoformat()),
             )
 
+    @_locked
     def load_evidence_bundle(self, ref: str) -> str | None:
         row = self._connection.execute(
             "SELECT payload FROM evidence_bundle WHERE ref = ?", (ref,)
@@ -316,6 +347,7 @@ class SqliteWorkStore:
             serde=self.checkpoint_serde(),
         )
 
+    @_locked
     def search_published_units(self, text: str) -> list[UnitSummary]:
         # LIKE over title+narrative is deliberately all there is —
         # Phase 6 owns anything smarter. ensure_schema first: this is
@@ -341,6 +373,7 @@ class SqliteWorkStore:
             for row in rows
         ]
 
+    @_locked
     def list_workspaces(self, owner: str) -> list[Workspace]:
         rows = self._connection.execute(
             "SELECT id, owner, name, created_at FROM workspace "
