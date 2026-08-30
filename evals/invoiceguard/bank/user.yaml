@@ -14,14 +14,6 @@
   expected_gold: {rule: quantity_spike, effective: 610768.51}
   route_pair: rule_metric
   threshold: 0.8
-  xfail:
-    ref: WBV-U5
-    note: >-
-      4b baseline 1/5 verified duplicate_line $11,004.73: WHERE
-      ff.valid_exception = 0 turned the LEFT JOIN into an INNER JOIN.
-      Fix pass 3 grounds the rule_savings template — the map had no
-      per-rule savings metric; recovered_opportunity is the team
-      rollup.
   expect:
     exit: [0]
     assertions:

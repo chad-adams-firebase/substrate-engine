@@ -188,14 +188,6 @@
   expected_gold:
     value: 665
     window: ["2026-04-30", "2026-05-30"]
-  xfail:
-    ref: WBV-C4
-    note: >-
-      4b baseline 0/5, verified 662: the window [04-29, 05-29)
-      dropped the newest data day. Fix pass 3 states one convention
-      in grounding — half-open [last_day - N + 1, last_day + 1) — and
-      re-derives this gold under it (665, was 692 with a 31-day
-      window that contradicted B5/A1's 7-day "last week").
   expect:
     exit: [0]
     assertions:
@@ -276,7 +268,10 @@
       4b baseline 1/5 verified 0: adjustment_flag = 0 (the gotcha
       says = 1) and NOT EXISTS (any finding) instead of rule_name =
       'total_mismatch' — the gotcha's exact query, ignored. Fix pass
-      3's zero challenge caps a 0 at unverified.
+      3's zero challenge caps a 0 at unverified. fp3-confirm 3/5:
+      the residual is stochastic wrong-question SQL with every miss
+      capped at exit 2 by the zero-challenge — the designed trade,
+      kept annotated.
   expect:
     exit: [0]
     assertions:
@@ -337,14 +332,6 @@
   gold: gold/s7_lapsed_reactivation.py
   expected_gold: {count: 1, invoice: INV-LPS-0001, actor: mona}
   threshold: 0.8
-  xfail:
-    ref: WBV-S7
-    note: >-
-      4b baseline 0/5, one rep a verified empty table: every rep
-      filtered i.status = 'LAPSED', which excludes exactly the
-      reactivated population. Fix pass 3: the empty-result challenge
-      caps the wrong path at unverified; the status_is_current gotcha
-      grounds the transition query.
   expect:
     exit: [0]
     assertions:

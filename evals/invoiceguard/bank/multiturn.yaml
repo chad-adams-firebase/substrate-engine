@@ -33,15 +33,6 @@
   category: multiturn
   gold: gold/mt2_critical_compliance.py
   expected_gold: {compliance: 4216, critical: 254}
-  xfail:
-    ref: WBV-MT2
-    note: >-
-      4b baseline 1/5 verified 1,065: findings JOIN compliance_reports
-      JOIN compliance_rules on invoice_id cross-multiplied every
-      finding against every critical rule on the invoice. Fix pass 3's
-      fan-out lint draws a repair round; the invoices_to_compliance
-      note says severity lives on compliance_rules (a repair landing
-      on COUNT(DISTINCT findings.id) is still 499, so read the SQL).
   turns:
     - question: "How many findings came from the external compliance layer?"
       expect:

@@ -24,17 +24,18 @@ from engine.harness.outcomes import TurnOutcome
 from engine.verifier.models import VerifierVerdict
 
 # The open-backlog anomaly refs an expected-fail row may carry
-# (docs/phase4-gate-verdict.md §6 condition of closure), plus the 4b
-# baseline's five wrong-but-verified rows
-# (docs/phase4b-baseline-findings.md §2) — ledger honesty while fix
-# pass 3 is graded: breach detection pierces xfail by design, so the
-# before-picture stays loud. Flipping a row to expected-pass is a
+# (docs/phase4-gate-verdict.md §6 condition of closure), plus WBV-S4,
+# the one 4b wrong-but-verified row still annotated
+# (docs/phase4b-baseline-findings.md §2) — ledger honesty while its
+# residual is graded: breach detection pierces xfail by design, so
+# the before-picture stays loud. Flipping a row to expected-pass is a
 # deliberate bank edit: delete the xfail block when the fix lands.
-# (clarify-open, the §7.8 question, was retired after 522 live turns
-# without a clarify: the ambiguity rows now test a named reading.)
+# Retired after two clean runs apiece: WBV-C4/MT2/S7/U5 (fp3-rerun +
+# fp3-confirm XPASS); clarify-open went earlier, after 522 live turns
+# without a clarify (the ambiguity rows now test a named reading).
 XfailRef = Literal[
     "N9", "N10", "N11", "N12", "O1",
-    "WBV-S4", "WBV-S7", "WBV-C4", "WBV-MT2", "WBV-U5",
+    "WBV-S4",
 ]
 
 
