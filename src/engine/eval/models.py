@@ -76,7 +76,8 @@ class _AssertionBase(BaseModel):
     # values a correct answer has no obligation to state (S6's amount
     # when the question asks which supplier). Applied deliberately, per
     # assertion, where a findings document justifies it; never a row
-    # default.
+    # default. Orthogonal to breach-by-kind (grade._alarm_worthy): a
+    # contains failure never breaches regardless of this flag.
     breach: bool = True
 
 

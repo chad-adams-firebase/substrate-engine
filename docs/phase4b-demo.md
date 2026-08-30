@@ -75,7 +75,8 @@ unsupported, so demotion is not safe on current evidence.
 
 - **The INVARIANT line comes first.** Any rep that exited 0 while a
   content assertion failed (wrong number, wrong name, wall-clock SQL
-  window, forbidden content) is a wrong-but-verified occurrence —
+  window, forbidden content — a missing `contains` pattern is
+  phrasing and gates only) is a wrong-but-verified occurrence —
   the failure class the whole Phase 4 architecture exists to prevent.
   One occurrence fails the grade at exit 4 regardless of every
   threshold, xfail, and sentinel. Zero such occurrences across three

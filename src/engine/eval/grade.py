@@ -625,12 +625,23 @@ def _grade_rep(
 
 def _alarm_worthy(assertion: Assertion, view: _TurnView, gold) -> bool:
     """Whether a content assertion's failure at exit 0 is the
-    wrong-but-verified breach. Every kind is, except a window whose
-    only fault is a convention mismatch: the invariant there is
-    double-guarded already (a wrong window that changes the count
-    breaches via numeric_from_gold; a wall-clock window breaches
-    here), so a right, data-anchored count over a different window
-    fails the rep and nothing more."""
+    wrong-but-verified breach.
+
+    Breach is by kind. A missing contains pattern is phrasing, not
+    wrong content: both historical false alarms — A1's window literals
+    and HN-ERRORS' digit/word gap ("had 0 errors" against
+    (no|none|zero|clean)) — were pattern-kind, while both catastrophic
+    shapes (S4, S7) were numeric_from_gold, whose semantics are
+    untouched. So contains gates the rep and rings no alarm, ever;
+    not_contains still breaches, because forbidden content present IS
+    wrong content. A window whose only fault is a convention mismatch
+    is the other exception: the invariant there is double-guarded
+    already (a wrong window that changes the count breaches via
+    numeric_from_gold; a wall-clock window breaches here), so a right,
+    data-anchored count over a different window fails the rep and
+    nothing more."""
+    if assertion.kind == "contains":
+        return False
     if assertion.kind != "window_data_anchored":
         return True
     forbidden, _, _ = _window_findings(assertion, view, gold)

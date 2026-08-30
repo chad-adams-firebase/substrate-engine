@@ -308,6 +308,48 @@ def test_xfail_and_xpass_do_not_gate(tmp_path):
     assert "appears to have landed" not in text  # it cannot know that
 
 
+def test_contains_failure_gates_without_the_alarm(tmp_path):
+    """Breach is by kind: a missing contains pattern is phrasing, not
+    wrong content (n13-witnesses: "had 0 errors" against
+    (no|none|zero|clean) rang the alarm on five verified-correct
+    bodies). The rep still fails its threshold."""
+    rows = ROW_DATA.replace(
+        "      - {kind: numeric_from_gold, field: value}\n",
+        "      - {kind: contains, pattern: '\\b(no|none|zero)\\b', regex: true}\n",
+    )
+    bank, header, world, pack = make_env(tmp_path, rows)
+
+    records = [make_record("B5", 1, make_turn("There were 0 of them."))]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.exit_code() == 2
+    assert result.breaches == []
+    assert result.rows[0].status == "fail"
+    assert "contains" in result.rows[0].failure_classes
+    text = render(result)
+    assert "INVARIANT: ok" in text
+    assert "RESULT: FAIL (thresholds)" in text
+
+
+def test_not_contains_still_trips_the_alarm(tmp_path):
+    """The other pattern kind keeps its teeth: forbidden content
+    present IS wrong content, and a verified answer carrying it is
+    the wrong-but-verified breach, contradicted."""
+    rows = ROW_DATA.replace(
+        "      - {kind: numeric_from_gold, field: value}\n",
+        "      - {kind: not_contains, pattern: 'no information', regex: true}\n",
+    )
+    bank, header, world, pack = make_env(tmp_path, rows)
+
+    records = [
+        make_record("B5", 1, make_turn("The evidence has no information."))
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.exit_code() == 4
+    (breach,) = result.breaches
+    assert breach.assertion == "not_contains"
+    assert breach.severity == "contradicted"
+
+
 def test_omission_tolerant_assertion_gates_without_the_alarm(tmp_path):
     """Finding 4b §2 (S6): a value a correct answer need not state
     fails the rep but rings no alarm. breach: false is per-assertion
