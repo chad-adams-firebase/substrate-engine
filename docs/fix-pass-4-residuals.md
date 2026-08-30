@@ -30,7 +30,10 @@ re-run.
    correction (`name_from_gold` on supplier, or split the amount off
    the pass criterion), citing `b3d8375` as its pattern — the same
    collision class: an engine mandate changed correct answers'
-   surface, and the gold predates it.
+   surface, and the gold predates it. **Landed (Phase 5 opening
+   rider):** the gold returns the supplier's code and name, the row
+   gates on `name_from_gold [supplier, supplier_name]`, and the
+   amount assertion is gone.
 2. Reps 2–5 layered `supplier_acceptance` / `review_reports.disposition`
    / `invoice_history` predicates onto the CREEPBACK category and
    self-annihilated to zero rows; the fix-pass-3 zero/empty-result

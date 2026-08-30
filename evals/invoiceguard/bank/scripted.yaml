@@ -290,6 +290,8 @@
   question: "Has any supplier raised prices back up after accepting a correction?"
   gold: gold/s6_creepback.py
   expected_gold:
+    supplier: CRP01
+    supplier_name: Crestpoint Mechanical
     invoice: INV-CRP-0001
     revision: 3
     amount: 120.0
@@ -299,13 +301,16 @@
     assertions:
       - {kind: nonempty}
       - {kind: contains, pattern: '(creepback|creep)', regex: true}
-      - {kind: numeric_from_gold, field: amount, breach: false}
+      - {kind: name_from_gold, field: [supplier, supplier_name]}
   note: >-
-    Story 6 — the creepback chain, $120.00 = (92-80) x 10. The amount
-    is omission-tolerant (4b findings §2): the question asks which
-    supplier, and the baseline's four correct "Crestpoint Mechanical"
-    answers rang the alarm for not stating a figure they had no
-    reason to state. It still gates the threshold.
+    Story 6 — the creepback chain, $120.00 = (92-80) x 10. The
+    question asks which supplier, so the supplier is the content gate
+    (code or display name, the b3d8375 pattern) and the amount is no
+    longer asserted at all: fix pass 4's residual triage found the
+    correct "Crestpoint Mechanical" answers failing only
+    numeric_from_gold(amount) — a figure they had no reason to state
+    — even after it was made omission-tolerant, because it still gated
+    the threshold. The amount stays in the gold for the record.
 
 - id: S7
   provenance: scripted

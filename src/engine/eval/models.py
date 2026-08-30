@@ -50,8 +50,13 @@ from engine.verifier.models import VerifierVerdict
 # backticked failures run-wide. P-N11's block re-attributed to N5:
 # N11 and N13 proven on its one reached rep; what it tracks now is
 # the licensed retry's firing rate (reached 1/5).
+# N5 retired on the full post-N13 bank (Phase 5 opening rider): P-N11
+# XPASS 4/4 with reached 4/5 — the MUST-form retry sentence moved the
+# firing rate, and the row's setup block (min_errored/min_ok) now
+# states the scenario directly, so the annotation had nothing left to
+# explain. Block deleted; no remaining N5 rows.
 XfailRef = Literal[
-    "N5", "O1",
+    "O1",
     "WBV-S4",
 ]
 

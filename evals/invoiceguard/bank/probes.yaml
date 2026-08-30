@@ -8,19 +8,6 @@
   question: "Did benchmark scoring have any errors on 2026-04-15?"
   gold: gold/p_benchmark_clean_day.py
   expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
-  xfail:
-    ref: N5
-    note: >-
-      N11 and N13 are both proven for this row: n13-witnesses rep 1
-      reached the e0-error/e1-recovery scenario and verified at exit
-      0 with the backticked error_count matched from the envelope's
-      field names. What the row measures now is the licensed retry's
-      firing rate: reps 2-5 surrendered after the one error that
-      named all seven valid components — reached 1/5, INCONCLUSIVE —
-      N5's early-surrender shape. The protocol prompt now states the
-      retry as an expectation, not a permission; the block tracks
-      whether that moves the reached rate. Setup block and floor
-      unchanged.
   expect:
     exit: [0]
     setup: {min_invocations: 2, min_errored: 1, min_ok: 1}
