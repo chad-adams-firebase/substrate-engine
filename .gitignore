@@ -13,8 +13,8 @@ dist/
 *.duckdb
 *.db
 *.sqlite3
+*.db-shm
+*.db-wal
 
 # OS noise
 .DS_Store
-*.db-shm
-*.db-wal
