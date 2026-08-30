@@ -29,7 +29,11 @@ class DraftResult(BaseModel):
 
 def render_evidence(evidence: list[ToolInvocation]) -> str:
     """The drafter-facing evidence: one indexed JSON line per
-    invocation, outputs whole, residue never."""
+    invocation, outputs whole, residue never. Failed calls render
+    collapsed — index, tool, status, and a fixed note, never the
+    error text: the verifier harvests nothing from a non-ok
+    invocation, so every token echoed from one is guaranteed
+    unmatched. The router already saw the error in its own loop."""
     lines = []
     for index, invocation in enumerate(evidence):
         entry: dict = {
@@ -37,9 +41,9 @@ def render_evidence(evidence: list[ToolInvocation]) -> str:
             "tool": invocation.tool.value,
             "status": invocation.status,
         }
-        if invocation.error is not None:
-            entry["error"] = invocation.error
-        if invocation.output is not None:
+        if invocation.status != "ok":
+            entry["note"] = "call failed; supports no citations or placeholders"
+        elif invocation.output is not None:
             entry["output"] = invocation.output.model_dump(mode="json")
         lines.append(json.dumps(entry, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines)

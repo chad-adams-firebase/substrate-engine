@@ -41,7 +41,32 @@ def test_answer_path_routes_tools_drafts_and_verifies(tool_pack):
     assert call["draft"].injected_spans  # the 50 was code-injected
 
 
-def test_a_verified_shrug_ships_as_a_refusal(tool_pack):
+def test_draft_cites_the_clean_invocation_not_the_errored_one(tool_pack):
+    """Fix pass 4 (gate verdict N11): the P-N11 shape — e0 errors, the
+    answer sits in e1. The drafter's view carries e0 only as a
+    collapsed status stub (no error text to anchor on), and the draft
+    resolves against e1 cleanly."""
+    responses = [
+        tool_call("query_univariate_stats", {"nope": 1}),  # e0: errors
+        STATS_CALL,  # e1: the clean answer
+        GIVE_PROSE,
+        LLMResponse(
+            content="Invoices has {{e1.rows[0].row_count}} rows.", model="s"
+        ),
+    ]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("how many invoice rows are there?")
+
+    assert result.outcome.kind == "answer"
+    assert result.outcome.body.text == "Invoices has 50 rows."
+
+    from engine.config.models import PortName
+
+    stub = ports.get(PortName.LLM)
+    sent = stub.calls[-1]["messages"][1].content  # the drafter's evidence
+    assert '"status":"error"' in sent  # e0 is visible as a failed call…
+    assert "Invalid arguments" not in sent  # …but its error text is not
+    assert '"note":"call failed; supports no citations or placeholders"' in sent
     # Addendum N7, the U6 twin pair: "the evidence does not provide…"
     # passed verification with zero claims and exited 0 while its twin
     # refused with 3. Same substance now gets the same outcome shape:

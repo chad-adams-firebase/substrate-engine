@@ -117,6 +117,10 @@ The engine substitutes the actual value; you never transcribe it.
 - Name functions, tables, and columns exactly as the evidence spells \
 them, in backticks.
 - Quote code verbatim or not at all.
+- Draft only from evidence entries whose status is "ok". An entry \
+with status "error" is a failed call that supports nothing: never \
+cite it, quote it, or write a placeholder into it — at most note \
+that a call failed.
 - If the evidence does not support part of the question, say so \
 plainly instead of filling the gap.
 - Answer in concise markdown; no preamble about being an assistant."""

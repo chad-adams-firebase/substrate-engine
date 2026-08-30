@@ -2,9 +2,14 @@
 resolution; and the table projections for pass-through answers."""
 
 from engine.config.models import PortName
-from engine.harness.drafter import Drafter, build_drafting_messages
+from engine.harness.drafter import (
+    Drafter,
+    build_drafting_messages,
+    render_evidence,
+)
 from engine.harness.tables import caption_for, project_table
-from engine.ports.types import LLMResponse
+from engine.ports.types import LLMResponse, RunStatus
+from engine.tools.envelope import CheckExecutionOutput, ToolInvocation
 from tests.conftest import build_tool_registry
 
 
@@ -50,6 +55,36 @@ def test_drafter_context_is_outputs_only_never_residue(tool_pack):
     sent = stub.calls[0]["messages"][1].content
     assert '"output"' in sent
     assert '"sections"' not in sent  # ...and never reaches the model
+
+
+def test_errored_invocations_render_collapsed_without_error_text():
+    """Fix pass 4 (gate verdict N11): the drafter anchored on an
+    errored invocation, recited its content-rich error text, and
+    shipped "no information" while the answer sat in the clean one.
+    Failed calls render collapsed — the verifier harvests nothing
+    from a non-ok invocation, so every echoed token was guaranteed
+    unmatched; the router already saw the error in its own loop."""
+    error_text = (
+        "Unknown component 'benchmark'. Known components: "
+        "invoiceguard.benchmark_scoring, invoiceguard.stale_sweep"
+    )
+    errored = ToolInvocation(
+        tool="check_execution", arguments={}, status="error", error=error_text
+    )
+    clean = ToolInvocation(
+        tool="check_execution",
+        arguments={},
+        status="ok",
+        output=CheckExecutionOutput(
+            run_status=RunStatus(ran=True, count=1, detail="1 event(s)")
+        ),
+    )
+    first, second = render_evidence([errored, clean]).splitlines()
+    assert '"status":"error"' in first
+    assert "Known components" not in first
+    assert '"output"' not in first
+    assert '"note":"call failed; supports no citations or placeholders"' in first
+    assert '"status":"ok"' in second and '"run_status"' in second
 
 
 def test_feedback_appends_previous_draft_and_instructions():
