@@ -1,0 +1,60 @@
+Eval grade — pack: invoiceguard · report: 2026-08-30-post-block1.jsonl
+engine 6a2180842b55 · target 761a18e9b925 · seed 42 · model openai/gpt-4o · bank e2a03239340b1dc2
+
+INVARIANT: ok — no wrong-but-verified occurrence
+
+[   ok] AMB1       5/5  threshold 1.00
+[ FAIL] AMB2       2/5  threshold 1.00  failures: exit(4 not in [0]), contains, numeric_from_gold
+[ FAIL] HN-DIDRUN  1/5  threshold 0.80  failures: exit(3 not in [0, 2]), contains
+[   ok] HN-ERRORS  5/5  threshold 1.00
+[   ok] ZT-CR147   5/5  threshold 1.00
+[   ok] FO-EXCEPT  5/5  threshold 1.00
+[   ok] MT1        5/5  threshold 0.80
+[   ok] MT2        5/5  threshold 1.00
+[   ok] MT3        5/5  threshold 1.00
+[   ok] P-N11      2/2  threshold 1.00  reached 2/5
+[   ok] P-L3Q      5/5  threshold 1.00
+[   ok] REC-SQL    5/5  threshold 0.60
+[   ok] REC-CKG    5/5  threshold 0.60
+[   ok] RT-fires   5/5  threshold 1.00
+[   ok] B1         5/5  threshold 1.00
+[ FAIL] B2         2/5  threshold 0.80  failures: exit(3 not in [0])
+[   ok] B3         5/5  threshold 1.00
+[   ok] B4         5/5  threshold 1.00
+[   ok] B5         5/5  threshold 1.00
+[   ok] B6         5/5  threshold 1.00
+[ FAIL] C1         2/5  threshold 1.00  failures: exit(3 not in [0]), contains
+[   ok] C1b        5/5  threshold 1.00
+[   ok] C2         5/5  threshold 0.80
+[   ok] C3         5/5  threshold 1.00
+[   ok] C4         5/5  threshold 1.00
+[   ok] C5         5/5  threshold 1.00
+[   ok] S2         4/5  threshold 0.80  failures: contains
+[   ok] S3         5/5  threshold 0.80
+[XFAIL] S4         4/5  threshold 1.00 (WBV-S4)  failures: exit(2 not in [0]), numeric_from_gold
+[   ok] S5         3/5  threshold 0.60  failures: exit(2 not in [0])
+[ FAIL] S6         0/5  threshold 0.60  failures: exit(2 not in [0]), contains, name_from_gold
+[   ok] S7         5/5  threshold 0.80
+[   ok] NP1        5/5  threshold 1.00
+[   ok] NP2        5/5  threshold 1.00
+[   ok] NP3        5/5  threshold 1.00
+[   ok] NP4        5/5  threshold 1.00
+[   ok] NP5        5/5  threshold 1.00
+[   ok] NP6        5/5  threshold 0.60
+[   ok] NP7        5/5  threshold 1.00
+[   ok] R1         5/5  threshold 1.00
+[   ok] R2         5/5  threshold 0.80
+[   ok] A1         5/5  threshold 1.00
+[   ok] SEN-MONTH  5/5  threshold 1.00
+[   ok] U5         5/5  threshold 0.80
+[   ok] U6         5/5  threshold 0.80
+[   ok] U-WHO      5/5  threshold 0.80
+[   ok] U-META     5/5  threshold 0.80
+
+Route pairs (first-decision tool must agree):
+  rule_metric [RT-fires, U5, U6]: run_sql ×15 — consistent
+
+Xfail ledger:
+  WBV-S4: S4
+
+RESULT: FAIL (thresholds)
