@@ -1,0 +1,28 @@
+Eval grade — pack: invoiceguard · report: fp4-slice.jsonl
+engine 56a98bc124dd · target 761a18e9b925 · seed 42 · model openai/gpt-4o · bank e6b72355576bab68
+
+warning: engine drift: report from 56a98bc124dd, grading at 15341a23ee1d (grading logic may legitimately be newer)
+
+INVARIANT: ok — no wrong-but-verified occurrence
+
+[XFAIL] HN-ERRORS  0/5  threshold 1.00 (N12)  failures: exit(2 not in [0]), contains
+[XPASS] MT3        5/5  threshold 1.00 (N9)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[XFAIL] P-N11      0/5  threshold 1.00 (N11)  failures: exit(3 not in [0]), contains, not_contains, exit(2 not in [0])
+[XPASS] P-L3Q      5/5  threshold 1.00 (N9)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[XPASS] B4         5/5  threshold 1.00 (N9)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[XPASS] C1         5/5  threshold 1.00 (N10)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[XPASS] C1b        5/5  threshold 1.00 (N10)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[   ok] S5         5/5  threshold 0.60
+
+Xfail ledger:
+  N10: C1, C1b
+  N11: P-N11
+  N12: HN-ERRORS
+  N9: MT3, P-L3Q, B4
+
+RESULT: PASS
