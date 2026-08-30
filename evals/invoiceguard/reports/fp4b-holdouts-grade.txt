@@ -1,0 +1,18 @@
+Eval grade — pack: invoiceguard · report: fp4b-holdouts.jsonl
+engine c19ac7c18065 · target 761a18e9b925 · seed 42 · model openai/gpt-4o · bank 1cc1cea4312ef91e
+
+warning: engine drift: report from c19ac7c18065, grading at 83a12d6ceb28 (grading logic may legitimately be newer)
+
+INVARIANT: ok — no wrong-but-verified occurrence
+
+[XFAIL] HN-ERRORS  1/5  threshold 1.00 (N12)  failures: exit(2 not in [0]), contains
+        - fails exactly when iso_dates emitted (4 with, 1 without)
+        - fails exactly when backticked emitted (4 with, 1 without)
+[XFAIL] P-N11      3/5  threshold 1.00 (N11)  reached 5/5  failures: exit(2 not in [0])
+        - fails exactly when backticked emitted (2 with, 3 without)
+
+Xfail ledger:
+  N11: P-N11
+  N12: HN-ERRORS
+
+RESULT: PASS
