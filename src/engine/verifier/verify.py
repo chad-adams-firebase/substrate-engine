@@ -52,14 +52,27 @@ def _overlaps(claim: Claim, spans: list[InjectedSpan]) -> bool:
     )
 
 
+def _delimiter_trimmed(claim: Claim) -> tuple[int, int]:
+    """The claim's bounds with backtick delimiters stripped. The
+    backticks around `{{e0.file_path}}` are the model's markup, not
+    model-typed content; only backticks trim, so any other character
+    outside an injected span still defeats containment."""
+    lead = len(claim.surface) - len(claim.surface.lstrip("`"))
+    trail = len(claim.surface) - len(claim.surface.rstrip("`"))
+    return claim.start + lead, claim.end - trail
+
+
 def _containing_span(
     claim: Claim, spans: list[InjectedSpan]
 ) -> InjectedSpan | None:
     """The injected span that wholly contains the claim, or None.
     Containment, not overlap: a claim that extends past an injected
-    span has model-typed characters and must verify normally."""
+    span has model-typed characters and must verify normally —
+    after trimming backtick delimiters, which the injected value
+    never includes."""
+    start, end = _delimiter_trimmed(claim)
     for span in spans:
-        if span.start <= claim.start and claim.end <= span.end:
+        if span.start <= start and end <= span.end:
             return span
     return None
 

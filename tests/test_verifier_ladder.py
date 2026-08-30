@@ -195,6 +195,39 @@ def test_a_claim_extending_past_an_injected_span_verifies_normally():
     assert claim.status == "unmatched"  # but construction proves nothing
 
 
+def test_backticked_injected_path_is_contained_after_delimiter_trim():
+    """Fix pass 4 (gate verdict N9): the injected span covers only the
+    rendered value, but the model backticks it, so the quote claim's
+    surface extended one delimiter past the span on each side and
+    containment rejected code-written content. Backticks trim before
+    the containment test; any other character still defeats it. B4
+    attempt 2's surface, and P-L3Q's fp3-confirm rep 4."""
+    verifier, llm = make_verifier([])
+    path = "src/invoiceguard/spine/rules_engine.py"
+    text = f"See `{path}` for the rule."
+    start = text.index(path)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(
+            kind="prose",
+            text=text,
+            injected_spans=[
+                InjectedSpan(
+                    start=start, end=start + len(path), ref="e0.file_path"
+                )
+            ],
+        ),
+        evidence=EVIDENCE,
+        attempt=1,
+    )
+    (claim,) = [c for c in result.attempt_record.claims if c.kind == "quote"]
+    assert claim.surface == f"`{path}`"
+    assert claim.status == "matched_injected"
+    assert claim.evidence_ref == "e0.file_path"
+    assert result.disposition == "verified"
+    assert llm.calls == []
+
+
 def test_table_passthrough_with_clean_caption_verifies():
     verifier, _ = make_verifier([])
     result = verifier.verify(

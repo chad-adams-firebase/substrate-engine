@@ -348,6 +348,58 @@ def test_location_claims_match_retrieved_line_ranges():
     assert bad.status == "unmatched"
 
 
+_B4_SOURCE = ToolInvocation(
+    tool="read_source",
+    arguments={},
+    status="ok",
+    output=ReadSourceOutput(
+        qualified_name="invoiceguard.spine.rules_engine.rule_rate_variance",
+        file_path="src/invoiceguard/spine/rules_engine.py",
+        start_line=116,
+        end_line=149,
+        commit_sha="761a18e9",
+        text="def rule_rate_variance(): ...",
+    ),
+    substrates_read=[],
+)
+
+
+def test_backticked_file_path_quote_falls_back_to_vocabulary():
+    """Fix pass 4 (gate verdict N9): a backticked file path is a quote
+    claim (the slash defeats the identifier shape) shopping in a corpus
+    that holds only the file's text — a file doesn't contain its own
+    path. The path IS harvested, into vocabulary; exact membership
+    there matches as matched_derived, honestly labeled. B4 attempt 1's
+    surface, and MT3's attempt-1 miss in 4/5 fp3-confirm reps."""
+    matches = _match(
+        "Defined in `src/invoiceguard/spine/rules_engine.py`.", _B4_SOURCE
+    )
+    [(claim, outcome)] = [(c, o) for c, o in matches if c.kind == "quote"]
+    assert claim.text == "src/invoiceguard/spine/rules_engine.py"
+    assert outcome.status == "matched_derived"
+    assert outcome.method == "quote-vocabulary"
+
+    # Exact membership only — a near-miss body stays unmatched. The
+    # bare-filename temptation ("rules_engine.py" for the full path)
+    # is refused by design: fuzzy paths belong to the queued dotted-
+    # fallback conversation, not this fix.
+    near = _match(
+        "Defined in `src/invoiceguard/spine/rules_engine`.", _B4_SOURCE
+    )
+    [(_, bad)] = [(c, o) for c, o in near if c.kind == "quote"]
+    assert bad.status == "unmatched"
+
+
+def test_exact_evidence_string_quote_falls_back_to_strings():
+    """Fix pass 4 (gate verdict N9): the strings pool backs the same
+    fallback — a backticked commit SHA is a harvested string, not a
+    passage from the corpus."""
+    matches = _match("Pinned at `761a18e9`.", _B4_SOURCE)
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "quote"]
+    assert outcome.status == "matched_derived"
+    assert outcome.method == "quote-string"
+
+
 def test_derivation_pair_cap_falls_to_the_judge():
     inv = sql_invocation(
         "SELECT a, b FROM t",

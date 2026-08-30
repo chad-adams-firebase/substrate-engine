@@ -285,7 +285,14 @@ def _match_quote(claim: QuoteClaim, pools: EvidencePools) -> MatchOutcome:
     to the judge: a judge blessing a near-quote is the exact failure
     class this system exists to kill. (The spelled-cardinal fallback
     in _match_numeric casefolds deliberately — prose, not code — and
-    the two policies must not be unified.)"""
+    the two policies must not be unified.)
+
+    Inline quotes that miss the corpus fall back to exact membership
+    in the vocabulary/strings pools: a backticked file path is a
+    harvested name (a file doesn't contain its own path), not a
+    passage. Exact, case-sensitive, whole-string only — the pool
+    membership is the cap — and labeled matched_derived, never
+    matched_exact."""
     lines = [
         _normalize(line)
         for line in claim.text.splitlines()
@@ -306,6 +313,15 @@ def _match_quote(claim: QuoteClaim, pools: EvidencePools) -> MatchOutcome:
                 status="matched_exact",
                 method="quote-lines",
                 evidence_ref=corpus.ref,
+            )
+    if not claim.fenced:
+        if claim.text in pools.vocabulary:
+            return MatchOutcome(
+                status="matched_derived", method="quote-vocabulary"
+            )
+        if claim.text in pools.strings:
+            return MatchOutcome(
+                status="matched_derived", method="quote-string"
             )
     return MatchOutcome(
         status="unmatched",
