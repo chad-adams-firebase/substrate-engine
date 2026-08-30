@@ -114,14 +114,65 @@ cross-table composites.
 
 Both xfail blocks re-attributed to N13; N11/N12 retired by
 re-attribution with mechanisms proven (the third retirement shape).
-Next-run expectation: P-N11 and HN-ERRORS flip together (the N9
-acceptance pattern). **NP6 stays deliberately unannotated**: its
+Next-run expectation at the time: P-N11 and HN-ERRORS flip together
+(the N9 acceptance pattern). What happened instead is in the
+n13-witnesses section below — HN-ERRORS flipped in substance and
+P-N11 did not reach its scenario often enough to say. **NP6 stays deliberately unannotated**: its
 misses mixed backticked dictionary field names (`enum_values`,
 `top_values`, `data_scan`), which the field-name harvest now covers,
 a concept name (b), and the composite (a) — so it may flip partially
 from (b)+(c) alone with only the composite case left behind. It sits
 in the re-run witness set precisely to measure that decomposition;
 an xfail block now would blur what the run is measuring.
+
+## n13-witnesses — N13 closed; HN-ERRORS closed; P-N11 onto N5
+
+The witness re-run (`n13-witnesses.jsonl`, engine 17429b4, seed 42,
+rows P-N11 + HN-ERRORS + NP6) graded exit 4 with five breaches, every
+one a `contains` miss on a verified-correct body; no failure in the
+run was a backticked-identifier failure. N13 is closed in substance
+and retires from `XfailRef` with no remaining rows.
+
+**HN-ERRORS — closed.** 5/5 verified at exit 0, all three claims
+grounded on attempt 1 (the argument-borne `benchmark_scoring`, the
+window date, the injected 0). Reps 3–5 answered "The
+`benchmark_scoring` component had 0 errors on 2026-04-15." and failed
+only `\b(no|none|zero|clean)\b` — the pattern had no digit. The
+assertion was the defect: it gains `|0` (P-N11's identical pattern
+too) and the xfail block is deleted. Grade-side consequence: breach
+is now by kind — a `contains` miss gates the rep's threshold and
+never alarms (both historical false alarms, A1's window literals and
+this one, were pattern-kind; both catastrophic shapes, S4/S7, were
+`numeric_from_gold`, untouched). `not_contains` still breaches.
+
+**P-N11 — migrated N13 → N5.** Rep 1 reached the e0-error/e1-recovery
+scenario and verified at exit 0 with the backticked `error_count`
+matched from the envelope's field names — N11 and N13 both proven for
+this row. Reps 2–5 took the error naming all seven valid components
+and did not retry (three refusals, one unverified shrug): reached
+1/5, INCONCLUSIVE. What the row measures now is the licensed retry's
+firing rate, the addendum's N5. Landed alongside: the protocol
+prompt's retry sentence moves from permission to expectation
+(MUST-form, still exactly one retry). Next-run expectation: reached
+at or above the floor; the setup block and floor are unchanged.
+
+**NP6 — 4/5, still deliberately unannotated.** Reps 1,2,4,5 gave the
+seven-value lifecycle list verified at exit 0; each had the
+`` `invoices.status` `` composite unmatched on attempt 1 and redrafted
+it to "`status` in the `invoices` table" — mechanism (a) is still
+live and redraft-absorbed, and stays queued. Rep 3's delivered body
+listed only CLOSED and LAPSED, but its attempt-1 draft enumerated all
+four gold statuses; the Verifier marked backticked
+`` `NO_REVIEW_NEEDED` `` and `` `READY` `` unmatched and the redraft
+deleted them. Cause: `StatsCheck.harvest` put `top_values` into
+`strings`, while a backticked identifier extracts as an entity claim
+that shops `vocabulary` only; CLOSED/LAPSED survived because the
+`status_is_current` gotcha text tokenizes them. Not drafting
+completeness — a pool-shape gap. **Landed:** identifier-shaped top
+values now enter vocabulary as well (`checks/stats.py`), pinned by a
+replay of the rep-3 enumeration. The dictionary field-name misses
+from the earlier NP6 census (`enum_values`, `top_values`,
+`data_scan`) did not recur.
 
 ---
 
