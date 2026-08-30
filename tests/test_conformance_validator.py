@@ -191,3 +191,18 @@ def test_business_doc_without_front_matter_fails(fixture_pack, snapshot_duckdb):
     check = next(c for c in report.checks if "business docs" in c.name)
     assert check.status == "FAIL"
     assert any("front matter" in detail for detail in check.details)
+
+
+def test_dictionary_map_column_format_unknown_column_fails_naming_it(
+    fixture_pack, snapshot_duckdb
+):
+    add_authored_artifacts(fixture_pack)
+    corrupt_line(
+        fixture_pack / "dictionary_map.yaml",
+        "invoices.opportunity",
+        "invoices.opportunity_usd",
+    )
+    report = make_validator(snapshot_duckdb).validate(fixture_pack, "snapshot")
+    check = next(c for c in report.checks if "dictionary map" in c.name)
+    assert check.status == "FAIL"
+    assert any("invoices.opportunity_usd" in d for d in check.details)

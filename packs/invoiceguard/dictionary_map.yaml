@@ -363,6 +363,22 @@ gotchas:
       'compliance_%' selects exactly the compliance layer.
     tables: [findings]
 
+# Display hints (§10.5): the money columns as the pack author knows
+# them. Consumer: run_sql tags result columns (and aliases ending in
+# these names — total_opportunity) so every surface renders currency.
+column_formats:
+  - format: money
+    columns:
+      - invoices.invoice_total
+      - invoices.opportunity
+      - invoice_lines.extended_price
+      - invoice_lines.unit_rate
+      - contracts.contract_rate
+      - contracts.list_price
+      - review_report_lines.requested_rate
+      - findings.amount
+      - compliance_rules.amount
+
 examples:
   - question: How many invoices received last week had findings?
     guidance: >-

@@ -48,6 +48,20 @@ from engine.substrates.models import (
 JsonValue = str | int | float | bool | None
 
 
+class ColumnFormat(BaseModel):
+    """A per-column display hint that travels with the table, store to
+    screen (§10.5): every renderer — CLI text, eval flattening,
+    placeholder injection, the browser — applies the same rule, so a
+    money cell never reaches a human as a float tail. The symbol rides
+    along because it is pack config (locale/branding), and a persisted
+    table must render identically without the pack in hand."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["money"]
+    symbol: str = ""
+
+
 class Table(BaseModel):
     """Rows as data, not prose (§9.4) — the §10.5 table-envelope
     precursor and the canonical home of run_sql's result set (the
@@ -61,6 +75,10 @@ class Table(BaseModel):
     # must stay answerable after truncation.
     total_row_count: int
     truncated: bool = False
+    # Keyed by column name (name-based access, never positional);
+    # absent = render as-is. Resolved by the producing tool from the
+    # Dictionary Map's column_formats and the pack's display config.
+    column_formats: dict[str, ColumnFormat] = {}
 
 
 # --- Per-tool outputs (what the drafting LLM may see) -----------------

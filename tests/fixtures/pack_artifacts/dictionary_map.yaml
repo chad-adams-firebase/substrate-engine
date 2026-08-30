@@ -38,6 +38,10 @@ gotchas:
       difference as an error.
     tables: [invoices, invoice_lines]
 
+column_formats:
+  - format: money
+    columns: [invoices.opportunity, invoices.invoice_total, findings.amount]
+
 examples:
   - question: How many invoices had findings last week?
     guidance: >-

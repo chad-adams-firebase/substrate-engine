@@ -283,3 +283,43 @@ def test_guard_rejects_multi_statement():
     assert guard_select_only("DELETE FROM invoices") is not None
     assert guard_select_only("SELECT 1") is None
     assert guard_select_only("WITH x AS (SELECT 1) SELECT * FROM x") is None
+
+
+def test_result_tables_carry_money_hints_from_the_map_and_pack(tool_pack):
+    """§10.5 / NP3: the tool tags money columns — declared ones and
+    aggregate aliases ending in them — from the Dictionary Map's
+    column_formats and the pack's display.money; nothing in engine
+    code names a column."""
+    query = LLMResponse(
+        content=(
+            "```sql\nSELECT COUNT(*) AS backlog_count, "
+            "SUM(opportunity) AS total_opportunity, "
+            "AVG(opportunity) AS opportunity_rate, opportunity "
+            "FROM invoices GROUP BY opportunity LIMIT 1\n```"
+        ),
+        model="scripted",
+    )
+    registry, _ = build_tool_registry(tool_pack, [query])
+    invocation = registry.invoke("run_sql", {"question": "backlog and opportunity"})
+    assert invocation.status == "ok", invocation.error
+    formats = invocation.output.table.column_formats
+    assert {name: hint.kind for name, hint in formats.items()} == {
+        "total_opportunity": "money",
+        "opportunity": "money",
+    }
+    assert formats["opportunity"].symbol == "$"
+
+
+def test_no_display_money_block_means_untagged_tables(tool_pack):
+    import yaml
+
+    config = yaml.safe_load((tool_pack / "config.yaml").read_text())
+    config.pop("display")
+    (tool_pack / "config.yaml").write_text(yaml.safe_dump(config))
+    query = LLMResponse(
+        content="```sql\nSELECT SUM(opportunity) AS total_opportunity FROM invoices\n```",
+        model="scripted",
+    )
+    registry, _ = build_tool_registry(tool_pack, [query])
+    invocation = registry.invoke("run_sql", {"question": "total opportunity"})
+    assert invocation.output.table.column_formats == {}

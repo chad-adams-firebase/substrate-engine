@@ -191,6 +191,7 @@ def tool_pack(snapshot_outputs, snapshot_duckdb, tmp_path) -> Path:
                 },
             },
         },
+        "display": {"money": {"symbol": "$"}},
     }
     (pack / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
     return pack

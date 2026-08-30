@@ -178,6 +178,7 @@ def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
                 ports.get(PortName.LLM),
                 ports.get(PortName.IDENTITY),
                 settings.run_sql,
+                display=pack.config.display,
             )
         )
     if ToolName.APP_PRIMER in enabled:

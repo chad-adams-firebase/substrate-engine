@@ -312,6 +312,14 @@ class ConformanceValidator:
                             f"join path {join_path.name!r}: unknown column "
                             f"{table}.{column}"
                         )
+        for rule in dictionary_map.column_formats:
+            for qualified in rule.columns:
+                table, _, column = qualified.partition(".")
+                if not column or (table, column) not in known_columns:
+                    details.append(
+                        f"column format {rule.format!r}: unknown column "
+                        f"{qualified}"
+                    )
         return CheckResult(
             name=name, status="FAIL" if details else "PASS", details=details
         )

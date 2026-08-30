@@ -336,6 +336,21 @@ class WhereToLookExample(BaseModel):
     guidance: str
 
 
+class ColumnFormatRule(BaseModel):
+    """Columns that share a display format — "these are money" — as
+    the pack author knows them. Semantic knowledge about the schema,
+    so it lives in the map beside concepts and metrics, not in the
+    generated dictionary (whose DOUBLE cannot tell dollars from a
+    weight) and not in engine code (CLAUDE.md: config over code).
+    Consumer: run_sql's table envelope, which tags result columns."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # "table.column", joined to the dictionary by the validator.
+    columns: list[str]
+    format: Literal["money"]
+
+
 class DictionaryMap(BaseModel):
     """The Data Dictionary Map substrate (Brief §4.2): the semantic /
     routing layer over the dictionary. This whole artifact IS the
@@ -349,6 +364,7 @@ class DictionaryMap(BaseModel):
     join_paths: list[JoinPath] = []
     gotchas: list[Gotcha] = []
     examples: list[WhereToLookExample] = []
+    column_formats: list[ColumnFormatRule] = []
 
 
 class BusinessDoc(BaseModel):

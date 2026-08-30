@@ -183,3 +183,38 @@ def test_text_without_placeholders_passes_through_untouched():
     resolution = resolve_placeholders("No figures here.", [])
     assert resolution.text == "No figures here."
     assert resolution.failures == [] and resolution.injected_spans == []
+
+
+def test_money_hinted_cells_inject_as_currency():
+    """§10.5 / NP3: the drafter never types the figure, and the figure
+    code injects reads as currency when the column says money — no
+    float tail in prose, exactly as in the table."""
+    from engine.tools.envelope import ColumnFormat
+
+    evidence = _sql_evidence(
+        [{"n": 78, "total_opportunity": 8308.92139244107}],
+    )
+    evidence[0].output.table.column_formats = {
+        "total_opportunity": ColumnFormat(kind="money", symbol="$")
+    }
+    resolution = resolve_placeholders(
+        "{{e0.table.rows[0].n}} items worth "
+        "{{e0.table.rows[0].total_opportunity}} "
+        "({{e0.output.table.rows[0].total_opportunity}}).",
+        evidence,
+    )
+    assert resolution.failures == []
+    assert resolution.text == "78 items worth $8,308.92 ($8,308.92)."
+    values = [
+        resolution.text[span.start : span.end]
+        for span in resolution.injected_spans
+    ]
+    assert values == ["78", "$8,308.92", "$8,308.92"]
+
+
+def test_unhinted_float_cells_still_render_round_trip():
+    evidence = _sql_evidence([{"total_opportunity": 8308.92139244107}])
+    resolution = resolve_placeholders(
+        "{{e0.table.rows[0].total_opportunity}}", evidence
+    )
+    assert resolution.text == "8308.92139244107"

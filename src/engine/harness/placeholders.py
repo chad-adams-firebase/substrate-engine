@@ -14,7 +14,8 @@ import re
 
 from pydantic import BaseModel, ConfigDict
 
-from engine.tools.envelope import ToolInvocation
+from engine.harness.render import format_cell
+from engine.tools.envelope import ColumnFormat, ToolInvocation
 from engine.verifier.models import InjectedSpan
 
 _PLACEHOLDER = re.compile(r"\{\{e(\d+)\.([^{}]+)\}\}")
@@ -76,16 +77,33 @@ def _navigate(value: object, path: str) -> object:
     return value
 
 
-def _render(value: object) -> str | None:
+def _render(value: object, column_format: ColumnFormat | None = None) -> str | None:
     """A scalar as prose text; None for non-scalars (a placeholder
     must name one value, not a structure)."""
-    if isinstance(value, str):
-        return value
-    if isinstance(value, (bool, int, float)) or value is None:
-        # json.dumps renders ints plain, floats shortest-round-trip,
-        # booleans lowercase, null for None.
-        return json.dumps(value)
+    if value is None:
+        return json.dumps(value)  # "null", visibly
+    if isinstance(value, (str, bool, int, float)):
+        # ints plain, floats shortest-round-trip, booleans lowercase —
+        # unless the column carries a display hint (§10.5): a money
+        # cell reads $8,308.92 in prose exactly as it does in a table.
+        return format_cell(value, column_format)
     return None
+
+
+def _column_format(tree: object, path: str) -> ColumnFormat | None:
+    """The display hint for a path into a table cell — table.rows[i]
+    .<column> against the table's column_formats — else None."""
+    segments = path.split(".")
+    if len(segments) != 3 or not segments[1].startswith("rows["):
+        return None
+    if not isinstance(tree, dict):
+        return None
+    table = tree.get(segments[0])
+    if not isinstance(table, dict):
+        return None
+    formats = table.get("column_formats") or {}
+    hint = formats.get(segments[2])
+    return ColumnFormat.model_validate(hint) if hint else None
 
 
 def resolve_placeholders(
@@ -111,7 +129,10 @@ def resolve_placeholders(
             tree = evidence[index].output.model_dump(mode="json")
             for candidate in _candidates(path):
                 try:
-                    rendered = _render(_navigate(tree, candidate))
+                    rendered = _render(
+                        _navigate(tree, candidate),
+                        _column_format(tree, candidate),
+                    )
                 except (KeyError, IndexError, TypeError, ValueError):
                     rendered = None
                 if rendered is not None:

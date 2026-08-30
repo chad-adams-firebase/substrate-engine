@@ -194,3 +194,26 @@ def test_turns_lists_conversations_rows_and_evidence(tool_pack, tmp_path, capsys
         main(["turns", "--pack", str(tool_pack), "--conversation", "999"]) == 1
     )
     assert "No turns logged" in capsys.readouterr().err
+
+
+def test_table_answers_render_money_hints_as_currency(monkeypatch, capsys, tool_pack):
+    from engine.tools.envelope import ColumnFormat
+
+    outcome = AnswerOutcome(
+        body=TableAnswer(
+            table=Table(
+                columns=["backlog_count", "total_opportunity"],
+                rows=[{"backlog_count": 78, "total_opportunity": 8308.92139244107}],
+                total_row_count=1,
+                column_formats={
+                    "total_opportunity": ColumnFormat(kind="money", symbol="$")
+                },
+            ),
+        ),
+        verification="verified",
+    )
+    _patch(monkeypatch, outcome)
+    assert main(["ask", "--pack", str(tool_pack), "q"]) == 0
+    out = capsys.readouterr().out
+    assert "$8,308.92" in out
+    assert "8308.92139" not in out

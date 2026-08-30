@@ -871,3 +871,73 @@ def test_numeric_from_gold_accepts_any_listed_field(tmp_path):
     breach = result.breaches[0]
     assert breach.severity == "contradicted"
     assert "any of [78, 965]" in breach.detail
+
+
+ROW_MONEY_GOLD = """\
+- id: NP3
+  provenance: scripted
+  category: data
+  question: "READY backlog count and opportunity?"
+  gold: gold/g.py
+  expected_gold: {count: 78, money: 8308.92}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: numeric_from_gold, field: count}
+      - {kind: numeric_from_gold, field: money}
+      - {kind: currency_format}
+"""
+
+MONEY_GOLD_BODY = """\
+def gold(world):
+    return {"count": 78, "money": 8308.92}
+"""
+
+
+def _table_turn(table: Table) -> TurnRecord:
+    caption = "SELECT ..."
+    return TurnRecord(
+        turn_index=0,
+        question="q",
+        outcome=AnswerOutcome(
+            body=TableAnswer(table=table, caption=caption), verification="verified"
+        ),
+        exit_equiv=0,
+        tools_used=["run_sql"],
+        evidence_ref="abcd1234abcd1234",
+        evidence_payload=sql_payload(caption),
+        emitted_tokens=detect(caption),
+    )
+
+
+def test_numeric_from_gold_parses_rendered_money(tmp_path):
+    """Approved addition 1: once tables render $8,308.92, the numeric
+    assertions must read the figure through the symbol and thousands
+    separators — otherwise currency_format flips while its own row's
+    numeric_from_gold breaks."""
+    from engine.tools.envelope import ColumnFormat
+
+    bank, header, world, pack = make_env(tmp_path, ROW_MONEY_GOLD, MONEY_GOLD_BODY)
+
+    prose = [make_record("NP3", 1, make_turn("78 items worth $8,308.92."))]
+    result = grade(bank, header, prose, world, pack_root=pack)
+    assert result.rows[0].status == "ok", result.rows[0].failure_classes
+
+    table = Table(
+        columns=["backlog_count", "total_opportunity"],
+        rows=[{"backlog_count": 78, "total_opportunity": 8308.92139244107}],
+        total_row_count=1,
+        column_formats={"total_opportunity": ColumnFormat(kind="money", symbol="$")},
+    )
+    hinted = [make_record("NP3", 1, _table_turn(table))]
+    result = grade(bank, header, hinted, world, pack_root=pack)
+    assert result.rows[0].status == "ok", result.rows[0].failure_classes
+
+    # The same table with no hint is the pre-Phase-5 float tail: the
+    # engine's rendered text is what the grader reads, so it fails
+    # currency_format and nothing else.
+    unhinted = table.model_copy(update={"column_formats": {}})
+    raw = [make_record("NP3", 1, _table_turn(unhinted))]
+    result = grade(bank, header, raw, world, pack_root=pack)
+    assert result.rows[0].status == "fail"
+    assert result.rows[0].failure_classes == ["currency_format"]

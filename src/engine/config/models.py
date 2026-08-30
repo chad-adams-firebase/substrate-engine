@@ -235,6 +235,37 @@ class VerifierSettings(BaseModel):
     plausibility: PlausibilitySettings = PlausibilitySettings()
 
 
+class MoneySettings(BaseModel):
+    """How money renders, and which result columns count as money
+    beyond the Dictionary Map's own list (§10.5; NP3). The symbol is
+    locale/branding, so it is config with no engine default — a pack
+    that declares no money block gets no money formatting at all."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    symbol: str
+    # fnmatch globs over result column names (LLM-chosen aliases), an
+    # explicit extension of the map's column list: e.g. "*_usd".
+    column_patterns: list[str] = []
+    # An alias that ends in a money column's name is money — SUM(x) AS
+    # total_opportunity — unless one of its tokens says otherwise:
+    # opportunity_pct, amount_count. The precedent for a config-owned
+    # token list is the verifier's rate_column_suffixes.
+    non_money_markers: list[str] = [
+        "count", "n", "num", "pct", "percent", "rate", "ratio", "rank",
+        "share",
+    ]
+
+
+class DisplaySettings(BaseModel):
+    """Presentation knobs shared by every surface that renders an
+    answer (CLI text, eval flattening, the browser)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    money: MoneySettings | None = None
+
+
 class PackConfig(BaseModel):
     """The validated shape of a pack's config.yaml."""
 
@@ -248,4 +279,5 @@ class PackConfig(BaseModel):
     tool_settings: ToolSettings = ToolSettings()
     harness: HarnessSettings = HarnessSettings()
     verifier: VerifierSettings = VerifierSettings()
+    display: DisplaySettings = DisplaySettings()
     generation: GenerationConfig | None = None

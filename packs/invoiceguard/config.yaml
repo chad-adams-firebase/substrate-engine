@@ -138,6 +138,13 @@ verifier:
     # S4's 0-for-114 and S7's empty-for-mona were both verified.
     challenge_zero_results: true
 
+display:
+  money:
+    symbol: "$"
+    # Aliases the map's column list cannot reach: metric-shaped names
+    # that carry dollars without ending in a money column's name.
+    column_patterns: ["*_savings", "*_dollars", "recovered_*"]
+
 generation:
   source_sqlite: ../../../invoice-guard/simout/invoiceguard.db
   simulation_seed: 42

@@ -622,8 +622,13 @@ def _print_status(event) -> None:
 
 
 def _render_text_table(table) -> str:
+    from engine.harness.render import format_cell
+
     columns = table.columns
-    rows = [[_cell_text(row.get(c)) for c in columns] for row in table.rows]
+    rows = [
+        [format_cell(row.get(c), table.column_formats.get(c)) for c in columns]
+        for row in table.rows
+    ]
     widths = [
         max(len(c), *(len(r[i]) for r in rows)) if rows else len(c)
         for i, c in enumerate(columns)
@@ -636,10 +641,6 @@ def _render_text_table(table) -> str:
     if table.truncated:
         lines.append(f"({len(table.rows)} of {table.total_row_count} rows)")
     return "\n".join(lines)
-
-
-def _cell_text(value) -> str:
-    return "" if value is None else str(value)
 
 
 def _ask(

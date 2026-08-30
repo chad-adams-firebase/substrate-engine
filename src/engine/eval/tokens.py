@@ -15,6 +15,7 @@ import re
 
 from engine.eval.models import EmittedTokens
 from engine.harness.outcomes import TurnOutcome
+from engine.harness.render import format_cell
 
 LINE_NUMBERS = re.compile(r"\blines?\s+\d+(?:\s*[–—-]\s*\d+)?", re.IGNORECASE)
 FILE_PATHS = re.compile(r"\b[\w./-]*\w\.(?:py|md|ya?ml|json|sql|txt)\b")
@@ -79,7 +80,10 @@ def answer_body(outcome: TurnOutcome | None) -> str:
             return outcome.body.text
         table = outcome.body.table
         cells = "\n".join(
-            " ".join("" if v is None else str(v) for v in row.values())
+            " ".join(
+                format_cell(row.get(column), table.column_formats.get(column))
+                for column in table.columns
+            )
             for row in table.rows
         )
         header = " ".join(table.columns)

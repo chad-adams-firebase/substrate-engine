@@ -21,13 +21,20 @@ import re
 
 from pydantic import BaseModel, ConfigDict
 
-from engine.config.models import RunSqlSettings, SubstrateName, ToolName
+from engine.config.models import (
+    DisplaySettings,
+    RunSqlSettings,
+    SubstrateName,
+    ToolName,
+)
 from engine.ports.identity import IdentityPort
 from engine.ports.llm import LLMPort
 from engine.ports.sql import SqlPort
 from engine.ports.substrate_store import SubstrateStoreError, SubstrateStorePort
 from engine.ports.types import Message
+from engine.substrates.models import DictionaryMap
 from engine.tools.base import Tool, manifest_ids_of
+from engine.tools.column_formats import money_column_names, resolve_column_formats
 from engine.tools.envelope import (
     JsonValue,
     RunSqlEvidence,
@@ -129,12 +136,14 @@ class RunSql(Tool):
         llm: LLMPort,
         identity: IdentityPort,
         settings: RunSqlSettings,
+        display: DisplaySettings | None = None,
     ) -> None:
         self._store = store
         self._sql = sql
         self._llm = llm
         self._identity = identity
         self._settings = settings
+        self._display = display or DisplaySettings()
 
     def run(self, params: RunSqlInput) -> ToolInvocation:
         if _SQL_SHAPED.search(params.question):
@@ -217,7 +226,10 @@ class RunSql(Tool):
                         )
                         return self.ok(
                             params,
-                            RunSqlOutput(sql=sql, table=self._to_table(rows)),
+                            RunSqlOutput(
+                                sql=sql,
+                                table=self._to_table(rows, dictionary_map),
+                            ),
                             evidence=RunSqlEvidence(
                                 grounding_prompt=prompt, attempts=attempts
                             ),
@@ -260,14 +272,20 @@ class RunSql(Tool):
             substrates_read=_SUBSTRATES,
         )
 
-    def _to_table(self, rows: list[dict]) -> Table:
+    def _to_table(self, rows: list[dict], dictionary_map: DictionaryMap) -> Table:
         kept = rows[: self._settings.max_result_rows]
+        columns = list(rows[0].keys()) if rows else []
         return Table(
-            columns=list(rows[0].keys()) if rows else [],
+            columns=columns,
             rows=[
                 {key: _to_json_value(value) for key, value in row.items()}
                 for row in kept
             ],
             total_row_count=len(rows),
             truncated=len(kept) < len(rows),
+            column_formats=resolve_column_formats(
+                columns,
+                money_column_names(dictionary_map),
+                self._display.money,
+            ),
         )
