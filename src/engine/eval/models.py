@@ -33,8 +33,12 @@ from engine.verifier.models import VerifierVerdict
 # Retired after two clean runs apiece: WBV-C4/MT2/S7/U5 (fp3-rerun +
 # fp3-confirm XPASS); clarify-open went earlier, after 522 live turns
 # without a clarify (the ambiguity rows now test a named reading).
+# N9/N10 retired on fp4-slice's 5/5 XPASSes (B4, MT3, P-L3Q; C1, C1b)
+# — a single run, but code-backed by fix pass 4 (unlike the 6c0e848
+# luck-flip), and N9's acceptance condition (all three sites 5/5
+# simultaneously) was met in full.
 XfailRef = Literal[
-    "N9", "N10", "N11", "N12", "O1",
+    "N11", "N12", "O1",
     "WBV-S4",
 ]
 

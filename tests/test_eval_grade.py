@@ -279,7 +279,7 @@ def test_table_numerics_read_cells_not_the_caption(tmp_path):
 
 
 def test_breach_outranks_xfail_annotation(tmp_path):
-    rows = ROW_DATA + '  xfail: {ref: N10, note: "date tokens"}\n'
+    rows = ROW_DATA + '  xfail: {ref: N12, note: "drafting attention"}\n'
     bank, header, world, pack = make_env(tmp_path, rows)
     records = [make_record("B5", 1, make_turn("A verified wrong 9,999."))]
     result = grade(bank, header, records, world, pack_root=pack)
@@ -288,7 +288,7 @@ def test_breach_outranks_xfail_annotation(tmp_path):
 
 
 def test_xfail_and_xpass_do_not_gate(tmp_path):
-    rows = ROW_DATA + '  xfail: {ref: N10, note: "date tokens"}\n'
+    rows = ROW_DATA + '  xfail: {ref: N12, note: "drafting attention"}\n'
     bank, header, world, pack = make_env(tmp_path, rows)
 
     failing = [make_record("B5", 1, make_turn(exit_equiv=2))]
@@ -296,7 +296,7 @@ def test_xfail_and_xpass_do_not_gate(tmp_path):
     assert result.exit_code() == 0
     assert result.rows[0].status == "xfail"
     text = render(result)
-    assert "[XFAIL]" in text and "N10: B5" in text
+    assert "[XFAIL]" in text and "N12: B5" in text
 
     passing = [make_record("B5", 1, make_turn())]
     result = grade(bank, header, passing, world, pack_root=pack)
@@ -646,9 +646,9 @@ def test_multiturn_grades_every_turn_and_missing_turns_fail(tmp_path):
 
 
 def test_token_stratification_note(tmp_path):
-    """The N9-shaped coin-flip: fails exactly when a file path is
-    stated. The grade names the correlation."""
-    rows = ROW_DATA + '  xfail: {ref: N9, note: "path claims"}\n'
+    """The N9-shaped coin-flip (ref since retired): fails exactly when
+    a file path is stated. The grade names the correlation."""
+    rows = ROW_DATA + '  xfail: {ref: N11, note: "path claims"}\n'
     bank, header, world, pack = make_env(tmp_path, rows)
     records = [
         make_record("B5", 1, make_turn("146 (see rules_engine.py)", exit_equiv=2)),

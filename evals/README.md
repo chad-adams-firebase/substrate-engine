@@ -13,7 +13,7 @@ Layout per bank (`evals/<name>/`):
   examined, so nothing eval-shaped may live in `packs/`.
 - `bank/*.yaml` — machine-readable rows (schema:
   `engine.eval.models.BankRow`). Expected-fail rows carry an `xfail`
-  block naming the anomaly (N9–N12, O1, WBV-*) and its root
+  block naming the anomaly (N11–N12, O1, WBV-*) and its root
   cause; flipping a row to expected-pass = deleting that block, a
   reviewed bank edit.
 - `gold/*.py` — one executable gold script per gold-bearing row.

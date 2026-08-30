@@ -58,16 +58,6 @@
     supplier: RVX01
     supplier_name: Ravenswood Extrusion
     start_line: 116
-  xfail:
-    ref: N9
-    note: >-
-      Reversal of 6c0e848 (fix-pass-3 item 0.5), which removed this
-      block on the 4b baseline's 5/5. The fp3 re-run (engine bf7a3e1)
-      is 4/5, failing exactly when file_paths is emitted (1 with, 4
-      without): rep 1's turn 2 stated `src/invoiceguard/spine/
-      rules_engine.py`, the quote claim went unmatched, exit 2 — B4's
-      N9 signature. Stating the path is a drafting coin-flip, so the
-      row is N9-exposed whenever it lands.
   turns:
     - question: "Which supplier gets flagged most often for rate variance?"
       expect:

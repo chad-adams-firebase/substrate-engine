@@ -62,14 +62,6 @@
     file_path: src/invoiceguard/spine/rules_engine.py
     start_line: 116
     end_line: 149
-  xfail:
-    ref: N9
-    note: >-
-      The backticked file path fails both delimiter containment
-      (injected span excludes backticks) and pool reachability
-      (paths harvest into vocabulary, quote claims shop only in
-      quote_corpus). Fails exactly when the draft states the path —
-      S2's control passed only because that draft omitted it.
   expect:
     exit: [0]
     assertions:
@@ -116,13 +108,6 @@
   question: "Did the stale sweep run on May 29?"
   gold: gold/c1_stale_sweep_may29.py
   expected_gold: {ran: true, count: 1, date: "2026-05-29"}
-  xfail:
-    ref: N10
-    note: >-
-      Prose "May 29" extracts bare numeral 29; the value pool holds
-      count=1 and nothing calendar-shaped; the date lives in
-      run_status.detail text, unreachable by numeric claims. Correct
-      answer delivered since session 3, downgraded to exit 2.
   expect:
     exit: [0]
     assertions:
@@ -137,9 +122,6 @@
   question: "Did the stale sweep run on 2026-05-29?"
   gold: gold/c1_stale_sweep_may29.py
   expected_gold: {ran: true, count: 1, date: "2026-05-29"}
-  xfail:
-    ref: N10
-    note: Same class as C1 — the ISO phrasing control.
   expect:
     exit: [0]
     assertions:
