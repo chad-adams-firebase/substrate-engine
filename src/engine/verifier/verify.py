@@ -25,6 +25,7 @@ from engine.ports.llm import LLMPort
 from engine.substrates.models import StatsRow
 from engine.tools.envelope import ToolInvocation
 from engine.verifier.checks.base import CheckRegistry, PlausibilityContext
+from engine.verifier.checks.invocation import harvest_invocation
 from engine.verifier.claims import containing_sentence, extract_claims
 from engine.verifier.judge import JudgeRunner
 from engine.verifier.matching import (
@@ -107,6 +108,10 @@ class Verifier:
         for index, invocation in enumerate(evidence):
             if invocation.status != "ok" or invocation.output is None:
                 continue  # failed calls support no claims
+            # The record's own material first — arguments and rendered
+            # field names — for every tool, registered check or not:
+            # the gap it closes (N13) is structural, not per-tool.
+            contributions.append(harvest_invocation(invocation))
             check = self._checks.for_tool(invocation.tool)
             if check is None:
                 continue

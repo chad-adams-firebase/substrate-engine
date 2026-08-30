@@ -7,6 +7,11 @@ be adjudicated by the judge — no scope creep). What IS checked:
 entity names, verbatim quotes of the retrieved text, and numeric
 figures appearing in it (as literals). Definitional paraphrase ships
 unverified by design, like primer paraphrase.
+
+Concept, metric and gotcha *names* reach the quote corpus whole (N13):
+identifier_tokens shatters a multi-word name at the space, and a
+backticked `invoice lifecycle` is a quote of the name, not a
+paraphrase of the definition.
 """
 
 from engine.config.models import ToolName
@@ -49,6 +54,9 @@ class DictionaryCheck(SubstrateCheck):
 
         for index, concept in enumerate(output.concepts):
             contribution.vocabulary |= identifier_tokens(concept.name)
+            contribution.quote_corpus.append(
+                CorpusText(text=concept.name, ref=f"{ref}.concepts[{index}].name")
+            )
             contribution.vocabulary.update(concept.tables)
             for synonym in concept.synonyms:
                 contribution.vocabulary |= identifier_tokens(synonym)
@@ -58,6 +66,9 @@ class DictionaryCheck(SubstrateCheck):
 
         for index, metric in enumerate(output.metrics):
             contribution.vocabulary |= identifier_tokens(metric.name)
+            contribution.quote_corpus.append(
+                CorpusText(text=metric.name, ref=f"{ref}.metrics[{index}].name")
+            )
             contribution.vocabulary.update(metric.tables)
             contribution.vocabulary |= identifier_tokens(metric.aggregation_sql)
             contribution.vocabulary |= identifier_tokens(metric.filter_sql)
@@ -83,6 +94,9 @@ class DictionaryCheck(SubstrateCheck):
 
         for index, gotcha in enumerate(output.gotchas):
             contribution.vocabulary |= identifier_tokens(gotcha.name)
+            contribution.quote_corpus.append(
+                CorpusText(text=gotcha.name, ref=f"{ref}.gotchas[{index}].name")
+            )
             contribution.vocabulary.update(gotcha.tables)
             for text in (gotcha.summary, gotcha.detail):
                 self._prose(contribution, text, f"{ref}.gotchas[{index}]")

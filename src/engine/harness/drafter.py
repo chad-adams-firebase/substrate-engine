@@ -47,9 +47,7 @@ def render_evidence(evidence: list[ToolInvocation]) -> str:
         if invocation.status != "ok":
             entry["note"] = "call failed; supports no citations or placeholders"
         elif invocation.output is not None:
-            entry["output"] = invocation.output.model_dump(
-                mode="json", exclude_none=True
-            )
+            entry["output"] = invocation.rendered_output()
         lines.append(json.dumps(entry, sort_keys=True, separators=(",", ":")))
     return "\n".join(lines)
 

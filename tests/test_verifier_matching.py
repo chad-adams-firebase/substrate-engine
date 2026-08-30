@@ -11,6 +11,7 @@ from engine.tools.envelope import (
     ToolInvocation,
 )
 from engine.verifier.checks import CheckRegistry, default_checks
+from engine.verifier.checks.invocation import harvest_invocation
 from engine.verifier.claims import extract_claims
 from engine.verifier.matching import match_claim, merge_contributions
 from engine.verifier.models import DraftAnswer
@@ -21,10 +22,11 @@ CHECKS = CheckRegistry(default_checks())
 
 
 def _pools(*invocations: ToolInvocation):
-    contributions = [
-        CHECKS.for_tool(inv.tool).harvest(inv, f"e{i}")
-        for i, inv in enumerate(invocations)
-    ]
+    # Mirrors Verifier._pools: the record's own harvest, then the check's.
+    contributions = []
+    for i, inv in enumerate(invocations):
+        contributions.append(harvest_invocation(inv))
+        contributions.append(CHECKS.for_tool(inv.tool).harvest(inv, f"e{i}"))
     return merge_contributions(contributions)
 
 
@@ -556,3 +558,153 @@ def test_ckg_condition_literal_bridges_percent_to_fraction():
     matches = _match("Items are flagged above a 15% variance.", traversal)
     [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "numeric"]
     assert outcome.status in ("matched_exact", "matched_derived")
+
+
+# --- N13: the poolless-identifier class -------------------------------
+
+_CLEAN_DAY_ARGS = {
+    "component": "benchmark_scoring",
+    "key": "",
+    "mode": "recent_errors",
+    "window_end": "2026-04-15T23:59:59Z",
+    "window_start": "2026-04-15T00:00:00Z",
+}
+
+
+def _clean_day(arguments=None, status="ok"):
+    """The fp4b-holdouts envelope verbatim: errors [], error_count 0,
+    run_status None, evidence lines [] — every string pool empty."""
+    return ToolInvocation(
+        tool="check_execution",
+        arguments=_CLEAN_DAY_ARGS if arguments is None else arguments,
+        status=status,
+        error=None if status == "ok" else "boom",
+        output=(
+            CheckExecutionOutput(errors=[], error_count=0)
+            if status == "ok"
+            else None
+        ),
+        evidence=CheckExecutionEvidence(lines=[]) if status == "ok" else None,
+        substrates_read=["application_logs"] if status == "ok" else [],
+    )
+
+
+def test_clean_day_recent_errors_grounds_argument_component_name():
+    """Fix pass 4 follow-up (N13; fp4b-holdouts HN-ERRORS reps 1,2,4,5):
+    the component the router asked about sits in the invocation's
+    arguments, which no check harvested — a clean day's errors list
+    is empty, so the correct name shopped an empty vocabulary."""
+    matches = _match(
+        "The `benchmark_scoring` component had no errors.", _clean_day()
+    )
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "entity"]
+    assert outcome.status == "matched_exact"
+    assert outcome.method == "vocabulary"
+
+
+def test_window_argument_grounds_prose_and_iso_dates():
+    """Fix pass 4 follow-up (N13; HN-ERRORS' "the date 2026-04-15"):
+    the window arguments are ISO timestamps; harvested whole into
+    strings, N10's existing date paths reach them."""
+    iso = _match("No errors on 2026-04-15.", _clean_day())
+    [(_, exact)] = [(c, o) for c, o in iso if c.kind == "numeric"]
+    assert (exact.status, exact.method) == ("matched_exact", "date")
+
+    prose = _match("No errors on April 15.", _clean_day())
+    [(_, derived)] = [(c, o) for c, o in prose if c.kind == "numeric"]
+    assert (derived.status, derived.method) == (
+        "matched_derived",
+        "date-yearless",
+    )
+
+
+def test_envelope_field_name_grounds_backticked_error_count():
+    """Fix pass 4 follow-up (N13; P-N11 reps 2-3, "fails exactly when
+    backticked emitted"): the envelope's own field name is rendered to
+    the drafter verbatim and is part of the evidence."""
+    matches = _match(
+        "No errors occurred in benchmark scoring. The `error_count` is 0.",
+        _clean_day(),
+    )
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "entity"]
+    assert outcome.status == "matched_exact"
+    assert outcome.method == "vocabulary"
+
+
+def test_none_fields_never_ground():
+    """The field-name harvest reads the drafter's own view: a
+    None-suppressed field (run_status on a recent_errors call) was
+    never shown, so it cannot be cited."""
+    matches = _match("The `run_status` was clean.", _clean_day())
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "entity"]
+    assert outcome.status == "unmatched"
+
+
+def test_errored_invocation_arguments_never_harvest():
+    """Failed calls support no claims — the P-N11 e0 law holds for the
+    record's own harvest too."""
+    errored = _clean_day(
+        arguments={"component": "benchmark_scoring"}, status="error"
+    )
+    contribution = harvest_invocation(errored)
+    assert contribution.vocabulary == set()
+    assert contribution.strings == set()
+
+
+def test_free_text_arguments_are_not_tokenized():
+    """Whole-value shape only: a free-text query is never shredded into
+    citeable words, and a bare numeral argument is not a name."""
+    inv = _clean_day(
+        arguments={"query": "why invoices lapse", "limit": 20, "key": ""}
+    )
+    matches = _match("Look at `invoices`.", inv)
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "entity"]
+    assert outcome.status == "unmatched"
+
+
+def test_dictionary_concept_name_grounds_backticked_quote():
+    """Fix pass 4 follow-up (N13 mechanism b; NP6's `invoice
+    lifecycle`): identifier_tokens shatters a multi-word concept name
+    at the space and only its definition reached the corpus."""
+    from engine.substrates.models import Concept
+    from engine.tools.envelope import DictionaryLookupOutput
+
+    inv = ToolInvocation(
+        tool="lookup_data_dictionary",
+        arguments={"term": "lifecycle"},
+        status="ok",
+        output=DictionaryLookupOutput(
+            rows=[],
+            concepts=[
+                Concept(
+                    name="invoice lifecycle",
+                    definition="The states an invoice passes through.",
+                )
+            ],
+        ),
+    )
+    matches = _match("The `invoice lifecycle` has four states.", inv)
+    [(_, outcome)] = [(c, o) for c, o in matches if c.kind == "quote"]
+    assert outcome.status == "matched_exact"
+    assert outcome.method == "quote"
+
+
+def test_holdout_drafts_verify_on_the_clean_day_without_a_judge():
+    """The two witness drafts from fp4b-holdouts, replayed through the
+    Verifier against the recorded envelope: verified, and no judge
+    call was spent (quotes and names never reach the judge)."""
+    verifier, llm = make_verifier([])
+    for text in (
+        "The evidence does not specify the `benchmark_scoring` component "
+        "or the date 2026-04-15. However, it indicates that there were "
+        "0 errors.",
+        "No errors occurred in benchmark scoring. The `error_count` is 0.",
+    ):
+        result = verifier.verify(
+            question="errors on 2026-04-15?",
+            draft=DraftAnswer(kind="prose", text=text),
+            evidence=[_clean_day()],
+            attempt=1,
+        )
+        assert result.disposition == "verified", text
+        assert llm.calls == []

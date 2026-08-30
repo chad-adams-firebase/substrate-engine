@@ -28,7 +28,10 @@ _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 # shape: ig.spine.invoice-parse). A bare hyphenated backtick body
 # (`invoice-parse`) stays a quote: the vocabulary harvest never yields
 # bare hyphenated tokens, so an entity claim there could not match.
-_IDENTIFIER_SHAPED = re.compile(
+# Public: the harvest side (checks/invocation.py) admits an argument
+# value to vocabulary by this same shape, so what extraction calls an
+# entity and what harvest calls a name stay one definition.
+IDENTIFIER_SHAPED = re.compile(
     r"^[A-Za-z_][A-Za-z0-9_.]*$"
     r"|^[A-Za-z_]\w*(?:-\w+)*(?:\.[A-Za-z_]\w*(?:-\w+)*)+$"
 )
@@ -192,7 +195,7 @@ def extract_claims(text: str) -> list[Claim]:
     current = "".join(masked)
     for match in _INLINE_CODE.finditer(current):
         body = match.group(1)
-        if _IDENTIFIER_SHAPED.match(body):
+        if IDENTIFIER_SHAPED.match(body):
             claims.append(
                 EntityClaim(
                     surface=match.group(0),

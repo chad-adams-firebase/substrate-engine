@@ -265,6 +265,15 @@ class ToolInvocation(BaseModel):
     # consumers: turn provenance (§8) and staleness flagging (§11).
     manifest_ids: list[str] = []
 
+    def rendered_output(self) -> dict[str, Any]:
+        """The output exactly as the drafter sees it: a JSON-mode dump
+        with None-valued fields suppressed (a mode's unused half reads
+        as emptiness and lures disclaimers of present fields). The
+        verifier harvests the envelope's field names from this same
+        view, so a name the drafter never saw cannot ground a claim."""
+        assert self.output is not None, "rendered_output needs an output"
+        return self.output.model_dump(mode="json", exclude_none=True)
+
 
 TurnEvidence = list[ToolInvocation]
 

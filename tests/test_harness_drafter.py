@@ -144,3 +144,24 @@ def test_run_sql_table_passes_through_identical(tool_pack):
     )
     assert project_table(output) is output.table  # the same object
     assert caption_for(output) == "SELECT COUNT(*) AS n FROM invoices"
+
+
+def test_harvested_field_names_are_exactly_the_rendered_keys():
+    """N13: the verifier's field-name harvest and the drafter's view
+    are one function (ToolInvocation.rendered_output) — what the
+    drafter can read is exactly what it may cite, None-suppressed
+    fields included in neither."""
+    import json
+
+    from engine.verifier.checks.invocation import field_names
+
+    invocation = ToolInvocation(
+        tool="check_execution",
+        arguments={},
+        status="ok",
+        output=CheckExecutionOutput(errors=[], error_count=0),
+    )
+    rendered = json.loads(render_evidence([invocation]))["output"]
+    assert field_names(rendered) == field_names(invocation.rendered_output())
+    assert "error_count" in field_names(rendered)
+    assert "run_status" not in field_names(rendered)
