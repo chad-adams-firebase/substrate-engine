@@ -50,3 +50,49 @@ Machine-generated substrates under `packs/*/substrates/` are committed
 but never hand-edited; if output looks wrong, fix the generator
 (CLAUDE.md). Human knowledge goes in `packs/*/overlays/` and is never
 touched by regeneration.
+
+## Web layer
+
+```
+uv run engine serve --pack packs/invoiceguard      # http://127.0.0.1:5000
+```
+
+`engine serve` composes the same session `engine ask` uses (load
+pack → build ports → build tools → build harness) and hands the
+resolved objects to a thin Flask shell (`src/engine/web/`). Routes
+contain no engine logic and never import adapters; every answer path
+is `AskSession.ask()`, i.e. the Verifier's path. Branding, accent
+color, and starter prompts come from the pack's `ui:` block — the
+page never knows which pack it serves.
+
+**SSE contract.** `POST /api/ask` with `{"question": str,
+"conversation_id": int | null}` returns `text/event-stream`. Before
+the stream starts, a bad body is `400`, an unknown conversation
+`404`, and a turn already running `409` (one turn per process; the
+session refuses to interleave). Frames are `event:` + one JSON
+`data:` line:
+
+| event | data | when |
+|---|---|---|
+| `status` | `StatusEvent` — `{node, phase, detail, at}` | every graph node start/finish, live |
+| `result` | `{exit_code, result: TurnResult}` — the same JSON `engine ask --json` prints | terminal, once, after verification |
+| `error` | `{message}` | terminal, once, if the turn raised |
+| `: keepalive` | (comment) | after 15 s of silence |
+
+No answer text is ever streamed before its verdict exists (Brief
+§9.2, §10.2 as amended in v2.2). The browser reads the stream with
+`fetch` (POST) and a small frame parser in `static/app.js`.
+
+**Money rendering.** `Table.column_formats` carries a per-column hint
+(`{"kind": "money", "symbol": "$"}`) that run_sql resolves from the
+pack — the Dictionary Map's `column_formats` list of money columns
+plus `display.money` in `config.yaml` (symbol, alias glob patterns,
+the marker tokens that veto an alias such as `opportunity_pct`). The
+CLI, the eval grader's answer text, prose placeholder injection, and
+the browser all render the hint by one rule
+(`src/engine/harness/render.py`): `$8,308.92`, never a float tail.
+
+**Frontend.** Vanilla JS + vendored marked.js and highlight.js (the
+common-languages build), pinned in
+`src/engine/web/static/vendor/VERSIONS.md` with their licenses beside
+them. No build pipeline, no framework, no CDN, no browser storage.

@@ -2,6 +2,8 @@
 
 Supersedes v1 in full. Consolidates all design decisions through 2026-08-11, including the substrate-acquisition inversion (ship producers, not products), the CKG L0–L3 specification, the Verifier specification, the Unit of Work model, chat infrastructure, and the uv/Python-3.12 toolchain decisions from the pipeline dry run.
 
+**v2.2 changelog (2026-08-30):** Phase 5 rulings, recorded at §10.2/§10.3/§10.5 — (1) no token streaming: an answer cannot reach the screen before its verdict exists (§9.2), so the SSE stream carries status events live and the complete outcome as one terminal frame after verification; (2) the `chart` envelope is deferred to a later phase, and `code` renders via highlight.js on fenced blocks inside `markdown` — no new envelope kind; (3) the frontend libraries are vendored at pinned versions with their licenses, never loaded from a CDN, so the demo runs without egress; (4) the running conversation summary regenerates synchronously inside the turn in v1 (an `update_state`-based asynchronous refresh is the documented upgrade path). Also: tables carry a per-column display hint (`money`) resolved from the Dictionary Map and pack display config, so figures render as currency on every surface.
+
 **v2.1 changelog (2026-08-15):** amendments recording decisions already made and shipped — the messages-shaped LLMPort, the DuckDB local SqlPort adapter, and InvoiceGuard's move out of the engine repo into its own external repo. The code led; the docs follow. No new design is introduced here. (The file keeps its `technical-build-brief-v2.md` name: CLAUDE.md, phasing.md, docstrings, and prior prompts reference it by that name.)
 
 ## 0. Read this first
@@ -195,11 +197,11 @@ Three first-class surfaces: private **workspaces**, the shared **library**, **ch
 
 ### 10.2 Streaming
 
-All agent turns stream via SSE from generator-based Flask routes. Two event types: **status events** (per LangGraph node start/finish — "Consulting data dictionary…", "Running SQL (attempt 1)…", "Verifying against statistics…") rendered as a live progress trail, and **token events** for answer text. On completion the trail collapses to a chip ("✓ Verified · 3 tools · 14s"), expandable, persistent on every past turn, doubling as the provenance affordance.
+All agent turns stream via SSE from generator-based Flask routes. Two frame types: **status events** (per LangGraph node start/finish — "Consulting data dictionary…", "Running SQL (attempt 1)…", "Verifying against statistics…") rendered as a live progress trail, and **one terminal outcome frame** carrying the complete, verified `TurnResult` (or an error). There are no token events (v2.2): §9.2 forbids returning a confident-but-unchecked answer, and the verdict exists only after drafting, so nothing of the answer body is shown before it. On completion the trail collapses to a chip ("✓ Verified · 3 tools · 14s"), expandable, persistent on every past turn, doubling as the provenance affordance. One turn runs per process at a time; a concurrent ask is refused (409) rather than interleaved. The frame contract is in the README ("Web layer").
 
 ### 10.3 Context management
 
-Per-turn LLM context = system/pack context + running conversation summary + last N turns verbatim (N=10, configurable) + current turn's evidence bundle. The running summary regenerates asynchronously past a size threshold. **Summaries carry turn references, never restated figures** ("user established flag rates for item 4471 in turn 12") — the agent re-reads a turn's evidence bundle when it needs the actual number. No forced session boundaries: past a threshold, a dismissible banner nudges toward a fresh conversation. **Cross-conversation memory is out of scope for v1**; each conversation stands alone. State persists via the LangGraph checkpointer through WorkStore.
+Per-turn LLM context = system/pack context + running conversation summary + last N turns verbatim (N=10, configurable) + current turn's evidence bundle. The running summary regenerates past a turn-count threshold — synchronously inside the turn in v1 (v2.2), asynchronously as the documented upgrade. **Summaries carry turn references, never restated figures** ("user established flag rates for item 4471 in turn 12") — the agent re-reads a turn's evidence bundle when it needs the actual number. No forced session boundaries: past a threshold, a dismissible banner nudges toward a fresh conversation. **Cross-conversation memory is out of scope for v1**; each conversation stands alone. State persists via the LangGraph checkpointer through WorkStore.
 
 ### 10.4 Evidence inspector & the Package flow
 
@@ -207,7 +209,7 @@ Right panel, two modes. **Inspect:** clicking a turn's chip shows its receipts �
 
 ### 10.5 Rendering & input
 
-Typed response envelope: `markdown` (marked.js), `table` (HTML table), `chart` (Chart.js from an LLM-produced JSON spec), `code` (highlight.js). Exactly these four; no free-form HTML. Input is a single plain-text box — no slash commands, no menus. Empty state shows pack-configured starter prompts. Fail-closed exits render as first-class styled cards stating what can't be answered, why, and what would work — never apologetic prose.
+Typed response envelope: `markdown` (marked.js; fenced code blocks inside it are highlighted by highlight.js — this is how source renders, with no separate `code` kind, v2.2) and `table` (HTML table honoring the per-column display hint the engine attached — money cells render as currency, identically to the CLI's text rendering). `chart` (Chart.js from an LLM-produced JSON spec) is deferred to a later phase (v2.2). No free-form HTML. marked.js and highlight.js are vendored into the engine's static directory at pinned versions with their licenses; nothing loads from a CDN. Input is a single plain-text box — no slash commands, no menus. Empty state shows pack-configured starter prompts. Fail-closed exits render as first-class styled cards stating what can't be answered, why, and what would work — never apologetic prose.
 
 ## 11. Crowdsourcing layer
 
