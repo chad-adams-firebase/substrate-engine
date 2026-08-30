@@ -67,6 +67,9 @@ def test_draft_cites_the_clean_invocation_not_the_errored_one(tool_pack):
     assert '"status":"error"' in sent  # e0 is visible as a failed call…
     assert "Invalid arguments" not in sent  # …but its error text is not
     assert '"note":"call failed; supports no citations or placeholders"' in sent
+
+
+def test_a_verified_shrug_ships_as_a_refusal(tool_pack):
     # Addendum N7, the U6 twin pair: "the evidence does not provide…"
     # passed verification with zero claims and exited 0 while its twin
     # refused with 3. Same substance now gets the same outcome shape:
