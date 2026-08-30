@@ -27,6 +27,7 @@ from engine.eval.models import (
     Expectation,
     RunRecord,
     RunReportHeader,
+    SetupSpec,
     TurnRecord,
 )
 from engine.eval.tokens import (
@@ -83,8 +84,11 @@ class RowGrade(BaseModel):
     reps: int
     passes: int
     threshold: float
-    status: Literal["ok", "fail", "xfail", "xpass", "rot"]
+    status: Literal["ok", "fail", "xfail", "xpass", "rot", "inconclusive"]
     xfail_ref: str | None = None
+    # Rows with a setup block: how many reps reached the scenario.
+    # None means the row has no setup and every rep counts.
+    reached: int | None = None
     failure_classes: list[str] = []
     notes: list[str] = []
 
@@ -118,12 +122,18 @@ class GradeReport(BaseModel):
 
     def exit_code(self) -> int:
         """4 breach (dominates) · 3 bank rot · 2 threshold failures ·
-        0 pass. 1 is reserved for usage/IO errors upstream."""
+        0 pass. 1 is reserved for usage/IO errors upstream. An
+        inconclusive row gates like a threshold failure unless its
+        xfail annotation predicted failure anyway."""
         if self.breaches:
             return 4
         if any(row.status == "rot" for row in self.rows):
             return 3
-        if any(row.status == "fail" for row in self.rows):
+        if any(
+            row.status == "fail"
+            or (row.status == "inconclusive" and row.xfail_ref is None)
+            for row in self.rows
+        ):
             return 2
         return 0
 
@@ -519,24 +529,57 @@ def _check_verdict(assertion, record: TurnRecord) -> tuple[bool, str]:
 # --- Rep and row grading -------------------------------------------------
 
 
+def _check_setup(spec: SetupSpec, view: _TurnView) -> bool:
+    """Scenario preconditions over the turn's recorded invocations."""
+    invocations = view.invocations
+    if spec.tool is not None:
+        invocations = [
+            inv for inv in invocations if inv.tool.value == spec.tool
+        ]
+    if (
+        spec.min_invocations is not None
+        and len(invocations) < spec.min_invocations
+    ):
+        return False
+    errored = sum(inv.status == "error" for inv in invocations)
+    if spec.min_errored is not None and errored < spec.min_errored:
+        return False
+    ok = sum(inv.status == "ok" for inv in invocations)
+    if spec.min_ok is not None and ok < spec.min_ok:
+        return False
+    return True
+
+
+RepOutcome = Literal["passed", "failed", "not-reached"]
+
+
 def _grade_rep(
     row: BankRow,
     record: RunRecord,
     gold: dict[str, Any] | None,
     breaches: list[BreachRecord],
-) -> tuple[bool, list[str]]:
-    """(rep passed, failure classes). Breach detection runs on every
-    turn with exit 0 — xfail and sentinel rows included — because the
-    invariant outranks every annotation."""
+) -> tuple[RepOutcome, list[str]]:
+    """(rep outcome, failure classes). Breach detection runs on every
+    turn with exit 0 — xfail, sentinel, and scenario-not-reached reps
+    included — because the invariant outranks every annotation. A rep
+    whose setup preconditions fail is not-reached: excluded from the
+    pass-rate denominator, neither a pass nor a fail."""
     expected_turns = row.all_turns()
     failures: list[str] = []
+    reached = True
     for index, bank_turn in enumerate(expected_turns):
         if index >= len(record.turns):
+            if bank_turn.expect.setup is not None:
+                reached = False
             failures.append("turn-missing")
             continue
         turn = record.turns[index]
         view = _TurnView(turn)
         expectation = bank_turn.expect
+        if expectation.setup is not None and not _check_setup(
+            expectation.setup, view
+        ):
+            reached = False
 
         exit_ok = turn.exit_equiv in expectation.exit
         if not exit_ok:
@@ -575,7 +618,9 @@ def _grade_rep(
             if assertion.xfail_ref is not None:
                 continue  # expected-fail assertion: never gates the rep
             failures.append(assertion.kind)
-    return not failures, failures
+    if not reached:
+        return "not-reached", failures
+    return ("failed" if failures else "passed"), failures
 
 
 def _alarm_worthy(assertion: Assertion, view: _TurnView, gold) -> bool:
@@ -699,25 +744,44 @@ def grade(
         graded = []
         failure_classes: list[str] = []
         for record in row_records:
-            passed, failures = _grade_rep(row, record, gold_values, breaches)
-            graded.append((record, passed))
+            outcome, failures = _grade_rep(row, record, gold_values, breaches)
+            graded.append((record, outcome))
+            if outcome == "not-reached":
+                continue  # its failures are moot — the scenario never ran
             for failure in failures:
                 if failure not in failure_classes:
                     failure_classes.append(failure)
 
-        passes = sum(passed for _, passed in graded)
-        met = passes / len(graded) >= threshold
-        if row.xfail is not None:
-            status = "xpass" if met else "xfail"
+        has_setup = any(
+            turn.expect.setup is not None for turn in row.all_turns()
+        )
+        reached = [
+            (record, outcome)
+            for record, outcome in graded
+            if outcome != "not-reached"
+        ]
+        passes = sum(outcome == "passed" for _, outcome in reached)
+        if has_setup and len(reached) < row.reached_floor:
+            # Too few reps produced the scenario to say anything —
+            # neither pass nor fail, and never xpass.
+            status = "inconclusive"
         else:
-            status = "ok" if met else "fail"
-        notes.extend(_token_notes(graded))
+            met = passes / len(reached) >= threshold
+            if row.xfail is not None:
+                status = "xpass" if met else "xfail"
+            else:
+                status = "ok" if met else "fail"
+        notes.extend(
+            _token_notes(
+                [(record, outcome == "passed") for record, outcome in reached]
+            )
+        )
         row_grades.append(
             RowGrade(
                 row_id=row.id, category=row.category, reps=len(graded),
                 passes=passes, threshold=threshold, status=status,
                 xfail_ref=_xfail_ref(row), failure_classes=failure_classes,
-                notes=notes,
+                notes=notes, reached=len(reached) if has_setup else None,
             )
         )
 

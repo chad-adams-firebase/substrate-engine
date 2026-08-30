@@ -15,7 +15,15 @@ Layout per bank (`evals/<name>/`):
   `engine.eval.models.BankRow`). Expected-fail rows carry an `xfail`
   block naming the anomaly (N11–N12, O1, WBV-*) and its root
   cause; flipping a row to expected-pass = deleting that block, a
-  reviewed bank edit.
+  reviewed bank edit. Probe rows may carry a `setup` block on an
+  expect (scenario preconditions over the rep's recorded
+  invocations: `min_invocations`, `min_errored`, `min_ok`,
+  optionally per-`tool`); a rep failing setup is
+  scenario-not-reached and leaves the pass-rate denominator, and a
+  row with fewer reached reps than its `reached_floor` (default 2)
+  grades INCONCLUSIVE — neither pass nor fail, never XPASS, gating
+  like a threshold failure unless the row's xfail predicted failure
+  anyway.
 - `gold/*.py` — one executable gold script per gold-bearing row.
   Every gold answer is **produced by executed code committed beside
   the expectation** — never transcribed, never remembered (the

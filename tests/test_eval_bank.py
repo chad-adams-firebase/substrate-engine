@@ -105,6 +105,24 @@ def test_route_pair_needs_two_members(tmp_path):
         load_bank(tmp_path)
 
 
+def test_setup_block_parses_and_bad_floor_fails(tmp_path):
+    rows = ROW_B5.replace(
+        "    exit: [0]\n",
+        "    exit: [0]\n"
+        "    setup: {tool: run_sql, min_invocations: 2, min_errored: 1}\n",
+    )
+    bank = load_bank(write_bank(tmp_path, rows=rows))
+    setup = bank.rows[0].expect.setup
+    assert (setup.tool, setup.min_invocations, setup.min_errored) == (
+        "run_sql", 2, 1,
+    )
+    assert bank.rows[0].reached_floor == 2  # the default
+
+    write_bank(tmp_path / "bad", rows=ROW_B5 + "  reached_floor: 0\n")
+    with pytest.raises(BankLoadError, match="reached_floor"):
+        load_bank(tmp_path / "bad")
+
+
 def test_unknown_key_fails(tmp_path):
     write_bank(tmp_path, rows=ROW_B5 + "  thresold: 0.8\n")
     with pytest.raises(BankLoadError, match="thresold"):

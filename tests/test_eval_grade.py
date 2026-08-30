@@ -431,6 +431,102 @@ def retry_payload(retried: bool) -> str:
     return dumps_turn_evidence(invocations)
 
 
+ROW_SETUP = """\
+- id: PRB1
+  provenance: n-probe
+  category: execution
+  question: "Any errors that day?"
+  expect:
+    exit: [0]
+    setup: {tool: run_sql, min_invocations: 2, min_errored: 1, min_ok: 1}
+    assertions:
+      - {kind: nonempty}
+"""
+
+
+def test_scenario_never_reached_grades_inconclusive(tmp_path):
+    """Setup assertions (fix-pass-4 follow-up, P-N11): a probe row
+    whose reps never produce their scenario says nothing — neither
+    pass nor fail, gating like a threshold failure."""
+    bank, header, world, pack = make_env(tmp_path, ROW_SETUP)
+    records = [
+        make_record("PRB1", rep, make_turn(payload=retry_payload(False)))
+        for rep in range(1, 6)
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.rows[0].status == "inconclusive"
+    assert result.rows[0].reached == 0
+    assert result.exit_code() == 2
+    text = render(result)
+    assert "[INCON]" in text
+    assert "reached 0/5" in text
+
+
+def test_inconclusive_never_xpasses_and_xfail_keeps_it_non_gating(tmp_path):
+    rows = ROW_SETUP + '  xfail: {ref: N11, note: "scenario probe"}\n'
+    bank, header, world, pack = make_env(tmp_path, rows)
+    records = [
+        make_record("PRB1", rep, make_turn(payload=retry_payload(False)))
+        for rep in range(1, 6)
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.rows[0].status == "inconclusive"  # never xpass
+    assert result.exit_code() == 0  # the annotation predicted failure
+
+
+def test_partially_reached_row_grades_on_the_reached_reps(tmp_path):
+    """2 of 5 reps miss the scenario; the row grades on the other 3
+    and their failures alone fill the ledger."""
+    bank, header, world, pack = make_env(tmp_path, ROW_SETUP)
+    records = [
+        make_record("PRB1", 1, make_turn(payload=retry_payload(False))),
+        make_record(
+            "PRB1", 2, make_turn("", exit_equiv=2, payload=retry_payload(False))
+        ),
+        make_record("PRB1", 3, make_turn(payload=retry_payload(True))),
+        make_record("PRB1", 4, make_turn(payload=retry_payload(True))),
+        make_record("PRB1", 5, make_turn(payload=retry_payload(True))),
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    (row,) = result.rows
+    assert row.status == "ok"
+    assert (row.passes, row.reached, row.reps) == (3, 3, 5)
+    # Rep 2's empty answer is a not-reached rep's failure — moot.
+    assert row.failure_classes == []
+    assert result.exit_code() == 0
+    assert "reached 3/5" in render(result)
+
+
+def test_not_reached_rep_still_records_a_breach(tmp_path):
+    """The invariant outranks the setup annotation too: a
+    wrong-but-verified turn alarms even when its rep never reached
+    the scenario."""
+    rows = """\
+- id: PRB2
+  provenance: n-probe
+  category: data
+  question: "How many last week?"
+  gold: gold/g.py
+  expected_gold: {value: 146}
+  expect:
+    exit: [0]
+    setup: {min_invocations: 2}
+    assertions:
+      - {kind: numeric_from_gold, field: value}
+"""
+    bank, header, world, pack = make_env(tmp_path, rows)
+    records = [
+        make_record(
+            "PRB2",
+            1,
+            make_turn("A verified wrong 9,999.", payload=retry_payload(False)),
+        )
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.rows[0].status == "inconclusive"
+    assert result.exit_code() == 4  # breach dominates
+
+
 def test_retry_count_asserts_the_n5_license(tmp_path):
     bank, header, world, pack = make_env(tmp_path, ROW_RECOVERY)
 

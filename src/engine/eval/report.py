@@ -12,6 +12,7 @@ _MARKS = {
     "xfail": "XFAIL",
     "xpass": "XPASS",
     "rot": "ROT",
+    "inconclusive": "INCON",
 }
 
 
@@ -60,10 +61,15 @@ def render(report: GradeReport) -> str:
     for row in report.rows:
         mark = _MARKS[row.status]
         annotation = f" ({row.xfail_ref})" if row.xfail_ref else ""
+        # Rows with a setup block grade over the reps that reached
+        # their scenario; the denominator shown is those reps.
+        denominator = row.reached if row.reached is not None else row.reps
         summary = (
-            f"[{mark:>5}] {row.row_id:<10} {row.passes}/{row.reps}"
+            f"[{mark:>5}] {row.row_id:<10} {row.passes}/{denominator}"
             f"  threshold {row.threshold:.2f}{annotation}"
         )
+        if row.reached is not None:
+            summary += f"  reached {row.reached}/{row.reps}"
         if row.failure_classes:
             summary += f"  failures: {', '.join(row.failure_classes)}"
         lines.append(summary)

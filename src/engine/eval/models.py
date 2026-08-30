@@ -261,12 +261,30 @@ GOLD_ASSERTION_KINDS = frozenset(
 # --- Bank rows ----------------------------------------------------------
 
 
+class SetupSpec(BaseModel):
+    """Scenario preconditions, evaluated per rep from the turn's
+    recorded invocations before any outcome assertion. Probe rows
+    exist to test a scenario, and twice a row silently failed to
+    reach its scenario yet graded as if it had; a rep failing setup
+    is scenario-not-reached — excluded from the pass-rate
+    denominator, neither a pass nor a fail."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Restrict the counts below to invocations of this tool.
+    tool: str | None = None
+    min_invocations: int | None = None
+    min_errored: int | None = None
+    min_ok: int | None = None
+
+
 class Expectation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # Exit-code equivalents that count as the expected shape
     # (0 verified · 2 unverified · 3 refuse · 4 clarify · 5 escalate).
     exit: list[int]
+    setup: SetupSpec | None = None
     assertions: list[Assertion] = []
 
 
@@ -310,6 +328,10 @@ class BankRow(BaseModel):
     # default.
     threshold: float | None = None
     xfail: Xfail | None = None
+    # Rows with a setup block: fewer scenario-reaching reps than this
+    # floor grades the row INCONCLUSIVE — a distinct status, neither
+    # pass nor fail, and never XPASS.
+    reached_floor: int = Field(default=2, ge=1)
     # Sentinel rows guard only the invariant: any exit in the expected
     # list passes shape, and content assertions apply only at exit 0.
     sentinel: bool = False
