@@ -219,6 +219,14 @@ class SqlAttempt(BaseModel):
     sql: str | None = None
     error: str | None = None
     row_count: int | None = None
+    # The fan-out challenge, typed so the audit trail distinguishes
+    # "never fired" / "fired and repaired" / "fired and overridden":
+    # set alongside error on the blocking round, and set on an
+    # EXECUTED attempt when the re-lint still trips (the play pass's
+    # W1: the licensed resend kept its fanned SUMs). The Verifier
+    # reads the final attempt's value; a set lint there caps the
+    # answer at unverified.
+    lint: str | None = None
 
 
 class RunSqlEvidence(BaseModel):

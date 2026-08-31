@@ -213,6 +213,22 @@ class PlausibilitySettings(BaseModel):
     # unverified (fix pass 3: the wrong-question shape the 4b baseline
     # found). Off only for a pack whose zero answers are routine.
     challenge_zero_results: bool = True
+    # Aggregate-vs-stats checks over result columns the select-list
+    # parse resolves to stats columns (play pass, §9.3 for tables):
+    # SUM must not exceed mean × non-null count (cells and the column
+    # total; only for columns with a non-negative min, since a
+    # filtered subset of a signed column can legitimately exceed the
+    # total), and AVG cells must lie within [min, max].
+    enforce_aggregate_bounds: bool = True
+    # These bounds are impossible-if-clean, so the tolerance absorbs
+    # only float slop and stats staleness: outside by up to this much
+    # (of the cap, or of the [min,max] span for AVG) warns — the
+    # answer ships [UNVERIFIED]; beyond it fails — the answer is
+    # refused.
+    aggregate_bound_tolerance_pct: float = 10.0
+    # Row cap for the alias-resolved per-cell min/max checks in
+    # aggregate queries (group keys and passthrough columns).
+    aggregate_cell_sample_rows: int = 50
 
 
 class VerifierSettings(BaseModel):

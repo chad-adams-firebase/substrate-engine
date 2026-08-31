@@ -3,7 +3,13 @@ verifier wired to the scripted LLM."""
 
 from engine.config.models import VerifierSettings
 from engine.substrates.models import Provenance, StatsRow
-from engine.tools.envelope import RunSqlOutput, Table, ToolInvocation
+from engine.tools.envelope import (
+    RunSqlEvidence,
+    RunSqlOutput,
+    SqlAttempt,
+    Table,
+    ToolInvocation,
+)
 from engine.verifier.checks import CheckRegistry, default_checks
 from engine.verifier.verify import Verifier
 from tests.stubs.llm_stub import ScriptedLLM
@@ -28,9 +34,27 @@ def stats_row(table: str, column: str, **overrides) -> StatsRow:
 
 
 def sql_invocation(
-    sql: str, rows: list[dict], *, total: int | None = None, truncated=False
+    sql: str,
+    rows: list[dict],
+    *,
+    total: int | None = None,
+    truncated=False,
+    final_lint: str | None = None,
 ) -> ToolInvocation:
     columns = list(rows[0].keys()) if rows else []
+    evidence = None
+    if final_lint is not None:
+        # The overridden-challenge shape: the executed (final, clean-
+        # error) attempt still carries the lint reason.
+        evidence = RunSqlEvidence(
+            grounding_prompt="",
+            attempts=[
+                SqlAttempt(raw_response=sql, sql=sql, error=final_lint,
+                           lint=final_lint),
+                SqlAttempt(raw_response=sql, sql=sql, row_count=len(rows),
+                           lint=final_lint),
+            ],
+        )
     return ToolInvocation(
         tool="run_sql",
         arguments={"question": "q"},
@@ -44,6 +68,7 @@ def sql_invocation(
                 truncated=truncated,
             ),
         ),
+        evidence=evidence,
         substrates_read=[],
     )
 

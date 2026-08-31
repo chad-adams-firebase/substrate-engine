@@ -24,6 +24,7 @@ def column(table: str, name: str, fk: str | None = None, pk=False) -> Dictionary
 DICTIONARY = [
     column("invoices", "id", pk=True),
     column("invoices", "supplier_id", fk="suppliers.id"),
+    column("invoice_lines", "invoice_id", fk="invoices.id"),
     column("suppliers", "id", pk=True),
     column("findings", "id", pk=True),
     column("findings", "invoice_id", fk="invoices.id"),
@@ -177,3 +178,67 @@ def test_join_without_a_foreign_key_is_challenged_not_exempt():
 def test_no_aggregate_means_no_lint():
     listing = "SELECT i.id, f.rule_name FROM invoices i JOIN findings f ON f.invoice_id = i.id"
     assert lint_fan_out(listing, DICTIONARY, MAP) is None
+
+
+# --- Play-pass extensions: SUM/AVG repairs, the DISTINCT band-aid ----
+
+W1_OVERRIDE = """
+SELECT s.name AS supplier_name,
+       COUNT(DISTINCT i.id) AS invoice_count,
+       SUM(i.invoice_total) AS total_invoice_amount,
+       SUM(l.extended_price) AS total_line_amount
+FROM suppliers s
+JOIN invoices i ON s.id = i.supplier_id
+JOIN invoice_lines l ON i.id = l.invoice_id
+GROUP BY s.name
+"""
+
+AVG_FANOUT = """
+SELECT s.name AS supplier_name, AVG(l.extended_price) AS avg_line_price
+FROM suppliers s
+JOIN invoices i ON s.id = i.supplier_id
+JOIN invoice_lines l ON i.id = l.invoice_id
+GROUP BY s.name
+"""
+
+W7_BANDAID = """
+SELECT u.short_name AS reviewer,
+       SUM(DISTINCT COALESCE(i.opportunity, 0)) AS total_opportunity
+FROM invoice_history ih
+JOIN users u ON u.short_name = ih.actor
+JOIN invoices i ON i.id = ih.invoice_id
+GROUP BY u.short_name
+"""
+
+
+def test_w1_shape_still_trips_after_the_count_repair():
+    """The play pass's W1 override: COUNT fixed to DISTINCT, SUMs left
+    fanned. The SUMs alone keep the lint tripping — this is what the
+    detection-only re-lint records on the executed attempt."""
+    reason = lint_fan_out(W1_OVERRIDE, DICTIONARY, MAP)
+    assert reason is not None
+    assert "invoices.supplier_id is a foreign key" in reason
+    assert "subquery joined back per entity" in reason
+    assert "resend the statement unchanged" in reason
+
+
+def test_avg_over_a_fanning_join_draws_the_lint():
+    """W6's family: AVG joins the aggregate set — a fanned AVG weights
+    repeated rows exactly like a fanned SUM."""
+    reason = lint_fan_out(AVG_FANOUT, DICTIONARY, MAP)
+    assert reason is not None
+    assert "COUNT/SUM/AVG" in reason
+
+
+def test_sum_distinct_bandaid_is_challenged_not_exempt():
+    """W7: SUM(DISTINCT ...) silently drops repeated values; it is a
+    challenged pattern in a fanning scope, never a sanctioned repair.
+    COUNT(DISTINCT ...) stays exempt (NP4 above)."""
+    reason = lint_fan_out(W7_BANDAID, DICTIONARY, MAP)
+    assert reason is not None
+    assert "silently drops repeated values" in reason
+
+
+def test_sum_distinct_without_a_risky_join_stays_silent():
+    single = "SELECT SUM(DISTINCT opportunity) AS s FROM invoices"
+    assert lint_fan_out(single, DICTIONARY, MAP) is None

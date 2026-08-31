@@ -101,15 +101,20 @@ def test_fan_out_lint_draws_one_repair_round_before_execution(tool_pack):
     attempts = invocation.evidence.attempts
     assert len(attempts) == 2
     assert attempts[0].error.startswith("Fan-out check:")
+    assert attempts[0].lint == attempts[0].error  # typed challenge marker
     assert attempts[0].row_count is None  # never executed
     assert attempts[1].error is None
+    assert attempts[1].lint is None  # repaired: the re-lint is clean
     stub = ports.get(PortName.LLM)
     assert attempts[0].error in stub.calls[1]["messages"][-1].content
 
 
 def test_fan_out_lint_fires_once_and_licenses_resend_unchanged(tool_pack):
     """The lint's word is a repair round, not a verdict: the same
-    statement resent is the model's considered answer and runs."""
+    statement resent is the model's considered answer and runs — but
+    the override is no longer invisible: the detection-only re-lint
+    records the still-tripping reason on the executed attempt, which
+    the Verifier reads as a plausibility warn."""
     registry, _ = build_tool_registry(tool_pack, [FANOUT, FANOUT])
     invocation = registry.invoke("run_sql", {"question": "how many flagged?"})
     assert invocation.status == "ok", invocation.error
@@ -117,6 +122,8 @@ def test_fan_out_lint_fires_once_and_licenses_resend_unchanged(tool_pack):
     assert len(attempts) == 2
     assert attempts[0].error.startswith("Fan-out check:")
     assert attempts[1].error is None and attempts[1].row_count == 1
+    assert attempts[1].lint is not None
+    assert attempts[1].lint.startswith("Fan-out check:")
 
 
 def test_zero_row_results_skip_the_alias_guard(tool_pack):

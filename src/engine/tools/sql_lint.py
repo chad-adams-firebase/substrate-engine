@@ -13,19 +13,25 @@ Regex-level on purpose (the house precedent, generators/ckg/sql_tables
 are split on parentheses so a correlated or scalar subquery is linted
 as its own SELECT, never mistaken for a join in its parent.
 
-What fires: a scope with a non-DISTINCT COUNT/SUM in its select list
-and at least one JOIN ... ON whose equality can multiply the rows of
-the tables already in scope — a join to the many side of a foreign
-key, a join of two foreign keys (MT2's shape), or a join no foreign
-key or declared one-to-one path vouches for. What is exempt: lookups
-along a foreign key from the from-side (findings -> invoices ->
-suppliers), joins the Dictionary Map declares one_to_one, and
-COUNT(DISTINCT ...). Comma-separated FROM lists escape the check
-(the model does not write them).
+What fires: a scope with a non-DISTINCT COUNT/SUM/AVG in its select
+list and at least one JOIN ... ON whose equality can multiply the
+rows of the tables already in scope — a join to the many side of a
+foreign key, a join of two foreign keys (MT2's shape), or a join no
+foreign key or declared one-to-one path vouches for. SUM(DISTINCT)
+and AVG(DISTINCT) also fire in such a scope: DISTINCT inside SUM/AVG
+silently drops repeated values (the play pass's W7 band-aid), so it
+is a challenged pattern, not a repair. What is exempt: lookups along
+a foreign key from the from-side (findings -> invoices -> suppliers),
+joins the Dictionary Map declares one_to_one, and COUNT(DISTINCT ...).
+Comma-separated FROM lists escape the check (the model does not write
+them).
 
-The lint's word is a repair round, not a verdict: run_sql fires it at
-most once per call and licenses the model to resend the statement
-unchanged when the join cannot multiply rows.
+The lint's word is a repair round, not a verdict: run_sql blocks on
+it at most once per call and licenses the model to resend the
+statement unchanged when the join cannot multiply rows. Overriding is
+no longer invisible, though: run_sql re-lints the resend in
+detection-only mode and records a still-tripping reason on the
+executed attempt, which the Verifier turns into a plausibility warn.
 """
 
 import re
@@ -51,7 +57,15 @@ _JOIN_ON = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 _EQUALITY = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\.([A-Za-z_]\w*)")
-_PLAIN_AGGREGATE = re.compile(r"\b(?:count|sum)\s*\(\s*(?!distinct\b)", re.IGNORECASE)
+_PLAIN_AGGREGATE = re.compile(
+    r"\b(?:count|sum|avg)\s*\(\s*(?!distinct\b)", re.IGNORECASE
+)
+# SUM(DISTINCT x)/AVG(DISTINCT x) drops repeated values instead of
+# de-fanning the join — the observed band-aid, challenged like a plain
+# aggregate. COUNT(DISTINCT x) stays the sanctioned repair.
+_DISTINCT_AGG_BANDAID = re.compile(
+    r"\b(?:sum|avg)\s*\(\s*distinct\b", re.IGNORECASE
+)
 _SUBQUERY = "(__subquery__)"
 
 
@@ -137,6 +151,24 @@ def split_scopes(sql: str) -> list[str]:
     return scopes
 
 
+def table_aliases(scope: str) -> dict[str, str]:
+    """alias (or bare table name) -> table name, lowercased, from the
+    scope's FROM/JOIN references. Shared with the verifier's
+    select-list resolution (checks/sql_columns.py)."""
+    aliases: dict[str, str] = {}
+    for _, table, alias in _TABLE_REF.findall(scope):
+        aliases[table.lower()] = table.lower()
+        if alias and alias.lower() not in _KEYWORDS:
+            aliases[alias.lower()] = table.lower()
+    return aliases
+
+
+def select_list_of(scope: str) -> str:
+    """The text between the scope's first SELECT and its FROM — where
+    the aggregates and result aliases live."""
+    return _select_list(scope)
+
+
 def lint_fan_out(
     sql: str, dictionary: list[DictionaryRow], dictionary_map: DictionaryMap
 ) -> str | None:
@@ -160,14 +192,14 @@ def lint_fan_out(
                 )
 
     risky: list[_RiskyJoin] = []
+    bandaid_seen = False
     for scope in split_scopes(sql):
-        if not _PLAIN_AGGREGATE.search(_select_list(scope)):
+        select_list = _select_list(scope)
+        bandaid = _DISTINCT_AGG_BANDAID.search(select_list) is not None
+        if not (_PLAIN_AGGREGATE.search(select_list) or bandaid):
             continue
-        aliases: dict[str, str] = {}
-        for _, table, alias in _TABLE_REF.findall(scope):
-            aliases[table.lower()] = table.lower()
-            if alias and alias.lower() not in _KEYWORDS:
-                aliases[alias.lower()] = table.lower()
+        risky_before = len(risky)
+        aliases = table_aliases(scope)
         for joined, _, condition in _JOIN_ON.findall(scope):
             joined = joined.lower()
             for a, c1, b, c2 in _EQUALITY.findall(condition):
@@ -200,6 +232,8 @@ def lint_fan_out(
                     else:
                         reason = "no foreign key relates these columns"
                 risky.append(_RiskyJoin(joined, left, right, reason))
+        if bandaid and len(risky) > risky_before:
+            bandaid_seen = True
 
     if not risky:
         return None
@@ -216,13 +250,21 @@ def lint_fan_out(
     ]
     listed = "; ".join(f"{r.left} = {r.right} ({r.reason})" for r in risky)
     hint = f" Canonical join paths for these tables: {', '.join(paths)}." if paths else ""
+    bandaid_note = (
+        " SUM(DISTINCT ...) / AVG(DISTINCT ...) is not a fan-out repair:"
+        " it silently drops repeated values."
+        if bandaid_seen
+        else ""
+    )
     return (
-        "Fan-out check: COUNT/SUM over a multi-table join counts join "
-        "combinations, not entities. Join condition(s) that can multiply "
-        f"rows: {listed}. Count the entity the question is about with "
-        "COUNT(DISTINCT <table>.id), or aggregate from the table that "
-        f"carries the filtered column.{hint} If this join cannot multiply "
-        "rows, resend the statement unchanged."
+        "Fan-out check: COUNT/SUM/AVG over a multi-table join "
+        "aggregates join combinations, not entities. Join condition(s) "
+        f"that can multiply rows: {listed}. Count the entity the "
+        "question is about with COUNT(DISTINCT <table>.id); for SUM or "
+        "AVG, aggregate the fanning table in a subquery joined back "
+        "per entity, or aggregate from the table that carries the "
+        f"filtered column.{bandaid_note}{hint} If this join cannot "
+        "multiply rows, resend the statement unchanged."
     )
 
 

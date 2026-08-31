@@ -175,15 +175,21 @@ class RunSql(Tool):
         user = self._identity.current_user()
         manifest_ids = manifest_ids_of(dictionary + stats)
         attempts: list[SqlAttempt] = []
-        # The fan-out lint fires at most once per call: its word is a
+        # The fan-out lint BLOCKS at most once per call: its word is a
         # repair round with an explicit license to resend unchanged,
         # so the second submission is the model's considered answer.
+        # After the challenge, later attempts are re-linted in
+        # detection-only mode — they execute regardless, but a
+        # still-tripping reason is recorded on the attempt so
+        # overriding leaves a trace (and, via the Verifier, costs the
+        # verified badge).
         fan_out_challenged = False
 
         for _ in range(self._settings.max_repair_attempts + 1):
             response = self._llm.complete(messages, temperature=0.0)
             sql = extract_sql(response.content)
             row_count: int | None = None
+            lint_reason: str | None = None
             if sql is None:
                 error = (
                     "No SQL statement found in the reply. Reply with exactly "
@@ -199,7 +205,10 @@ class RunSql(Tool):
             ):
                 fan_out_challenged = True
                 error = lint
+                lint_reason = lint
             else:
+                if self._settings.fan_out_lint and fan_out_challenged:
+                    lint_reason = lint_fan_out(sql, dictionary, dictionary_map)
                 try:
                     rows = self._sql.run_sql(sql, user)
                 except Exception as exc:
@@ -222,6 +231,7 @@ class RunSql(Tool):
                                 raw_response=response.content,
                                 sql=sql,
                                 row_count=len(rows),
+                                lint=lint_reason,
                             )
                         )
                         return self.ok(
@@ -251,6 +261,7 @@ class RunSql(Tool):
                     sql=sql,
                     error=error,
                     row_count=row_count,
+                    lint=lint_reason,
                 )
             )
             messages.append(Message(role="assistant", content=response.content))

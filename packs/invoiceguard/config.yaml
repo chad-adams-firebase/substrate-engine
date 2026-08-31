@@ -137,6 +137,15 @@ verifier:
     # A 0 or empty run_sql result ships unverified, never verified —
     # S4's 0-for-114 and S7's empty-for-mona were both verified.
     challenge_zero_results: true
+    # Aggregate-vs-stats (play pass): SUM columns capped at
+    # mean × non-null count, AVG columns held to [min, max]. The
+    # bounds are impossible-if-clean, so the tolerance covers only
+    # float slop and stats staleness — within it warns (ships
+    # [UNVERIFIED]), beyond it refuses. W1's ×4–5 fanned sums land
+    # far past any tolerance.
+    enforce_aggregate_bounds: true
+    aggregate_bound_tolerance_pct: 10.0
+    aggregate_cell_sample_rows: 50
 
 ui:
   app_name: InvoiceGuard Knowledge
