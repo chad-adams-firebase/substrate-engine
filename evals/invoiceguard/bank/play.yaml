@@ -1,0 +1,269 @@
+# Play-pass rows (Phase 5 interlude): the 2026-08-31 free-play
+# session's 8 wrong-but-verified outcomes and 6 refused layups, locked
+# in as bank rows with executed gold — the fix-pass discipline applied
+# to the manager distribution. Mechanisms are annotated per row; the
+# W-rows are stochastic wrong-SQL surfaces (thresholds 0.6–0.8, never
+# 5/5): they measure live rates under a nondeterministic router.
+#
+# Breach policy on W2/W5/W6 gold numerics: breach: false. Those
+# misses verify inside every plausibility bound — nothing but the row
+# itself can see them — and a standing alarm would flip every re-run
+# to exit 4 on a known stochastic miss. The trade is documented, not
+# hidden: the grader counts each such miss as a documented WBV event
+# (the report's "documented WBV misses" line), so INVARIANT: ok now
+# claims exactly "zero UNDOCUMENTED wrong-but-verified", the WBV-S4
+# designed-trade pattern applied to the alarm itself.
+
+- id: W1
+  provenance: user-sourced
+  category: multiturn
+  gold: gold/w1_supplier_lines.py
+  expected_gold:
+    supplier_name: Ravenswood Extrusion
+    invoice_count: 126
+    supplier_rows: 38
+    lineless_supplier: Umber Scrap Exchange
+  threshold: 0.6
+  turns:
+    - question: >-
+        Which suppliers send us the most invoices? Show a table with
+        invoice count, total invoice amount, and total opportunity
+        per supplier.
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: name_from_gold, field: [supplier_name]}
+    - question: "Add invoice-line totals to the table above."
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: name_from_gold, field: [supplier_name]}
+          # The 4 line-less suppliers: the play session's INNER JOIN
+          # dropped them. A dropped supplier fails this directly.
+          - {kind: name_from_gold, field: [lineless_supplier]}
+          # Turn-1 columns unchanged + the correct line total: the
+          # play session's join fan-out multiplied both SUM columns
+          # ×4–5. Gold numerics stay breaching — an exit-0 wrong
+          # number here is exactly the catastrophic class this row
+          # exists to catch (A2/A3 misses land at exit 2/3, not 0).
+          - {kind: numeric_from_gold, field: [invoice_count]}
+          - {kind: numeric_from_gold, field: [total_invoice_amount]}
+          - {kind: numeric_from_gold, field: [total_line_amount]}
+  note: >-
+    The first multi-turn extension row. Play W1: "add invoice-line
+    totals" fanned suppliers×invoices×invoice_lines; the lint fired,
+    the repair fixed only the COUNT, and the licensed resend shipped
+    ✓ with two SUM columns multiplied and 4 suppliers dropped. The
+    A2 re-lint records the override (warn → at most exit 2) and A3's
+    column-sum cap refuses the fanned totals, so a correct subquery
+    shape is the only path to exit 0 here.
+
+- id: W2
+  provenance: user-sourced
+  category: data
+  question: "For each auditor, how many rules did they see versus how many they actioned?"
+  gold: gold/w2_seen_actioned.py
+  expected_gold: {auditor: nova, findings_seen: 1260, findings_actioned: 193}
+  threshold: 0.6
+  xfail:
+    ref: ASSOC
+    note: >-
+      Play W2: every aggregate was COUNT(DISTINCT …) — lint-exempt by
+      design and not numerically fanned — yet the join attributed
+      every invoice's reports and feedback to every auditor who ever
+      touched the invoice, producing impossible rows (actioned >
+      seen). Cross-entity attribution is the play pass's declared
+      out-of-scope for generic checks; this row measures the gap
+      until association verification lands. Gold numerics are
+      breach: false (documented WBV): the miss verifies inside every
+      plausibility bound, and breach detection pierces xfail by
+      design, so a breaching assertion would alarm every run on a
+      known limitation.
+  expect:
+    exit: [0, 2, 3]
+    assertions:
+      - {kind: nonempty}
+      - {kind: numeric_from_gold, field: [findings_seen], breach: false}
+      - {kind: numeric_from_gold, field: [findings_actioned], breach: false}
+  note: >-
+    "Rules seen vs actioned" under one defensible attribution: seen =
+    distinct findings on invoices the auditor personally completed;
+    actioned = feedback rows the auditor authored.
+
+- id: W3
+  provenance: user-sourced
+  category: data
+  question: "How long does an invoice spend between RECEIVED and READY on average?"
+  gold: gold/w3_received_ready.py
+  expected_gold: {avg_hours: 1.0}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: numeric_from_gold, field: [avg_hours]}
+      - {kind: not_contains, pattern: "0:00:00"}
+  note: >-
+    Play W3: the WHERE kept only the READY-transition row, both CASE
+    branches read the same timestamp, and 0:00:00 shipped ✓. The
+    time_in_status gotcha now pairs the entering and leaving
+    transitions; the answer is 1.0 hour. (The miss class is a zero
+    scalar — the zero challenge caps it at exit 2, so no breach
+    exposure.)
+
+- id: W5
+  provenance: user-sourced
+  category: ambiguity
+  question: "How many rules run on an invoice?"
+  gold: gold/w5_rules_count.py
+  expected_gold: {value: 12}
+  threshold: 0.6
+  expect:
+    exit: [0, 4]
+    assertions:
+      - {kind: nonempty}
+      # documented WBV (breach: false): the known stochastic miss — a
+      # verified 1 from compliance_reports-per-invoice — sits inside
+      # every plausibility bound; the threshold gates it, the
+      # documented-misses line counts it.
+      - {kind: numeric_from_gold, field: [value], breach: false, at_exit: [0]}
+      # A clarify must actually pose the senses, not shrug.
+      - {kind: contains, regex: true, pattern: "mean.+\\bor\\b.+\\?", at_exit: [4]}
+  note: >-
+    Play W5: "rules" is three-way ambiguous in this pack (12 audit
+    rules in code / 10 compliance rule codes / 26 fired rule_name
+    values); the play answer counted compliance_reports per invoice
+    (= 1) and shipped ✓. With the audit-rules concept landed, 12 at
+    exit 0 or a sense-naming clarify at exit 4 both pass.
+
+- id: W6
+  provenance: user-sourced
+  category: data
+  question: "What's the average opportunity created by each rule?"
+  gold: gold/w6_rule_avg.py
+  expected_gold: {rule: quantity_spike, finding_count: 146}
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: name_from_gold, field: [rule]}
+      # documented WBV (breach: false): the invoice-level miss —
+      # AVG(invoices.opportunity) across a join — stays within the
+      # column's own [min, max], so A3 passes it and only this row
+      # can see it. Threshold-gated, counted, never alarming.
+      - {kind: numeric_from_gold, field: [avg_amount], breach: false}
+      # With interpretations declared on rule_savings, the drafter
+      # rule makes the answer name its grain (phrasing, never alarms).
+      - {kind: contains, regex: true, pattern: "finding|invoice.level"}
+  note: >-
+    Play W6: AVG(i.opportunity) — invoice-level, 1.5–25× inflated —
+    shipped ✓ as a defensible-but-unlabeled reading. The map now
+    declares finding-level the default and the answer must name the
+    grain it used.
+
+- id: PLAY-R1
+  provenance: user-sourced
+  category: routing
+  question: "What's the difference between the RECEIVED and READY statuses?"
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [app_primer]}
+  note: >-
+    Play R1: refused after budget exhaustion in data tools — one
+    app_primer call answers it. The definitional bullet (B1) now
+    names the lifecycle vocabulary.
+
+- id: PLAY-R3
+  provenance: user-sourced
+  category: routing
+  question: "What statuses can an invoice move through? Define each one."
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [app_primer]}
+      - {kind: contains, pattern: "RECEIVED"}
+      - {kind: contains, pattern: "READY"}
+      - {kind: contains, pattern: "CLAIMED"}
+      - {kind: contains, pattern: "IN_REVIEW"}
+      - {kind: contains, pattern: "CLOSED"}
+      - {kind: contains, pattern: "NO_REVIEW_NEEDED"}
+      - {kind: contains, pattern: "LAPSED"}
+  note: >-
+    Play R3 asked for "the five statuses"; the lifecycle has seven
+    (NP6's 4-vs-7 tension is why the phrasing here stays open). The
+    primer defines all seven; contains gates phrasing-tolerantly and
+    never alarms.
+
+- id: PLAY-R4
+  provenance: user-sourced
+  category: data
+  question: "How many different compliance rules are there?"
+  gold: gold/r4_rule_codes.py
+  expected_gold: {value: 10}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: [value]}
+  note: >-
+    Play R4: the correct COUNT(DISTINCT rule_code) = 10 was REFUSED —
+    count_vs_stats matched COUNT(DISTINCT …) with its count-only
+    regex and compared 10 against compliance_rules' 4,216-row
+    row_count. The A1 acceptance row: distinct counts compare to
+    distinct_count, and this refusal class dies.
+
+- id: PLAY-R6
+  provenance: user-sourced
+  category: meta
+  question: "How do I use this chat?"
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [app_capabilities]}
+  note: >-
+    Play R6: a refusal card. Meta questions now answer from pack
+    config (ui.capabilities + starter prompts) through the registered
+    app_capabilities tool, Verifier included — exit 0, not exit 3.
+    U-META stays the permissive measurement row; this one gates.
+
+- id: W4
+  provenance: user-sourced
+  category: code
+  question: "What are the 12 audit rules, and what does each one do?"
+  gold: gold/w5_rules_count.py
+  expected_gold: {value: 12}
+  threshold: 0.8
+  xfail:
+    ref: ASSOC
+    note: >-
+      Play W4: the drafter zipped the 12 descriptions against the
+      node list offset by 6 — every rule name real, every description
+      real, every pairing wrong — and the Verifier, which checks
+      entity existence, not association, verified it. The contains
+      tripwire pairs rate_variance with a fragment of its own
+      docstring on one line; the offset zip fails it. Association
+      verification is the queued design item this row measures.
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: "rate_variance"}
+      - kind: contains
+        regex: true
+        pattern: "rate_variance[^\\n]{0,240}contract"
+  note: >-
+    A correct answer describes rule_rate_variance with its contracted-
+    rate meaning in the same breath; contains never alarms, so this
+    measures without gating the invariant.

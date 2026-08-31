@@ -1,12 +1,16 @@
 # Ambiguity rows. Gate verdict §7.8 asked whether clarify CAN fire;
-# it has fired zero times in 522 live turns across five sessions, and
-# the engine's revealed behavior is to answer under a stated reading.
-# That is now the tested behavior: choosing a reading is fine, silent
-# choosing is not. The naming assertion reads the answer plus a table's
-# SQL caption (the displayed statement of the choice) and asserts that
-# a reading is named — not that exactly one is. The router keeps its
-# clarify verb; a clarify turn is exit 4 here, a threshold failure
-# (breaches need exit 0), never a breach.
+# for 522 live turns across five sessions it never did, and the tested
+# behavior became answering under a stated reading. The 2026-08-30
+# post-Block-1 run ended that record: AMB2 clarified on 3 of 5 reps —
+# the fix-pass-3 concrete trigger ("two materially different
+# readings") finally firing, against a row that still demanded exit 0.
+# Both behaviors are correct here, so both are accepted (the play-pass
+# AMB2 correction): exit 0 with a gold-matching total and a named
+# reading, or exit 4 with a clarify that actually poses two readings.
+# The per-exit split uses at_exit — a clarify body has no gold token
+# to carry, and a numeric guard has nothing to say about a question.
+# Choosing a reading is fine, silent choosing is not; a shrug dressed
+# as a clarify ("please rephrase") passes neither arm.
 
 - id: AMB1
   provenance: user-sourced
@@ -36,15 +40,24 @@
   gold: gold/amb2_open.py
   expected_gold: {ready: 78, not_closed: 965}
   expect:
-    exit: [0]
+    exit: [0, 4]
     assertions:
       - {kind: nonempty}
-      - {kind: contains, regex: true, pattern: "READY|CLOSED"}
-      - {kind: numeric_from_gold, field: [ready, not_closed]}
+      - {kind: contains, regex: true, pattern: "READY|CLOSED", at_exit: [0]}
+      - {kind: numeric_from_gold, field: [ready, not_closed], at_exit: [0]}
+      # The clarify arm: the question must pose two readings ("do you
+      # mean X, or Y?"), loosely matched — observed clarify bodies
+      # phrase the readings without status tokens, so demanding
+      # READY/CLOSED by name would re-break the row — with a guard
+      # against the degenerate please-rephrase shrug.
+      - {kind: contains, regex: true, pattern: "mean.+\\bor\\b.+\\?", at_exit: [4]}
+      - {kind: not_contains, pattern: "rephrase", at_exit: [4]}
   note: >-
     'Open' names no status: READY (78) and not-CLOSED (965) are both
-    defensible, twelve-fold apart. Either total passes; a verified
-    number matching neither is wrong content at exit 0 — the breach
-    guard the clarify expectation never had. The fp3 re-run answered
-    78 on every rep through a four-status predicate (RECEIVED, READY,
-    CLAIMED, IN_REVIEW), a third definition landing on the first.
+    defensible, twelve-fold apart. At exit 0 either total passes and a
+    verified number matching neither is wrong content — the breach
+    guard stays. At exit 4 (first observed 2026-08-30, clarify's first
+    firing ever: 3 of 5 reps asked "pending review, or never
+    reviewed?") the clarify must pose two readings. The fp3 re-run's
+    third definition (a four-status predicate answering 78) still
+    lands on the exit-0 arm.

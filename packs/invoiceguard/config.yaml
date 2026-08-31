@@ -33,7 +33,14 @@ adapters:
   llm:
     adapter: openrouter
     settings:
-      model: openai/gpt-4o
+      # Dated snapshot, not the floating alias: the 2026-08-30
+      # post-Block-1 run showed materially different router behavior
+      # under openai/gpt-4o same-day. Reproducibility needs a pinned
+      # model the way it needs a pinned seed. Verify this exact
+      # string against OpenRouter's model list BEFORE the bank
+      # re-run — a bad string must be caught then, never by turn one
+      # of a live run.
+      model: openai/gpt-4o-2024-11-20
   sql:
     adapter: duckdb
     settings:

@@ -941,3 +941,95 @@ def test_numeric_from_gold_parses_rendered_money(tmp_path):
     result = grade(bank, header, raw, world, pack_root=pack)
     assert result.rows[0].status == "fail"
     assert result.rows[0].failure_classes == ["currency_format"]
+
+
+ROW_PER_EXIT = """\
+- id: AMBX
+  provenance: scripted
+  category: ambiguity
+  question: "How many are open?"
+  gold: gold/g.py
+  expected_gold: {value: 146}
+  expect:
+    exit: [0, 4]
+    assertions:
+      - {kind: numeric_from_gold, field: value, at_exit: [0]}
+      - {kind: contains, regex: true, pattern: "mean.+\\\\bor\\\\b.+\\\\?", at_exit: [4]}
+      - {kind: not_contains, pattern: "rephrase", at_exit: [4]}
+"""
+
+
+def _clarify_turn(question_text: str) -> TurnRecord:
+    from engine.harness.outcomes import ClarifyOutcome
+
+    return TurnRecord(
+        turn_index=0,
+        question="q",
+        outcome=ClarifyOutcome(question=question_text),
+        exit_equiv=4,
+        tools_used=[],
+        emitted_tokens=detect(question_text),
+    )
+
+
+def test_at_exit_restricts_assertions_to_their_exits(tmp_path):
+    """The play-pass AMB2 correction: the numeric guard gates exit-0
+    reps, the clarify-shape check gates exit-4 reps, and neither is
+    evaluated on the other's turns (a clarify body has no gold token
+    to carry)."""
+    bank, header, world, pack = make_env(tmp_path, ROW_PER_EXIT)
+
+    answered = make_record("AMBX", 1, make_turn("There are 146 open."))
+    clarified = make_record(
+        "AMBX",
+        2,
+        _clarify_turn("Do you mean the current backlog, or never reviewed?"),
+    )
+    result = grade(bank, header, [answered, clarified], world, pack_root=pack)
+    assert result.rows[0].status == "ok"
+    assert result.breaches == []
+
+    shrug = make_record("AMBX", 2, _clarify_turn("Please rephrase that."))
+    result = grade(bank, header, [answered, shrug], world, pack_root=pack)
+    assert result.rows[0].status == "fail"
+    assert "contains" in result.rows[0].failure_classes
+    assert "not_contains" in result.rows[0].failure_classes
+    # The exit-0 numeric was not demanded of the clarify turn.
+    assert "numeric_from_gold" not in result.rows[0].failure_classes
+
+
+def test_documented_misses_are_counted_never_alarming(tmp_path):
+    """The play-pass breach:false trade, made auditable: a WBV-class
+    gold-numeric miss on a breach:false assertion gates the rep and
+    lands in the documented-misses count — so INVARIANT: ok reads
+    precisely as zero UNDOCUMENTED wrong-but-verified."""
+    rows = ROW_DATA.replace(
+        "      - {kind: numeric_from_gold, field: value}\n",
+        "      - {kind: numeric_from_gold, field: value, breach: false}\n",
+    )
+    bank, header, world, pack = make_env(tmp_path, rows)
+
+    wrong = [make_record("B5", 1, make_turn("There were 9,999 last week."))]
+    result = grade(bank, header, wrong, world, pack_root=pack)
+    assert result.exit_code() == 2  # threshold, never the alarm
+    assert result.breaches == []
+    (miss,) = result.documented_misses
+    assert (miss.row_id, miss.assertion) == ("B5", "numeric_from_gold")
+
+    text = render(result)
+    assert "no undocumented wrong-but-verified occurrence" in text
+    assert "documented WBV misses (breach: false, threshold-gated): 1" in text
+    assert "B5 ×1" in text
+
+    right = [make_record("B5", 1, make_turn("146 last week."))]
+    clean = grade(bank, header, right, world, pack_root=pack)
+    assert clean.documented_misses == []
+    assert "no wrong-but-verified occurrence" in render(clean)
+
+
+def test_assoc_is_a_registered_xfail_ref():
+    from typing import get_args
+
+    from engine.eval.models import XfailRef
+
+    assert "ASSOC" in get_args(XfailRef)

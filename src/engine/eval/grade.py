@@ -76,6 +76,23 @@ class BreachRecord(BaseModel):
     evidence_ref: str | None = None
 
 
+class DocumentedMiss(BaseModel):
+    """A WBV-class event the alarm deliberately ignores: a content
+    assertion with breach:false failing alarm-worthily at exit 0
+    (play pass W5/W6 — known stochastic misses that verify inside
+    every plausibility bound). Counted, never alarming, so the
+    invariant claim stays precise: INVARIANT ok = zero UNDOCUMENTED
+    wrong-but-verified."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    row_id: str
+    rep: int
+    turn_index: int
+    assertion: str
+    detail: str
+
+
 class RowGrade(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -117,6 +134,7 @@ class GradeReport(BaseModel):
     header: RunReportHeader
     warnings: list[str] = []
     breaches: list[BreachRecord] = []
+    documented_misses: list[DocumentedMiss] = []
     rows: list[RowGrade] = []
     route_pairs: list[RoutePairGrade] = []
 
@@ -558,6 +576,7 @@ def _grade_rep(
     record: RunRecord,
     gold: dict[str, Any] | None,
     breaches: list[BreachRecord],
+    documented: list[DocumentedMiss],
 ) -> tuple[RepOutcome, list[str]]:
     """(rep outcome, failure classes). Breach detection runs on every
     turn with exit 0 — xfail, sentinel, and scenario-not-reached reps
@@ -595,26 +614,43 @@ def _grade_rep(
             )
             if not applicable:
                 continue
+            if (
+                assertion.at_exit is not None
+                and turn.exit_equiv not in assertion.at_exit
+            ):
+                continue
             passed, detail = evaluate(assertion, view, gold)
             if passed:
                 continue
             if (
                 type(assertion).content
-                and assertion.breach
                 and turn.exit_equiv == 0
                 and _alarm_worthy(assertion, view, gold)
             ):
-                breaches.append(
-                    BreachRecord(
-                        row_id=row.id,
-                        rep=record.rep,
-                        turn_index=index,
-                        assertion=assertion.kind,
-                        severity=_severity(assertion, view),
-                        detail=detail,
-                        evidence_ref=turn.evidence_ref,
+                if assertion.breach:
+                    breaches.append(
+                        BreachRecord(
+                            row_id=row.id,
+                            rep=record.rep,
+                            turn_index=index,
+                            assertion=assertion.kind,
+                            severity=_severity(assertion, view),
+                            detail=detail,
+                            evidence_ref=turn.evidence_ref,
+                        )
                     )
-                )
+                else:
+                    # The alarm's blind spot, kept visible: WBV-class,
+                    # deliberately non-breaching, threshold-gated.
+                    documented.append(
+                        DocumentedMiss(
+                            row_id=row.id,
+                            rep=record.rep,
+                            turn_index=index,
+                            assertion=assertion.kind,
+                            detail=detail,
+                        )
+                    )
             if assertion.xfail_ref is not None:
                 continue  # expected-fail assertion: never gates the rep
             failures.append(assertion.kind)
@@ -710,6 +746,7 @@ def grade(
         )
 
     breaches: list[BreachRecord] = []
+    documented_misses: list[DocumentedMiss] = []
     row_grades: list[RowGrade] = []
     first_tools: dict[str, dict[str, int]] = {}
 
@@ -755,7 +792,9 @@ def grade(
         graded = []
         failure_classes: list[str] = []
         for record in row_records:
-            outcome, failures = _grade_rep(row, record, gold_values, breaches)
+            outcome, failures = _grade_rep(
+                row, record, gold_values, breaches, documented_misses
+            )
             graded.append((record, outcome))
             if outcome == "not-reached":
                 continue  # its failures are moot — the scenario never ran
@@ -818,6 +857,7 @@ def grade(
         header=header,
         warnings=warnings,
         breaches=breaches,
+        documented_misses=documented_misses,
         rows=row_grades,
         route_pairs=route_pairs,
     )

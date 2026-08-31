@@ -54,8 +54,26 @@ def render(report: GradeReport) -> str:
                     else ""
                 )
             )
+    elif report.documented_misses:
+        # Precision over comfort: with breach:false rows in the bank,
+        # "ok" claims zero UNDOCUMENTED occurrences, and the
+        # documented ones are counted right here.
+        lines.append(
+            "INVARIANT: ok — no undocumented wrong-but-verified occurrence"
+        )
     else:
         lines.append("INVARIANT: ok — no wrong-but-verified occurrence")
+    if report.documented_misses:
+        by_row: dict[str, int] = {}
+        for miss in report.documented_misses:
+            by_row[miss.row_id] = by_row.get(miss.row_id, 0) + 1
+        counted = ", ".join(
+            f"{row_id} ×{count}" for row_id, count in sorted(by_row.items())
+        )
+        lines.append(
+            f"  documented WBV misses (breach: false, threshold-gated): "
+            f"{len(report.documented_misses)} — {counted}"
+        )
     lines.append("")
 
     for row in report.rows:

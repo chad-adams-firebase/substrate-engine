@@ -55,9 +55,21 @@ from engine.verifier.models import VerifierVerdict
 # firing rate, and the row's setup block (min_errored/min_ok) now
 # states the scenario directly, so the annotation had nothing left to
 # explain. Block deleted; no remaining N5 rows.
+# ASSOC (opened in the Phase 5 interlude play pass): the Verifier
+# checks entity existence, not association. W4 zipped the 12 audit
+# rules against their descriptions offset by 6 — every name real,
+# every description real, every pairing wrong — and verified. W2
+# attributed every invoice's reports and feedback to every auditor
+# who touched the invoice; its COUNT(DISTINCT) aggregates are
+# lint-exempt by design and not numerically fanned, so no generic
+# check can see the mis-attribution (cross-entity semantics, the
+# play pass's declared out-of-scope). Association/attribution
+# verification is a queued design item; these rows measure the gap
+# until it lands.
 XfailRef = Literal[
     "O1",
     "WBV-S4",
+    "ASSOC",
 ]
 
 
@@ -88,8 +100,17 @@ class _AssertionBase(BaseModel):
     # when the question asks which supplier). Applied deliberately, per
     # assertion, where a findings document justifies it; never a row
     # default. Orthogonal to breach-by-kind (grade._alarm_worthy): a
-    # contains failure never breaches regardless of this flag.
+    # contains failure never breaches regardless of this flag. A
+    # breach:false gold-numeric miss at exit 0 is still a WBV-class
+    # event: the grader counts it as a documented miss so "INVARIANT
+    # ok" reads precisely as "zero UNDOCUMENTED wrong-but-verified".
     breach: bool = True
+    # Restrict the assertion to reps whose exit_equiv is listed — the
+    # per-exit half of a row that accepts several exits (AMB2: the
+    # numeric guard gates exit-0 reps, the clarify-shape check gates
+    # exit-4 reps; a clarify body has no gold token to carry). None
+    # applies at every exit, as before.
+    at_exit: list[int] | None = None
 
 
 class NonEmptyAssertion(_AssertionBase):
