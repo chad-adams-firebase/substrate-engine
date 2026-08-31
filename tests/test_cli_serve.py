@@ -18,7 +18,7 @@ def test_serve_builds_the_app_from_the_pack_and_runs_it(monkeypatch, capsys, too
         "host": "127.0.0.1", "port": 5055, "threaded": True, "use_reloader": False,
     }
     assert app.config["ENGINE_PACK_NAME"] == "toolpack"
-    assert app.config["ENGINE_UI"].starter_prompts == []
+    assert app.config["ENGINE_UI"].starter_prompts == ["How many invoices had findings?"]
     assert "serving toolpack on http://127.0.0.1:5055" in capsys.readouterr().err
 
     # The app is live: config route answers from the pack's identity.

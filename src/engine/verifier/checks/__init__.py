@@ -5,6 +5,7 @@ global matcher consumes the merged pools, because a drafted number may
 be supported by any invocation, not just the one it "belongs" to."""
 
 from engine.verifier.checks.base import CheckRegistry, SubstrateCheck
+from engine.verifier.checks.capabilities import CapabilitiesCheck
 from engine.verifier.checks.ckg import CkgCheck
 from engine.verifier.checks.dictionary import DictionaryCheck
 from engine.verifier.checks.docs import DocsCheck
@@ -29,4 +30,5 @@ def default_checks() -> list[SubstrateCheck]:
         DocsCheck(),
         ExecutionCheck(),
         KnownItemsCheck(),
+        CapabilitiesCheck(),
     ]

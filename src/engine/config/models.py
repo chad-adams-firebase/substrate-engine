@@ -43,6 +43,7 @@ class ToolName(StrEnum):
     APP_PRIMER = "app_primer"
     SEARCH_BUSINESS_DOCS = "search_business_docs"
     CHECK_EXECUTION = "check_execution"
+    APP_CAPABILITIES = "app_capabilities"
 
 
 class PortName(StrEnum):
@@ -171,6 +172,13 @@ class HarnessSettings(BaseModel):
     # Table rows shown back to the router in tool-result feedback;
     # the drafter and verifier always see the full retained output.
     max_rows_in_context: int = 30
+    # Dictionary columns ("table.column") whose enum values are
+    # lifecycle vocabulary — rendered into the router prompt's
+    # definitional bullet so "difference between RECEIVED and READY"
+    # routes to app_primer, not into run_sql's budget (play pass
+    # R1/R3/R5). Empty (default) renders no status values; the
+    # mechanism mirrors check_execution's coverage_columns.
+    lifecycle_status_columns: list[str] = []
 
 
 class JudgeSettings(BaseModel):
@@ -283,6 +291,11 @@ class UiSettings(BaseModel):
     app_name: str = ""
     accent_color: str = ""
     starter_prompts: list[str] = []
+    # Short pack-authored text answering "what can I ask you?" — the
+    # app_capabilities tool's whole evidence (play pass R6: meta
+    # questions answer instead of refusing). The LLM phrases it;
+    # the text is the grounding.
+    capabilities: str = ""
 
 
 class DisplaySettings(BaseModel):

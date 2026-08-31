@@ -11,6 +11,7 @@ from engine.config.models import PortName, SubstrateName, ToolName
 from engine.config.pack_loader import LoadedPack
 from engine.runtime.container import ResolvedPorts
 from engine.tools.answer_from_known_items import AnswerFromKnownItems
+from engine.tools.app_capabilities import AppCapabilities
 from engine.tools.app_primer import AppPrimer
 from engine.tools.base import Tool
 from engine.tools.check_execution import CheckExecution
@@ -50,6 +51,8 @@ REQUIRED_SUBSTRATES: dict[ToolName, set[SubstrateName]] = {
     ToolName.SEARCH_BUSINESS_DOCS: {SubstrateName.BUSINESS_CONTEXT_DOCS},
     ToolName.CHECK_EXECUTION: {SubstrateName.APPLICATION_LOGS},
     ToolName.ANSWER_FROM_KNOWN_ITEMS: set(),
+    # Answers from pack config (ui.*) alone — no substrate, no port.
+    ToolName.APP_CAPABILITIES: set(),
 }
 
 REQUIRED_PORTS: dict[ToolName, set[PortName]] = {
@@ -67,6 +70,7 @@ REQUIRED_PORTS: dict[ToolName, set[PortName]] = {
     ToolName.SEARCH_BUSINESS_DOCS: {PortName.SUBSTRATE_STORE},
     ToolName.CHECK_EXECUTION: {PortName.EXECUTION_LOG},
     ToolName.ANSWER_FROM_KNOWN_ITEMS: {PortName.WORK_STORE},
+    ToolName.APP_CAPABILITIES: set(),
 }
 
 
@@ -147,6 +151,47 @@ def resolve_data_terms(
     return deduped or None
 
 
+def resolve_definitional_terms(
+    pack: LoadedPack, ports: ResolvedPorts
+) -> list[str] | None:
+    """The vocabulary of definitional/lifecycle questions (play pass
+    B1, the N6 shape's second application): primer component names,
+    lifecycle status values from pack-declared dictionary columns, and
+    Dictionary Map concept names + synonyms. The same concept words
+    appear in resolve_data_terms — deliberately: a business phrasing
+    of a data question is run_sql's, while "what does X mean" is a
+    definition. The engine renders whatever the pack declares; None
+    when nothing resolves."""
+    from engine.ports.substrate_store import SubstrateStoreError
+
+    if PortName.SUBSTRATE_STORE not in set(ports.configured()):
+        return None
+    store = ports.get(PortName.SUBSTRATE_STORE)
+    terms: list[str] = []
+    try:
+        for component in store.components():
+            terms.append(component.name)
+    except SubstrateStoreError:
+        pass
+    status_columns = set(pack.config.harness.lifecycle_status_columns)
+    if status_columns:
+        try:
+            for row in store.dictionary():
+                qualified = f"{row.table_name}.{row.column_name}"
+                if qualified in status_columns and row.enum_values:
+                    terms.extend(row.enum_values)
+        except SubstrateStoreError:
+            pass
+    try:
+        for concept in store.dictionary_map().concepts:
+            terms.append(concept.name)
+            terms.extend(concept.synonyms)
+    except SubstrateStoreError:
+        pass
+    deduped = list(dict.fromkeys(terms))
+    return deduped or None
+
+
 def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
     _validate(pack, ports)
     settings = pack.config.tool_settings
@@ -195,4 +240,6 @@ def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
         )
     if ToolName.ANSWER_FROM_KNOWN_ITEMS in enabled:
         tools.append(AnswerFromKnownItems(ports.get(PortName.WORK_STORE)))
+    if ToolName.APP_CAPABILITIES in enabled:
+        tools.append(AppCapabilities(pack.config.ui))
     return ToolRegistry(tools)

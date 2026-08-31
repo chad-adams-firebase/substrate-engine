@@ -27,6 +27,7 @@ tools:
   - search_business_docs
   - check_execution
   - answer_from_known_items
+  - app_capabilities
 
 adapters:
   llm:
@@ -116,6 +117,12 @@ harness:
   max_router_iterations: 8
   max_draft_retries: 2
   max_rows_in_context: 30
+  # to_status carries all seven lifecycle values (invoices.status
+  # never shows RECEIVED/CLAIMED/IN_REVIEW — NP6's 4-vs-7 tension);
+  # rendered into the router's definitional bullet so lifecycle
+  # questions reach app_primer first (play pass R1/R3/R5).
+  lifecycle_status_columns:
+    - invoice_history.to_status
 
 verifier:
   max_regenerate_retries: 1
@@ -156,6 +163,22 @@ ui:
     - What's in the READY backlog right now — count and total opportunity?
     - Show me the source of rule_rate_variance
     - What does this application do?
+  # app_capabilities' whole evidence: the answer to "what can I ask
+  # you?" as the pack wants it told. De-identified, like everything
+  # in this repo.
+  capabilities: >-
+    This assistant answers questions about the InvoiceGuard
+    application from verified evidence only. Ask about the data
+    (counts, rates, listings — "how many invoices had findings last
+    week"), the code (what a rule does, what a function calls, the
+    source itself), the workflow (invoice statuses and lifecycle, what
+    the components do), execution ("did the nightly recalc run, were
+    there errors"), or policy ("why does this rule exist"). Every
+    answer is checked against its evidence before it ships; when the
+    evidence can't support an answer, it says so instead of guessing.
+    It reads the application's data and code; it cannot change
+    anything, and it doesn't answer questions unrelated to the
+    application.
 
 display:
   money:

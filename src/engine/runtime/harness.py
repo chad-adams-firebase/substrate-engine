@@ -3,7 +3,7 @@ into an AskSession. Mirrors runtime/tools.py — only runtime may name
 concrete pieces; the harness and verifier take everything injected.
 """
 
-from engine.config.models import PortName
+from engine.config.models import PortName, ToolName
 from engine.config.pack_loader import LoadedPack
 from engine.harness.drafter import Drafter
 from engine.harness.events import StatusListener
@@ -11,7 +11,11 @@ from engine.harness.graph import GraphDeps
 from engine.harness.prompts import render_drafter_prompt, render_router_prompt
 from engine.harness.session import AskSession
 from engine.runtime.container import ResolvedPorts
-from engine.runtime.tools import resolve_data_terms, resolve_pack_coverage
+from engine.runtime.tools import (
+    resolve_data_terms,
+    resolve_definitional_terms,
+    resolve_pack_coverage,
+)
 from engine.tools.registry import ToolRegistry
 from engine.verifier.checks import CheckRegistry, default_checks
 from engine.verifier.verify import Verifier
@@ -53,6 +57,9 @@ def build_harness(
                 else None
             ),
             data_terms=resolve_data_terms(pack, ports),
+            definitional_terms=resolve_definitional_terms(pack, ports),
+            has_capabilities_tool=ToolName.APP_CAPABILITIES
+            in pack.config.tools,
         ),
     )
     return AskSession(

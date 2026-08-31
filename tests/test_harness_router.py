@@ -138,7 +138,7 @@ def test_router_call_offers_all_real_and_control_specs(tool_pack):
     session.ask("q")
     llm = ports.get(PortName.LLM)
     offered = [spec.name for spec in llm.calls[0]["tools"]]
-    assert len(offered) == 9 + 4  # the closed surface + control verbs
+    assert len(offered) == 10 + 4  # the closed surface + control verbs
     assert "app_primer" in offered and "give_answer" in offered
     assert llm.calls[0]["temperature"] == 0.0
 
@@ -217,6 +217,82 @@ def test_router_prompt_ties_business_terms_to_run_sql():
         app_name="a", app_description="d", max_iterations=6
     )
     assert "still run_sql questions" not in without
+
+
+def test_router_prompt_renders_definitional_terms_only_when_given():
+    # Play pass B1 (the N6 shape again): lifecycle/definitional
+    # questions burned the budget in data tools. The rendered bullet
+    # ties the pack's component names, status values, and concept
+    # names to app_primer.
+    from engine.harness.prompts import render_router_prompt
+
+    prompt = render_router_prompt(
+        app_name="a",
+        app_description="d",
+        max_iterations=6,
+        definitional_terms=["Rules engine", "RECEIVED", "invoice lifecycle"],
+    )
+    bullet = prompt.split("Definitional and lifecycle questions", 1)[1]
+    assert "RECEIVED" in bullet
+    assert "app_primer first" in bullet
+    assert "never a run_sql question" in bullet
+
+    without = render_router_prompt(
+        app_name="a", app_description="d", max_iterations=6
+    )
+    assert "Definitional and lifecycle questions" not in without
+
+
+def test_router_prompt_offers_capabilities_only_when_the_tool_exists():
+    # Play pass B2 (R6): meta questions get a route instead of two
+    # protocol nudges and a refusal — but only for packs that enable
+    # the tool, or the router would call a tool that isn't there.
+    from engine.harness.prompts import render_router_prompt
+
+    with_tool = render_router_prompt(
+        app_name="a",
+        app_description="d",
+        max_iterations=6,
+        has_capabilities_tool=True,
+    )
+    assert "about this assistant itself" in with_tool
+    assert "app_capabilities" in with_tool
+
+    without = render_router_prompt(
+        app_name="a", app_description="d", max_iterations=6
+    )
+    assert "app_capabilities" not in without
+
+
+def test_definitional_terms_resolve_from_the_real_pack(tool_pack):
+    # The runtime half: component names from components.yaml, the
+    # seven lifecycle values from the declared dictionary column, and
+    # concept names from the map — all through ports, nothing typed
+    # into engine code.
+    import yaml
+
+    from engine.config.pack_loader import load_pack
+    from engine.runtime.tools import resolve_definitional_terms
+    from tests.conftest import build_tool_registry as _build
+
+    config = yaml.safe_load((tool_pack / "config.yaml").read_text())
+    config["harness"] = {
+        "lifecycle_status_columns": ["invoice_history.to_status"]
+    }
+    (tool_pack / "config.yaml").write_text(yaml.safe_dump(config))
+
+    _, ports = _build(tool_pack)
+    terms = resolve_definitional_terms(load_pack(tool_pack), ports)
+    assert "Rules engine" in terms  # a component's display name
+    assert "RECEIVED" in terms  # a to_status enum value
+    assert "invoice" in terms  # the fixture map's concept name
+
+    # Without declared status columns, no status values leak in.
+    config["harness"] = {}
+    (tool_pack / "config.yaml").write_text(yaml.safe_dump(config))
+    bare = resolve_definitional_terms(load_pack(tool_pack), ports)
+    assert "RECEIVED" not in bare
+    assert "Rules engine" in bare
 
 
 def test_router_prompt_renders_data_coverage_only_when_given():

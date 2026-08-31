@@ -87,7 +87,7 @@ def snapshot_outputs(snapshot_duckdb) -> dict:
 def tool_pack(snapshot_outputs, snapshot_duckdb, tmp_path) -> Path:
     """A complete pack directory for tool tests: generated substrates
     from the snapshot, manifests, authored artifacts, the carved log
-    slice, and a config enabling all nine tools. The config names the
+    slice, and a config enabling all ten tools. The config names the
     real 'openrouter' LLM adapter; build_tool_registry overrides that
     registry slot with the pytest stub, so the same pack also works
     through the CLI (whose lazy OpenRouter adapter needs no key)."""
@@ -155,7 +155,16 @@ def tool_pack(snapshot_outputs, snapshot_duckdb, tmp_path) -> Path:
             "search_business_docs",
             "check_execution",
             "answer_from_known_items",
+            "app_capabilities",
         ],
+        "ui": {
+            "starter_prompts": ["How many invoices had findings?"],
+            "capabilities": (
+                "This assistant answers data, code, and workflow "
+                "questions about the invoiceguard application from "
+                "verified evidence."
+            ),
+        },
         "adapters": {
             "llm": {"adapter": "openrouter", "settings": {"model": "openrouter/auto"}},
             "sql": {"adapter": "duckdb", "settings": {"database": str(snapshot_duckdb)}},

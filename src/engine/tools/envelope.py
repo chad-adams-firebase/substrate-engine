@@ -191,6 +191,19 @@ class KnownItemsOutput(BaseModel):
     matches: list[UnitSummary]
 
 
+class CapabilitiesOutput(BaseModel):
+    """Pack-configured self-description (ui.capabilities +
+    starter_prompts) — the whole evidence for a meta question about
+    the assistant itself. Config, not a substrate: substrates_read
+    stays empty."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["app_capabilities"] = "app_capabilities"
+    capabilities: str
+    starter_prompts: list[str]
+
+
 ToolOutput = Annotated[
     StatsOutput
     | DictionaryLookupOutput
@@ -200,7 +213,8 @@ ToolOutput = Annotated[
     | PrimerOutput
     | DocSearchOutput
     | CheckExecutionOutput
-    | KnownItemsOutput,
+    | KnownItemsOutput
+    | CapabilitiesOutput,
     Field(discriminator="kind"),
 ]
 

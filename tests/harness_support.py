@@ -1,7 +1,7 @@
 """Builders for full-graph harness tests: an AskSession over the tool
 pack with a scripted LLM and (by default) a scripted verifier."""
 
-from engine.config.models import PortName
+from engine.config.models import PortName, ToolName
 from engine.config.pack_loader import load_pack
 from engine.harness.drafter import Drafter
 from engine.harness.graph import GraphDeps
@@ -9,7 +9,11 @@ from engine.harness.prompts import render_drafter_prompt, render_router_prompt
 from engine.harness.session import AskSession
 from engine.ports.types import LLMResponse, ToolCall
 from engine.runtime.harness import build_verifier
-from engine.runtime.tools import resolve_data_terms, resolve_pack_coverage
+from engine.runtime.tools import (
+    resolve_data_terms,
+    resolve_definitional_terms,
+    resolve_pack_coverage,
+)
 from engine.tools.envelope import ToolInvocation
 from engine.verifier.models import (
     AttemptRecord,
@@ -119,6 +123,9 @@ def build_ask_session(
                 else None
             ),
             data_terms=resolve_data_terms(pack, ports),
+            definitional_terms=resolve_definitional_terms(pack, ports),
+            has_capabilities_tool=ToolName.APP_CAPABILITIES
+            in pack.config.tools,
         ),
     )
     session = AskSession(

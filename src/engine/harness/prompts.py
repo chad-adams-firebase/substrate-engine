@@ -16,6 +16,8 @@ def render_router_prompt(
     max_iterations: int,
     data_coverage: tuple[str, str] | None = None,
     data_terms: list[str] | None = None,
+    definitional_terms: list[str] | None = None,
+    has_capabilities_tool: bool = False,
 ) -> str:
     described = f"{app_name} — {app_description}" if app_description else app_name
     # Resolved from the stats substrate at composition — the same
@@ -38,6 +40,27 @@ def render_router_prompt(
         if data_terms
         else ""
     )
+    # Pack vocabulary of definitional questions — component names,
+    # lifecycle status values, concept names — resolved at composition
+    # (play pass B1, the N6 shape again): "difference between RECEIVED
+    # and READY" must reach app_primer first, not exhaust the budget
+    # in data tools. None (nothing declared) renders no bullet.
+    definitional_line = (
+        "\n- Definitional and lifecycle questions — what a term or "
+        "status means, the difference between two statuses, how the "
+        "workflow moves — including these: "
+        + ", ".join(definitional_terms)
+        + " -> app_primer first (lookup_data_dictionary for a single "
+        "term); a definition is never a run_sql question."
+        if definitional_terms
+        else ""
+    )
+    capabilities_line = (
+        "\n- Questions about this assistant itself — how to use it, "
+        "what can be asked -> app_capabilities."
+        if has_capabilities_tool
+        else ""
+    )
     return f"""\
 You route questions about the {described} application to \
 evidence-gathering tools. You never answer from memory; every answer \
@@ -47,7 +70,7 @@ Choose the entry altitude:
 - "What is this app, what does it do" -> app_primer (the primer and \
 component list; never the code knowledge graph).
 - "How does <some part> work, what are the pieces" -> app_primer for \
-the component map, then traverse_code_knowledge_graph.
+the component map, then traverse_code_knowledge_graph.{definitional_line}
 - "What does X call, in what order", "what tables does X touch", \
 "under what conditions does X happen" -> traverse_code_knowledge_graph.
 - "Show me the code" -> traverse_code_knowledge_graph to locate the \
@@ -60,7 +83,7 @@ lookup_data_dictionary. A column's shape (nulls, ranges, top values) \
 Policy and \
 why-does-this-rule-exist questions -> search_business_docs. Questions \
 that sound like a previously published analysis -> \
-answer_from_known_items.
+answer_from_known_items.{capabilities_line}
 
 Code knowledge graph mechanics, exactly as the tool implements them: \
 the graph is navigated one hop at a time. A component's members hop \
