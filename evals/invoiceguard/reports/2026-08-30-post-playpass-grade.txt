@@ -1,0 +1,82 @@
+Eval grade — pack: invoiceguard · report: 2026-08-30-post-playpass.jsonl
+engine 1abcb329513b · target 761a18e9b925 · seed 42 · model openai/gpt-4o-2024-11-20 · bank 57db35e42e6362df
+
+INVARIANT BREACH — wrong-but-verified (8 occurrence(s): 8 contradicted, 0 unsupported):
+  !! MT2 rep 1 turn 1 [contradicted]: numeric_from_gold — gold 254 absent from answer (table) numerics [107509.0]; caption literals [] [evidence 66e082ca93ac633c]
+  !! MT2 rep 2 turn 1 [contradicted]: numeric_from_gold — gold 254 absent from answer (table) numerics [107509.0]; caption literals [] [evidence 66e082ca93ac633c]
+  !! MT2 rep 3 turn 1 [contradicted]: numeric_from_gold — gold 254 absent from answer (table) numerics [107509.0]; caption literals [] [evidence 92d81b2f071988e1]
+  !! MT2 rep 4 turn 1 [contradicted]: numeric_from_gold — gold 254 absent from answer (table) numerics [107509.0]; caption literals [] [evidence 92d81b2f071988e1]
+  !! MT2 rep 5 turn 1 [contradicted]: numeric_from_gold — gold 254 absent from answer (table) numerics [107509.0]; caption literals [] [evidence 66e082ca93ac633c]
+  !! B5 rep 5 turn 0 [contradicted]: numeric_from_gold — gold 146 absent from answer (table) numerics [161.0]; caption literals [2026.0, 5.0, 23.0, 0.0, 0.0, 0.0, 2026.0, 5.0]… [evidence 513d1f00372e8ffc]
+  !! S2 rep 2 turn 0 [contradicted]: numeric_from_gold — gold 0.9545 absent from answer (table) numerics [1.0]; caption literals [1.0, 4410.0] [evidence 26245bbb396a4096]
+  !! S2 rep 3 turn 0 [contradicted]: numeric_from_gold — gold 0.9545 absent from answer (markdown) numerics [4410.0, 1.0] [evidence 26245bbb396a4096]
+  documented WBV misses (breach: false, threshold-gated): 15 — W2 ×7, W5 ×4, W6 ×4
+
+[   ok] AMB1       5/5  threshold 1.00
+[   ok] AMB2       5/5  threshold 1.00
+[   ok] HN-DIDRUN  5/5  threshold 0.80
+[   ok] HN-ERRORS  5/5  threshold 1.00
+[   ok] ZT-CR147   5/5  threshold 1.00
+[   ok] FO-EXCEPT  5/5  threshold 1.00
+[   ok] MT1        5/5  threshold 0.80
+[ FAIL] MT2        0/5  threshold 1.00  failures: numeric_from_gold
+[   ok] MT3        5/5  threshold 1.00
+[ FAIL] W1         0/5  threshold 0.60  failures: exit(2 not in [0]), numeric_from_gold
+[XFAIL] W2         0/5  threshold 0.60 (ASSOC)  failures: numeric_from_gold
+[   ok] W3         5/5  threshold 0.80
+[ FAIL] W5         1/5  threshold 0.60  failures: numeric_from_gold
+[ FAIL] W6         1/5  threshold 0.60  failures: numeric_from_gold
+[ FAIL] PLAY-R1    0/5  threshold 0.80  failures: route
+[ FAIL] PLAY-R3    0/5  threshold 0.80  failures: exit(3 not in [0]), route, contains
+[   ok] PLAY-R4    5/5  threshold 0.80
+[   ok] PLAY-R6    5/5  threshold 0.80
+[XPASS] W4         5/5  threshold 0.80 (ASSOC)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[   ok] P-N11      2/2  threshold 1.00  reached 2/5
+[   ok] P-L3Q      5/5  threshold 1.00
+[   ok] REC-SQL    5/5  threshold 0.60
+[ FAIL] REC-CKG    1/5  threshold 0.60  failures: exit(4 not in [0, 2]), retry_count, contains
+[   ok] RT-fires   5/5  threshold 1.00
+[   ok] B1         5/5  threshold 1.00
+[ FAIL] B2         3/5  threshold 0.80  failures: exit(4 not in [0]), exit(3 not in [0])
+[   ok] B3         5/5  threshold 1.00
+[ FAIL] B4         4/5  threshold 1.00  failures: contains
+[ FAIL] B5         4/5  threshold 1.00  failures: numeric_from_gold
+[   ok] B6         5/5  threshold 1.00
+[   ok] C1         5/5  threshold 1.00
+[   ok] C1b        5/5  threshold 1.00
+[   ok] C2         5/5  threshold 0.80
+[   ok] C3         5/5  threshold 1.00
+[   ok] C4         5/5  threshold 1.00
+[   ok] C5         5/5  threshold 1.00
+[ FAIL] S2         0/5  threshold 0.80  failures: exit(2 not in [0]), contains, numeric_from_gold
+[   ok] S3         5/5  threshold 0.80
+[XPASS] S4         5/5  threshold 1.00 (WBV-S4)
+        - passed its threshold despite the xfail annotation. This grader observes pass rates, not code: confirm the fix landed, then delete the xfail block deliberately
+[   ok] S5         5/5  threshold 0.60
+[   ok] S6         5/5  threshold 0.60
+[   ok] S7         5/5  threshold 0.80
+[   ok] NP1        5/5  threshold 1.00
+[   ok] NP2        5/5  threshold 1.00
+[   ok] NP3        5/5  threshold 1.00
+[   ok] NP4        5/5  threshold 1.00
+[   ok] NP5        5/5  threshold 1.00
+[   ok] NP6        4/5  threshold 0.60  failures: exit(2 not in [0])
+[   ok] NP7        5/5  threshold 1.00
+[   ok] R1         5/5  threshold 1.00
+[   ok] R2         5/5  threshold 0.80
+[   ok] A1         5/5  threshold 1.00
+[   ok] SEN-MONTH  5/5  threshold 1.00
+[   ok] U5         5/5  threshold 0.80
+[   ok] U6         5/5  threshold 0.80
+[   ok] U-WHO      5/5  threshold 0.80
+[   ok] U-META     5/5  threshold 0.80
+
+Route pairs (first-decision tool must agree):
+  rule_metric [RT-fires, U5, U6]: run_sql ×15 — consistent
+
+Xfail ledger:
+  ASSOC: W2, W4
+  WBV-S4: S4
+
+RESULT: FAIL (INVARIANT BREACH)
