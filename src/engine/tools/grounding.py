@@ -37,6 +37,18 @@ def match_metrics(
     return matched
 
 
+def _interpretation_lines(interpretations) -> list[str]:
+    """A declaring entry's readings, rendered under it — the SQL
+    author sees which attribution it is choosing (play pass W6/W8),
+    and the drafter rule makes the answer say which one it chose."""
+    if not interpretations:
+        return []
+    lines = ["  interpretations (the answer must name the one used):"]
+    for interpretation in interpretations:
+        lines.append(f"    - {interpretation.name}: {interpretation.meaning}")
+    return lines
+
+
 def render_grounding(
     dictionary: list[DictionaryRow],
     dictionary_map: DictionaryMap,
@@ -163,6 +175,7 @@ def render_grounding(
             if concept.synonyms:
                 names += f" (aka {', '.join(concept.synonyms)})"
             lines.append(f"- {names}: {concept.definition}")
+            lines.extend(_interpretation_lines(concept.interpretations))
 
     if dictionary_map.metrics:
         lines.append("\n## Canonical metrics (use these definitions)")
@@ -174,6 +187,7 @@ def render_grounding(
             lines.append(f"  aggregation: {metric.aggregation_sql}")
             if metric.notes:
                 lines.append(f"  notes: {metric.notes}")
+            lines.extend(_interpretation_lines(metric.interpretations))
 
     if dictionary_map.join_paths:
         lines.append("\n## Canonical join paths")

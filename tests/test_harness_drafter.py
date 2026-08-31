@@ -165,3 +165,36 @@ def test_harvested_field_names_are_exactly_the_rendered_keys():
     assert field_names(rendered) == field_names(invocation.rendered_output())
     assert "error_count" in field_names(rendered)
     assert "run_status" not in field_names(rendered)
+
+
+def test_interpretation_rule_renders_only_when_declared():
+    """Play pass C4 (W8): the drafter rule that makes an answer name
+    the reading it used exists only for packs whose map declares
+    interpretations — config-grounded, injected as text."""
+    from engine.harness.prompts import render_drafter_prompt
+
+    with_terms = render_drafter_prompt(
+        app_name="a",
+        interpretation_terms=(
+            "  recovered_opportunity: closed-invoice opportunity "
+            "(the rollup); feedback-authored findings (authored rows)"
+        ),
+    )
+    assert "more than one reading" in with_terms
+    assert "which reading the evidence's SQL used" in with_terms
+    assert "closed-invoice opportunity" in with_terms
+
+    without = render_drafter_prompt(app_name="a")
+    assert "more than one reading" not in without
+
+
+def test_interpretation_terms_resolve_from_the_fixture_map(tool_pack):
+    from engine.config.pack_loader import load_pack
+    from engine.runtime.tools import resolve_interpretation_terms
+    from tests.conftest import build_tool_registry as _build
+
+    _, ports = _build(tool_pack)
+    terms = resolve_interpretation_terms(load_pack(tool_pack), ports)
+    assert terms is not None
+    assert "flag_rate:" in terms
+    assert "substantive" in terms

@@ -40,7 +40,13 @@ re-run.
    challenge correctly capped them (exit 2/3 — the safety layer
    working on wrong SQL). **Queued:** a creepback /
    `prior_revision_id` grounding gotcha strong enough that the model
-   stops adding acceptance predicates.
+   stops adding acceptance predicates. **Landed (Phase 5 interlude,
+   play pass C1):** the `creepback_suppliers` canonical metric —
+   manager-phrasing synonyms, a template over `findings.rule_name
+   LIKE '%creepback%'`, and notes stating outright that acceptance
+   predicates re-test what the finding already proves — plus
+   synonyms on the creep-back concept so the phrasings reach both
+   the router's vocabulary and the grounding's metric match.
 
 ## P-N11 (0/5 on fp4-slice) — split residuals, neither is N11
 
@@ -180,4 +186,6 @@ from the earlier NP6 census (`enum_values`, `top_values`,
 ---
 
 *Un-triaged and deliberately parked: NP3 (0/5, `currency_format`
-float tails) — known since session 3, unchanged this pass.*
+float tails) — known since session 3, unchanged this pass. (Since
+resolved: the Phase 5 Block 0 money display hint flipped NP3 to 5/5
+on the 2026-08-30 post-Block-1 run.)*

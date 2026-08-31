@@ -251,6 +251,19 @@ class DocProvenance(BaseModel):
     note: str = ""
 
 
+class Interpretation(BaseModel):
+    """One reading a manager term can carry — 'recovered' as
+    feedback-authored findings vs closed-invoice opportunity, 15×
+    apart in the play session (W8). Consumers: run_sql grounding
+    (rendered under the declaring entry) and the drafter rule that
+    makes an answer name the reading it used."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    meaning: str
+
+
 class Concept(BaseModel):
     """One business concept, mapped to where it lives in the schema
     (Brief §4.2). Joins to the dictionary by table/column names."""
@@ -261,6 +274,12 @@ class Concept(BaseModel):
     definition: str
     tables: list[str] = []
     synonyms: list[str] = []
+    interpretations: list[Interpretation] = []
+    # Per-entry override of the document provenance block: the map is
+    # a living artifact, and entries hand-authored through use are
+    # source=human while the original machine draft stays machine.
+    # None inherits the document block.
+    provenance: DocProvenance | None = None
 
 
 class CanonicalMetric(BaseModel):
@@ -286,6 +305,8 @@ class CanonicalMetric(BaseModel):
     # join shape to the model (U5: the LEFT JOIN that must not become
     # an INNER JOIN). Rendered verbatim as the template.
     template_sql: str = ""
+    interpretations: list[Interpretation] = []
+    provenance: DocProvenance | None = None  # None inherits the document block
 
 
 class JoinStep(BaseModel):
@@ -324,6 +345,7 @@ class Gotcha(BaseModel):
     summary: str
     detail: str
     tables: list[str] = []
+    provenance: DocProvenance | None = None  # None inherits the document block
 
 
 class WhereToLookExample(BaseModel):

@@ -16,7 +16,9 @@ provenance:
   note: >-
     Authored from invoice-guard docs/functional-spec.md and
     docs/planted-stories.md at commit 761a18e9; to be human-validated
-    through use.
+    through use. Entries added later by hand carry their own
+    provenance block (source: human) overriding this document
+    default.
 
 concepts:
   - name: invoice lifecycle
@@ -72,6 +74,19 @@ concepts:
       the creepback scan; lands as CREEPBACK findings and doubles the
       invoice's weight multiplier.
     tables: [findings, invoices]
+    synonyms:
+      - creepback
+      - creep back
+      - raised prices back up
+      - reinflation
+      - price creep
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Synonyms hand-authored from the 2026-08-31 play session (S6:
+        manager phrasings never reached this concept).
   - name: lapse
     definition: >-
       Invoices still RECEIVED/READY past the lapse window
@@ -86,6 +101,28 @@ concepts:
       audit pipeline. Out-of-network suppliers' invoices are born
       LAPSED (out of audit scope), not scored.
     tables: [suppliers, invoices]
+  - name: audit rules
+    definition: >-
+      "Rules" has three senses. (1) The 12 audit rules in the rules
+      engine's code — every one runs on every scored invoice, so "how
+      many rules run on an invoice" is 12, answered from the
+      primer/CKG, not SQL. (2) Compliance rule codes —
+      compliance_rules rows, severity-bearing, arriving as
+      compliance_<code> findings; 10 distinct rule codes in this
+      data. (3) findings.rule_name values — the rules that actually
+      FIRED (26 distinct values, since compliance findings arrive as
+      compliance_<code>). Counting compliance_reports per invoice
+      answers none of these.
+    tables: [findings, compliance_rules]
+    synonyms: [rules, audit rule]
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-08-31 play session (W5: rules-per-
+        invoice counted compliance_reports; W6: rule averages read the
+        wrong grain).
 
 metrics:
   - name: flag_rate
@@ -125,6 +162,19 @@ metrics:
       invoices ON invoices.id = invoice_history.invoice_id; GROUP BY
       users.team, DATE(invoice_history.at). This mirrors the app's
       PRODUCTION_ROLLUP_SQL (platform/api/teams.py).
+    interpretations:
+      - name: closed-invoice opportunity
+        meaning: >-
+          SUM(invoices.opportunity) over reviews the auditor
+          completed — the app's production rollup, the default.
+      - name: closed-invoice findings
+        meaning: >-
+          effective finding amounts (valid exceptions zeroed) on
+          invoices the auditor closed.
+      - name: feedback-authored findings
+        meaning: >-
+          effective finding amounts where the auditor authored the
+          finding_feedback row.
   - name: rule_savings
     description: >-
       Effective savings each rule has produced — finding amounts with
@@ -155,7 +205,21 @@ metrics:
       WHERE clause turns it into an INNER JOIN and drops every finding
       without a feedback row — the inversion the 4b baseline caught
       (duplicate_line $11K instead of quantity_spike $610K). Zero the
-      excepted rows inside the SUM, never in WHERE.
+      excepted rows inside the SUM, never in WHERE. Per-rule AVERAGES
+      are finding-level: AVG over findings.amount, never
+      AVG(invoices.opportunity) across a join — invoice-level values
+      are inflated by every other rule on the same invoice (1.5–25×
+      in the play session).
+    interpretations:
+      - name: finding-level
+        meaning: >-
+          SUM/AVG over findings.amount — the dollars the rule's own
+          findings carry; the default.
+      - name: invoice-level
+        meaning: >-
+          aggregates over invoices.opportunity for invoices the rule
+          touched — inflated by every co-occurring rule; name it if
+          deliberately used.
   - name: queue_backlog
     description: >-
       The READY backlog awaiting audit: count, total opportunity,
@@ -169,6 +233,40 @@ metrics:
       The app splits this per team by mapping finding categories to
       teams via config.values_json team_to_categories — a JSON config
       lookup, not a column; per-team splits need that mapping.
+  - name: creepback_suppliers
+    description: >-
+      Suppliers caught creeping prices back up — the creepback scan's
+      own findings, already net of acceptance history.
+    tables: [findings, invoices, suppliers]
+    synonyms:
+      - who crept back
+      - raised prices back up after accepting
+      - reinflated prices
+      - crept back up
+    filter_sql: "f.rule_name LIKE '%creepback%'"
+    aggregation_sql: "COUNT(*)"
+    template_sql: |
+      SELECT s.code, s.name, COUNT(*) AS creepback_findings
+      FROM findings f
+      JOIN invoices i ON i.id = f.invoice_id
+      JOIN suppliers s ON s.id = i.supplier_id
+      WHERE f.rule_name LIKE '%creepback%'
+      GROUP BY s.code, s.name
+      ORDER BY creepback_findings DESC
+    notes: >-
+      The scan has already verified the accept-then-drift pattern
+      before writing the finding. Layering supplier_acceptance,
+      review_reports.disposition, or invoice_history predicates on
+      top re-tests what the finding already proves and
+      self-annihilates to zero rows (S6: five reps, five empty
+      results). The findings ARE the creep-back population.
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-08-31 play session; lands the
+        fix-pass-4 residuals queue's S6 grounding fix.
   - name: auditor_throughput
     description: >-
       Claims and completed reviews per auditor over a half-open
@@ -352,6 +450,26 @@ gotchas:
       reactivation is performed by an audit manager (users.role =
       'audit_manager'); actor holds the user's short_name.
     tables: [invoices, invoice_history]
+  - name: time_in_status
+    summary: >-
+      Time in a status pairs the transition that ENTERS it (to_status
+      = X) with the one that LEAVES it (from_status = X) — two
+      different invoice_history rows.
+    detail: >-
+      invoice_history rows are transitions, not states. "How long
+      from RECEIVED to READY" is the gap between the row entering
+      RECEIVED (to_status = 'RECEIVED') and the row leaving it
+      (from_status = 'RECEIVED' AND to_status = 'READY'), joined per
+      invoice_id. Reading both timestamps from the single READY
+      transition row (CASE branches over from_status/to_status inside
+      a WHERE to_status = 'READY' scope) subtracts a timestamp from
+      itself and yields exactly 0:00:00 — the play session's W3.
+    tables: [invoice_history]
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: Hand-authored from the 2026-08-31 play session (W3).
   - name: rule_name_prefixes
     summary: >-
       findings.rule_name drops the code's rule_ prefix, and

@@ -12,6 +12,7 @@ from engine.runtime.harness import build_verifier
 from engine.runtime.tools import (
     resolve_data_terms,
     resolve_definitional_terms,
+    resolve_interpretation_terms,
     resolve_pack_coverage,
 )
 from engine.tools.envelope import ToolInvocation
@@ -111,7 +112,13 @@ def build_ask_session(
         llm=llm,
         registry=registry,
         verifier=verifier,
-        drafter=Drafter(llm, render_drafter_prompt(app_name=pack.config.name)),
+        drafter=Drafter(
+            llm,
+            render_drafter_prompt(
+                app_name=pack.config.name,
+                interpretation_terms=resolve_interpretation_terms(pack, ports),
+            ),
+        ),
         settings=pack.config.harness,
         router_prompt=render_router_prompt(
             app_name=pack.config.name,

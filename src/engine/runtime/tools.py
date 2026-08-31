@@ -192,6 +192,30 @@ def resolve_definitional_terms(
     return deduped or None
 
 
+def resolve_interpretation_terms(
+    pack: LoadedPack, ports: ResolvedPorts
+) -> str | None:
+    """Rendered lines for every map entry that declares
+    interpretations (play pass C4/W8) — the drafter rule's payload.
+    None when nothing declares any."""
+    from engine.ports.substrate_store import SubstrateStoreError
+
+    if PortName.SUBSTRATE_STORE not in set(ports.configured()):
+        return None
+    try:
+        mapping = ports.get(PortName.SUBSTRATE_STORE).dictionary_map()
+    except SubstrateStoreError:
+        return None
+    lines: list[str] = []
+    for entry in [*mapping.concepts, *mapping.metrics]:
+        if entry.interpretations:
+            readings = "; ".join(
+                f"{i.name} ({i.meaning})" for i in entry.interpretations
+            )
+            lines.append(f"  {entry.name}: {readings}")
+    return "\n".join(lines) or None
+
+
 def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
     _validate(pack, ports)
     settings = pack.config.tool_settings

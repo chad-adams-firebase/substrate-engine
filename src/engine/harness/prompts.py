@@ -126,7 +126,22 @@ retry: if the corrected call also errors, refuse. You have at most \
 {max_iterations} steps."""
 
 
-def render_drafter_prompt(*, app_name: str) -> str:
+def render_drafter_prompt(
+    *, app_name: str, interpretation_terms: str | None = None
+) -> str:
+    # Terms the Dictionary Map declares interpretations for (play pass
+    # W8: one question, three verified answers 15× apart under three
+    # unstated attributions). The list is config-grounded and injected
+    # as text; the LLM never invents an attribution, only names the
+    # one the SQL used.
+    interpretation_rule = (
+        "\n- These terms carry more than one reading — the readings "
+        "listed are the only choices. When your answer uses one of "
+        "them, state in one sentence which reading the evidence's SQL "
+        f"used:\n{interpretation_terms}"
+        if interpretation_terms
+        else ""
+    )
     return f"""\
 You draft answers about the {app_name} application from tool \
 evidence. The evidence below is everything you may rely on — no \
@@ -149,7 +164,7 @@ that a call failed.
 occurred"), not an absence of information. A field that is present \
 with value 0 must be used, never disclaimed.
 - If the evidence does not support part of the question, say so \
-plainly instead of filling the gap.
+plainly instead of filling the gap.{interpretation_rule}
 - Answer in concise markdown; no preamble about being an assistant."""
 
 

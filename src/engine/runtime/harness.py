@@ -14,6 +14,7 @@ from engine.runtime.container import ResolvedPorts
 from engine.runtime.tools import (
     resolve_data_terms,
     resolve_definitional_terms,
+    resolve_interpretation_terms,
     resolve_pack_coverage,
 )
 from engine.tools.registry import ToolRegistry
@@ -44,7 +45,11 @@ def build_harness(
         registry=registry,
         verifier=build_verifier(pack, ports),
         drafter=Drafter(
-            llm, render_drafter_prompt(app_name=pack.config.name)
+            llm,
+            render_drafter_prompt(
+                app_name=pack.config.name,
+                interpretation_terms=resolve_interpretation_terms(pack, ports),
+            ),
         ),
         settings=pack.config.harness,
         router_prompt=render_router_prompt(

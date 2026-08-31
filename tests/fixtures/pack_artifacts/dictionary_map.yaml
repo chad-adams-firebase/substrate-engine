@@ -23,6 +23,11 @@ metrics:
       SELECT COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices) AS flag_rate
       FROM findings f
     notes: Join findings f on f.invoice_id = invoices.id.
+    interpretations:
+      - name: all findings
+        meaning: any finding row counts, bookkeeping included.
+      - name: substantive
+        meaning: excludes category NOTE bookkeeping rows.
 
 join_paths:
   - name: invoices_to_findings

@@ -168,6 +168,9 @@ notes: Join findings f on f.invoice_id = invoices.id.
   tables: invoices, findings
   aggregation: COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices)
   notes: Join findings f on f.invoice_id = invoices.id.
+  interpretations (the answer must name the one used):
+    - all findings: any finding row counts, bookkeeping included.
+    - substantive: excludes category NOTE bookkeeping rows.
 
 ## Canonical join paths
 - invoices_to_findings: invoices.id = findings.invoice_id
