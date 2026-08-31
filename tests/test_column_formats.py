@@ -58,6 +58,40 @@ def test_marker_tokens_veto_an_alias_that_merely_ends_in_a_money_name():
     ) == {}
 
 
+def test_rate_named_money_columns_survive_the_rate_marker():
+    """The play-pass veto-ordering fix: the pack declares three _rate
+    money columns (unit_rate, contract_rate, requested_rate), and the
+    engine-default "rate" marker used to veto every aggregate alias
+    over them (avg_unit_rate rendered unformatted). Markers veto only
+    tokens BEFORE the matched money suffix — a marker inside the
+    money column's own name is the name, not a veto."""
+    rate_map = DictionaryMap(
+        provenance=DocProvenance(
+            source="human", confidence=1.0, needs_validation=False
+        ),
+        column_formats=[
+            ColumnFormatRule(
+                format="money",
+                columns=["invoice_lines.unit_rate", "invoices.opportunity"],
+            )
+        ],
+    )
+    names = money_column_names(rate_map)
+    assert _kinds(
+        ["avg_unit_rate", "unit_rate", "max_unit_rate"], names=names
+    ) == {
+        "avg_unit_rate": "money",
+        "unit_rate": "money",
+        "max_unit_rate": "money",
+    }
+    # Markers before the suffix still veto; a bare marker suffix and a
+    # partial name still fail the suffix rule.
+    assert _kinds(
+        ["count_unit_rate", "unit_rate_pct", "rate", "opportunity_rate"],
+        names=names,
+    ) == {}
+
+
 def test_last_token_rule_needs_the_whole_money_name_as_a_suffix():
     # "total" alone is not a money column; "invoice_total" is.
     assert _kinds(["grand_total", "total"]) == {}

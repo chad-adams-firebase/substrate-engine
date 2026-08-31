@@ -28,15 +28,22 @@ def money_column_names(dictionary_map: DictionaryMap) -> set[str]:
     }
 
 
-def _ends_with_money_column(tokens: list[str], money_columns: set[str]) -> bool:
-    """total_opportunity ends in opportunity; invoice_total_rank ends
-    in rank. A money column name may itself be several tokens
-    (invoice_total), so compare token suffixes, not the last token."""
+def _money_suffix_length(tokens: list[str], money_columns: set[str]) -> int:
+    """Token count of the money-column name the alias ends in, or 0.
+    total_opportunity ends in opportunity; invoice_total_rank ends in
+    rank. A money column name may itself be several tokens
+    (invoice_total), so compare token suffixes, not the last token.
+    The length matters to the caller: marker tokens veto only when
+    they sit BEFORE the matched suffix — "rate" inside avg_unit_rate
+    is part of the money column unit_rate, not a marker (the play
+    pass's _rate veto-ordering bug), while count_opportunity's
+    "count" is a genuine veto."""
+    best = 0
     for name in money_columns:
         name_tokens = name.split("_")
         if len(name_tokens) < len(tokens) and tokens[-len(name_tokens):] == name_tokens:
-            return True
-    return False
+            best = max(best, len(name_tokens))
+    return best
 
 
 def resolve_column_formats(
@@ -46,8 +53,8 @@ def resolve_column_formats(
 ) -> dict[str, ColumnFormat]:
     """The column_formats a Table carries. A column is money when
     (a) it IS a declared money column, (b) its alias ends in one and
-    no token is a non-money marker, or (c) it matches a configured
-    pattern. No money settings, no formatting."""
+    no token BEFORE that suffix is a non-money marker, or (c) it
+    matches a configured pattern. No money settings, no formatting."""
     if money is None:
         return {}
     markers = {marker.lower() for marker in money.non_money_markers}
@@ -55,11 +62,12 @@ def resolve_column_formats(
     for column in columns:
         lowered = column.lower()
         tokens = lowered.split("_")
+        suffix_length = _money_suffix_length(tokens, money_columns)
         is_money = (
             lowered in money_columns
             or (
-                _ends_with_money_column(tokens, money_columns)
-                and not (set(tokens) & markers)
+                suffix_length > 0
+                and not (set(tokens[:-suffix_length]) & markers)
             )
             or any(fnmatchcase(lowered, pattern.lower()) for pattern in money.column_patterns)
         )
