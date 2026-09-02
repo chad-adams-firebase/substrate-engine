@@ -298,5 +298,6 @@ class RunSql(Tool):
                 columns,
                 money_column_names(dictionary_map),
                 self._display.money,
+                self._display.duration,
             ),
         )

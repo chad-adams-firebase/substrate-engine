@@ -36,7 +36,9 @@
   }
 
   // Same rule as engine/harness/render.py format_money: sign, symbol,
-  // thousands separators, two decimals.
+  // thousands separators, two decimals. toFixed rounds the exact
+  // binary value half-up; the engine's _fixed does the same, so the
+  // digits agree on every double.
   function formatMoney(value, symbol) {
     const sign = value < 0 ? "-" : "";
     const fixed = Math.abs(value).toFixed(2);
@@ -44,8 +46,41 @@
     return sign + symbol + whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "." + frac;
   }
 
+  // Same rule as render.py humanize_seconds: the largest unit the
+  // duration fills, one decimal, trailing .0 dropped, singular at 1.
+  const UNIT_SECONDS = { seconds: 1, minutes: 60, hours: 3600, days: 86400 };
+  const HUMAN_UNITS = [["day", 86400], ["hour", 3600], ["minute", 60], ["second", 1]];
+  const CLOCK = /^(\d+):([0-5]\d):([0-5]\d)(?:\.(\d+))?$/;
+  function humanizeSeconds(seconds) {
+    const sign = seconds < 0 ? "-" : "";
+    const magnitude = Math.abs(seconds);
+    let name, amount;
+    for (const [unit, size] of HUMAN_UNITS) {
+      if (magnitude >= size || size === 1) { name = unit; amount = (magnitude / size).toFixed(1); break; }
+    }
+    const text = amount.endsWith(".0") ? amount.slice(0, -2) : amount;
+    return sign + text + " " + (text === "1" ? name : name + "s");
+  }
+  function formatDuration(value, unit) {
+    if (typeof value === "string") {
+      const m = CLOCK.exec(value.trim());
+      if (!m) return null;
+      let total = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+      if (m[4]) total += Number("0." + m[4]);
+      return humanizeSeconds(total);
+    }
+    if (unit && typeof value === "number") return humanizeSeconds(value * UNIT_SECONDS[unit]);
+    return null;
+  }
+
+  // Same rule as render.py format_cell: NULL is an em dash, never blank.
+  const NULL_CELL = "\u2014";
   function formatCell(value, hint) {
-    if (value === null || value === undefined) return "";
+    if (value === null || value === undefined) return NULL_CELL;
+    if (hint && hint.kind === "duration") {
+      const rendered = formatDuration(value, hint.unit);
+      if (rendered !== null) return rendered;
+    }
     if (typeof value === "number" && hint && hint.kind === "money") return formatMoney(value, hint.symbol);
     if (typeof value === "boolean") return value ? "true" : "false";
     return String(value);

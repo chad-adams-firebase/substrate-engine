@@ -211,6 +211,21 @@ display:
     # Aliases the map's column list cannot reach: metric-shaped names
     # that carry dollars without ending in a money column's name.
     column_patterns: ["*_savings", "*_dollars", "recovered_*"]
+  # Elapsed-time aliases and the unit their numbers count (Phase 5
+  # Block 2: the play session read 1.0806402437502474 days and
+  # 1:00:00 where a manager reads "1.1 days" and "1 hour"). The SQL
+  # author's unit is in the alias — julianday differences are days,
+  # strftime('%s') differences are seconds — so the globs are the
+  # only place the engine can learn it. clock lists aliases whose
+  # cells are H:MM:SS strings (SQLite time()); those carry their own
+  # unit. service_hours is a billed quantity, but "8 hours" is still
+  # how a manager reads it.
+  duration:
+    days: ["*_days", "days_*", "*_days_*"]
+    hours: ["*_hours", "hours_*", "*_hours_*"]
+    minutes: ["*_minutes", "minutes_*", "*_minutes_*"]
+    seconds: ["*_seconds", "seconds_*", "*_seconds_*"]
+    clock: ["*duration*", "*time_in_*", "*time_between*", "*elapsed*", "avg_time*", "*_time_to_*"]
 
 generation:
   source_sqlite: ../../../invoice-guard/simout/invoiceguard.db

@@ -5,14 +5,17 @@ engine does not know, so the answer to "is this column money?" comes
 from two pack-owned sources and nothing else: the Dictionary Map's
 column_formats (the pack author's list of money columns) and the
 pack's display.money settings (glob patterns plus the marker tokens
-that veto an alias). No engine list — CLAUDE.md, config over code.
+that veto an alias). "Is this column a duration?" comes from the
+pack's display.duration alias globs alone — durations are computed
+aliases, not schema columns. No engine list — CLAUDE.md, config over
+code.
 
 Pure code, unit-tested: no ports, no I/O.
 """
 
 from fnmatch import fnmatchcase
 
-from engine.config.models import MoneySettings
+from engine.config.models import DurationSettings, MoneySettings
 from engine.substrates.models import DictionaryMap
 from engine.tools.envelope import ColumnFormat
 
@@ -46,31 +49,54 @@ def _money_suffix_length(tokens: list[str], money_columns: set[str]) -> int:
     return best
 
 
+def _money_format(
+    lowered: str, money_columns: set[str], money: MoneySettings | None
+) -> ColumnFormat | None:
+    """A column is money when (a) it IS a declared money column, (b)
+    its alias ends in one and no token BEFORE that suffix is a
+    non-money marker, or (c) it matches a configured pattern."""
+    if money is None:
+        return None
+    markers = {marker.lower() for marker in money.non_money_markers}
+    tokens = lowered.split("_")
+    suffix_length = _money_suffix_length(tokens, money_columns)
+    is_money = (
+        lowered in money_columns
+        or (suffix_length > 0 and not (set(tokens[:-suffix_length]) & markers))
+        or any(fnmatchcase(lowered, pattern.lower()) for pattern in money.column_patterns)
+    )
+    return ColumnFormat(kind="money", symbol=money.symbol) if is_money else None
+
+
+def _duration_format(
+    lowered: str, duration: DurationSettings | None
+) -> ColumnFormat | None:
+    """A column is a duration when its alias matches a configured glob;
+    the list it matched names the unit its numbers count (None for
+    clock-string columns, whose cells carry their own)."""
+    if duration is None:
+        return None
+    for unit, patterns in duration.unit_patterns():
+        if any(fnmatchcase(lowered, pattern.lower()) for pattern in patterns):
+            return ColumnFormat(kind="duration", unit=unit)
+    return None
+
+
 def resolve_column_formats(
     columns: list[str],
     money_columns: set[str],
     money: MoneySettings | None,
+    duration: DurationSettings | None = None,
 ) -> dict[str, ColumnFormat]:
-    """The column_formats a Table carries. A column is money when
-    (a) it IS a declared money column, (b) its alias ends in one and
-    no token BEFORE that suffix is a non-money marker, or (c) it
-    matches a configured pattern. No money settings, no formatting."""
-    if money is None:
-        return {}
-    markers = {marker.lower() for marker in money.non_money_markers}
+    """The column_formats a Table carries. Money is decided first, so
+    an alias that reads as both keeps its currency. No settings, no
+    formatting."""
     formats: dict[str, ColumnFormat] = {}
     for column in columns:
         lowered = column.lower()
-        tokens = lowered.split("_")
-        suffix_length = _money_suffix_length(tokens, money_columns)
-        is_money = (
-            lowered in money_columns
-            or (
-                suffix_length > 0
-                and not (set(tokens[:-suffix_length]) & markers)
-            )
-            or any(fnmatchcase(lowered, pattern.lower()) for pattern in money.column_patterns)
+        hint = _money_format(lowered, money_columns, money) or _duration_format(
+            lowered, duration
         )
-        if is_money:
-            formats[column] = ColumnFormat(kind="money", symbol=money.symbol)
+        if hint is not None:
+            formats[column] = hint
     return formats

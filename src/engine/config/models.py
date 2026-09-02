@@ -317,6 +317,40 @@ class UiSettings(BaseModel):
     capabilities: str = ""
 
 
+DurationUnit = Literal["seconds", "minutes", "hours", "days"]
+
+
+class DurationSettings(BaseModel):
+    """Which result columns are elapsed times, and what unit their
+    numbers count (§10.5; the play session's 1.0806402437502474 days
+    and 1:00:00). Durations are almost always computed aliases
+    (julianday differences, strftime output), so — unlike money — the
+    hint comes from alias globs alone: each list names the aliases
+    whose numeric cells are measured in that unit. A column whose
+    cells are H:MM:SS strings carries its own unit; list it under
+    `clock`. A pack that declares no duration block gets no duration
+    formatting at all."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    days: list[str] = []
+    hours: list[str] = []
+    minutes: list[str] = []
+    seconds: list[str] = []
+    clock: list[str] = []
+
+    def unit_patterns(self) -> list[tuple[DurationUnit | None, list[str]]]:
+        """(unit, globs) in match order — the first unit whose glob
+        fits an alias wins."""
+        return [
+            ("days", self.days),
+            ("hours", self.hours),
+            ("minutes", self.minutes),
+            ("seconds", self.seconds),
+            (None, self.clock),
+        ]
+
+
 class DisplaySettings(BaseModel):
     """Presentation knobs shared by every surface that renders an
     answer (CLI text, eval flattening, the browser)."""
@@ -324,6 +358,7 @@ class DisplaySettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     money: MoneySettings | None = None
+    duration: DurationSettings | None = None
 
 
 class PackConfig(BaseModel):

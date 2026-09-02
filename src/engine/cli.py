@@ -632,28 +632,6 @@ def _print_status(event) -> None:
     print(f"{marker} {event.detail}", file=sys.stderr)
 
 
-def _render_text_table(table) -> str:
-    from engine.harness.render import format_cell
-
-    columns = table.columns
-    rows = [
-        [format_cell(row.get(c), table.column_formats.get(c)) for c in columns]
-        for row in table.rows
-    ]
-    widths = [
-        max(len(c), *(len(r[i]) for r in rows)) if rows else len(c)
-        for i, c in enumerate(columns)
-    ]
-    header = "  ".join(c.ljust(w) for c, w in zip(columns, widths))
-    lines = [header, "  ".join("-" * w for w in widths)]
-    lines.extend(
-        "  ".join(cell.ljust(w) for cell, w in zip(r, widths)) for r in rows
-    )
-    if table.truncated:
-        lines.append(f"({len(table.rows)} of {table.total_row_count} rows)")
-    return "\n".join(lines)
-
-
 def _ask(
     pack_dir: str,
     question: str,
@@ -690,7 +668,9 @@ def _ask(
             print("[UNVERIFIED] This answer could not be fully verified "
                   "against its evidence.")
         if outcome.body.kind == "table":
-            print(_render_text_table(outcome.body.table))
+            from engine.harness.render import render_table_text
+
+            print(render_table_text(outcome.body.table))
             if outcome.body.caption:
                 print(f"\n({outcome.body.caption})")
         else:

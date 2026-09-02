@@ -218,3 +218,22 @@ def test_unhinted_float_cells_still_render_round_trip():
         "{{e0.table.rows[0].total_opportunity}}", evidence
     )
     assert resolution.text == "8308.92139244107"
+
+
+def test_duration_hinted_cells_inject_humanized():
+    """Block 2: the play session's "1.0806402437502474 days" in prose
+    — the figure is code-injected, so the same hint that formats the
+    table formats the sentence."""
+    from engine.tools.envelope import ColumnFormat
+
+    evidence = _sql_evidence([{"avg_days": 1.0806402437502474, "wait": "1:00:00"}])
+    evidence[0].output.table.column_formats = {
+        "avg_days": ColumnFormat(kind="duration", unit="days"),
+        "wait": ColumnFormat(kind="duration"),
+    }
+    resolution = resolve_placeholders(
+        "On average {{e0.table.rows[0].avg_days}}, or {{e0.table.rows[0].wait}} at best.",
+        evidence,
+    )
+    assert resolution.failures == []
+    assert resolution.text == "On average 1.1 days, or 1 hour at best."

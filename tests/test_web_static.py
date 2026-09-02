@@ -42,10 +42,16 @@ def test_highlight_build_covers_the_languages_answers_quote():
         assert f'name:"{language}"' in bundle, language
 
 
-def test_browser_money_formatting_mirrors_the_engine_rule():
-    """The JS formatter is not unit-tested in a browser; pin that it
-    exists and encodes the same three rules as harness/render.py."""
+def test_browser_cell_formatting_mirrors_the_engine_rules():
+    """The JS formatters are not unit-tested in a browser; pin that
+    they exist and encode the same rules as harness/render.py: money
+    (toFixed(2) plus grouping), durations (largest unit, one decimal,
+    clock strings parsed), and the NULL em dash."""
     script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert "function formatMoney" in script
     assert "toFixed(2)" in script
     assert "column_formats" in script
+    assert "function formatDuration" in script and "function humanizeSeconds" in script
+    assert "toFixed(1)" in script
+    assert '"\\u2014"' in script  # NULL_CELL, never an empty cell
+    assert 'hint.kind === "duration"' in script

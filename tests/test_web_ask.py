@@ -134,7 +134,7 @@ def test_table_result_carries_money_hints_for_the_browser():
     )
     body = frames[-1][1]["result"]["outcome"]["body"]
     assert body["table"]["column_formats"] == {
-        "total_opportunity": {"kind": "money", "symbol": "$"}
+        "total_opportunity": {"kind": "money", "symbol": "$", "unit": None}
     }
     # Numbers travel store to screen untouched; the hint formats them.
     assert body["table"]["rows"][0]["total_opportunity"] == 8308.92139244107

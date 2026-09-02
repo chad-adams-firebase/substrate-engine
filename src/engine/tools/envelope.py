@@ -48,18 +48,26 @@ from engine.substrates.models import (
 JsonValue = str | int | float | bool | None
 
 
+DurationUnit = Literal["seconds", "minutes", "hours", "days"]
+
+
 class ColumnFormat(BaseModel):
     """A per-column display hint that travels with the table, store to
     screen (§10.5): every renderer — CLI text, eval flattening,
     placeholder injection, the browser — applies the same rule, so a
-    money cell never reaches a human as a float tail. The symbol rides
-    along because it is pack config (locale/branding), and a persisted
-    table must render identically without the pack in hand."""
+    money cell never reaches a human as a float tail and a duration
+    never as 1.0806402437502474 days. The symbol and unit ride along
+    because they are pack config (locale/branding, the SQL author's
+    unit), and a persisted table must render identically without the
+    pack in hand. A duration column's numeric cells are measured in
+    `unit`; its H:MM:SS string cells carry their own unit, so a
+    clock-string column may leave unit unset."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["money"]
-    symbol: str = ""
+    kind: Literal["money", "duration"]
+    symbol: str = ""  # money
+    unit: DurationUnit | None = None  # duration: what a number counts
 
 
 class Table(BaseModel):
@@ -77,7 +85,8 @@ class Table(BaseModel):
     truncated: bool = False
     # Keyed by column name (name-based access, never positional);
     # absent = render as-is. Resolved by the producing tool from the
-    # Dictionary Map's column_formats and the pack's display config.
+    # Dictionary Map's column_formats and the pack's display config
+    # (money from both; durations from the pack's alias patterns).
     column_formats: dict[str, ColumnFormat] = {}
 
 

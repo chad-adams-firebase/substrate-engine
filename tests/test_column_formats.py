@@ -126,3 +126,71 @@ def test_matching_is_case_insensitive_and_keys_keep_the_alias_spelling():
     assert list(resolve_column_formats(["Total_Opportunity"], COLUMNS, MONEY)) == [
         "Total_Opportunity"
     ]
+
+
+# --- Durations (Phase 5 Block 2) -------------------------------------
+
+from engine.config.models import DurationSettings  # noqa: E402
+
+DURATION = DurationSettings(
+    days=["*_days", "days_*"],
+    hours=["*_hours"],
+    clock=["*duration*", "*time_in_*"],
+)
+
+
+def _hints(columns, money=MONEY, duration=DURATION):
+    return {
+        column: (hint.kind, hint.unit)
+        for column, hint in resolve_column_formats(
+            columns, COLUMNS, money, duration
+        ).items()
+    }
+
+
+def test_duration_aliases_carry_the_unit_their_list_names():
+    assert _hints(["avg_days", "days_in_ready", "service_hours", "n"]) == {
+        "avg_days": ("duration", "days"),
+        "days_in_ready": ("duration", "days"),
+        "service_hours": ("duration", "hours"),
+    }
+
+
+def test_clock_string_aliases_carry_no_unit():
+    # The cells are H:MM:SS strings; the string says what it counts.
+    assert _hints(["avg_duration", "time_in_received"]) == {
+        "avg_duration": ("duration", None),
+        "time_in_received": ("duration", None),
+    }
+
+
+def test_money_wins_when_an_alias_reads_as_both():
+    money = MoneySettings(symbol="$", column_patterns=["*_hours"])
+    assert _hints(["billed_hours"], money=money) == {"billed_hours": ("money", None)}
+
+
+def test_no_duration_settings_means_no_duration_formatting():
+    assert _hints(["avg_days"], duration=None) == {}
+    assert resolve_column_formats(["avg_days"], COLUMNS, None, None) == {}
+
+
+def test_the_real_pack_config_declares_the_play_session_shapes():
+    """The InvoiceGuard config's duration block must catch the aliases
+    the play session actually produced — a julianday difference and a
+    time() string — or the sighting recurs."""
+    from pathlib import Path
+
+    from engine.config.pack_loader import load_pack
+
+    pack = load_pack(Path(__file__).resolve().parents[1] / "packs" / "invoiceguard")
+    display = pack.config.display
+    hints = resolve_column_formats(
+        ["avg_days_between", "avg_time_in_received", "avg_service_hours", "invoice_count"],
+        set(),
+        display.money,
+        display.duration,
+    )
+    assert hints["avg_days_between"].unit == "days"
+    assert hints["avg_time_in_received"].kind == "duration"
+    assert hints["avg_service_hours"].unit == "hours"
+    assert "invoice_count" not in hints
