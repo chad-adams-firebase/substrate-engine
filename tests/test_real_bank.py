@@ -39,3 +39,13 @@ def test_play_route_rows_split_outcome_from_mechanism():
         a for a in rows["PLAY-R3"].expect.assertions if a.kind == "route"
     ]
     assert r3_route.mode == "must_include"  # the mechanism probe stays pure
+
+
+def test_claude_md_carries_the_pin_hygiene_law():
+    """The breach cost an evening because the pin landed inside the
+    play pass's commit range; the law is one line and this pins it."""
+    text = (ROOT / "CLAUDE.md").read_text()
+    assert (
+        "Model pin changes are isolated commits and trigger a full bank "
+        "re-run before any other change lands." in text
+    )

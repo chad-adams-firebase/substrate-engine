@@ -47,3 +47,4 @@ Read this every session. The spec is `docs/technical-build-brief-v2.md`; the del
 - Generator fixtures have checked-in expected output; a changed extractor must change fixtures deliberately.
 - The InvoiceGuard pack's machine-derived substrates are always produced by the generators — never hand-edited. If output looks wrong, fix the generator.
 - Verifier tests include deliberately wrong results and corrupted summaries; catching them is the acceptance test.
+- Model pin changes are isolated commits and trigger a full bank re-run before any other change lands.
