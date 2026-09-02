@@ -130,7 +130,10 @@ class RunSql(Tool):
         "the result rows as a table. question: the user's question in "
         "the user's own words (only references to earlier turns "
         "resolved) — never a paraphrase: the SQL author is grounded in "
-        "the domain's vocabulary and must see the original phrasing."
+        "the domain's vocabulary and must see the original phrasing. "
+        "If the question arrives as SQL, run_sql bounces it; resend "
+        "what the SQL asks, in plain English — that is the licensed "
+        "retry, not a paraphrase."
     )
     input_model = RunSqlInput
 

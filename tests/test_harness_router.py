@@ -333,3 +333,25 @@ def test_router_messages_order_system_history_question_scratch():
     assert [m.role for m in messages] == ["system", "user", "user", "assistant"]
     assert messages[0].content == "SYSTEM"
     assert messages[2].content == "current q"
+
+
+def test_router_prompt_carries_the_verbatim_rule_and_its_one_exception():
+    """Post-coverage REC-SQL (2/5 from 5/5): the verbatim rule sent the
+    SQL-shaped question through verbatim, the bounce fired as designed,
+    and three reps then refused — the rule read as forbidding the one
+    rephrase the bounce asks for. The rule and its exception travel
+    together: after a bounce, the question in plain English is the
+    licensed retry, not a paraphrase."""
+    from engine.harness.prompts import render_router_prompt
+
+    prompt = render_router_prompt(
+        app_name="invoiceguard", app_description="d", max_iterations=6
+    )
+    assert "Hand run_sql the question as the user asked it" in prompt
+    assert "a paraphrase into other terms loses them" in prompt
+    assert "when run_sql bounces a question that is itself SQL" in prompt
+    assert "what the SQL asks, not the SQL" in prompt
+    assert "that is not a paraphrase" in prompt
+    # The exception sits inside the run_sql bullet, after the rule.
+    bullet = prompt.split("run_sql.", 1)[1].split("\n-", 1)[0]
+    assert bullet.index("as the user asked it") < bullet.index("One exception")

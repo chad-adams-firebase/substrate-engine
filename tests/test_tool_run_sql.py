@@ -538,3 +538,14 @@ def test_all_three_lints_challenge_together_in_one_round(tool_pack):
     assert attempts[1].error is None
     assert attempts[1].lint and attempts[1].enum_lint and attempts[1].interval_lint
 
+
+
+def test_run_sql_description_licenses_the_english_retry_after_a_bounce():
+    """The verbatim rule and its one exception travel together on the
+    tool surface too: after a SQL bounce the retry is the question in
+    plain English (post-coverage REC-SQL)."""
+    from engine.tools.run_sql import RunSql
+
+    assert "never a paraphrase" in RunSql.description
+    assert "what the SQL asks" in RunSql.description
+    assert "the licensed retry, not a paraphrase" in RunSql.description

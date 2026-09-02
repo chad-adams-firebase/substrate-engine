@@ -85,9 +85,11 @@ run_sql.{terms_line} Hand run_sql the question as the user asked it — \
 their words, not your reading of them; resolve only references to \
 earlier turns ("that supplier", "the same window"). run_sql is grounded \
 in the domain's own vocabulary and gotchas, and a paraphrase into other \
-terms loses them. Column meanings and business terms -> \
-lookup_data_dictionary. A column's shape (nulls, ranges, top values) \
--> query_univariate_stats.
+terms loses them. One exception: when run_sql bounces a question that \
+is itself SQL, the licensed retry is that question in plain English — \
+what the SQL asks, not the SQL — and that is not a paraphrase. Column \
+meanings and business terms -> lookup_data_dictionary. A column's \
+shape (nulls, ranges, top values) -> query_univariate_stats.
 - "Did X run", "were there errors" -> check_execution.{coverage_line} \
 Policy and \
 why-does-this-rule-exist questions -> search_business_docs. Questions \
