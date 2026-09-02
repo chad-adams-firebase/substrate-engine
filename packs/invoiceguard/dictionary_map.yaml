@@ -409,6 +409,26 @@ gotchas:
       aggregations that should reflect the app's numbers must
       LEFT JOIN finding_feedback and zero out excepted rows.
     tables: [findings, finding_feedback]
+  - name: rate_needs_unflagged_side
+    summary: >-
+      A rate over a population needs the unflagged side —
+      COALESCE(indicator, 0) (or a CASE) so AVG doesn't silently skip
+      NULLs and saturate to 1.0.
+    detail: >-
+      "Usually", "share of", "what rate" questions divide by the
+      WHOLE population, but building the indicator via a LEFT JOIN
+      leaves unmatched rows NULL, and AVG skips NULLs — every
+      unflagged line vanishes from the denominator and the rate
+      saturates to exactly 1.0 (the pin pass's S2: 1.0 reported where
+      the true rate was 63/66). Make the unflagged side an explicit
+      0: AVG(COALESCE(indicator, 0)), or COUNT the matches and divide
+      by the population's own COUNT.
+    tables: [invoice_lines, findings]
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: Hand-authored from the 2026-08-31 pin pass (S2).
   - name: compliance_dual_signal
     summary: >-
       Critical compliance uses two deliberately different signals —
@@ -473,13 +493,21 @@ gotchas:
   - name: rule_name_prefixes
     summary: >-
       findings.rule_name drops the code's rule_ prefix, and
-      compliance findings are named compliance_<rule code>.
+      compliance findings are named compliance_<rule code> — a naming
+      convention, never a join key.
     detail: >-
       The rules engine's rule_rate_variance writes rule_name
       'rate_variance', and so on. Compliance-intake findings arrive
       as compliance_CR-147 etc. — filtering rule_name LIKE
-      'compliance_%' selects exactly the compliance layer.
-    tables: [findings]
+      'compliance_%' selects exactly the compliance layer. But
+      rule_name = 'compliance_' || rule_code is a DERIVED, NON-UNIQUE
+      key (10 rule codes across 4,216 compliance_rules rows): used as
+      a join condition it pairs every finding of a code with every
+      rule of that code and fans out 17× and worse. Never join on it.
+      For severity questions count compliance_rules directly — the
+      invoices_to_compliance join path is the keyed road when invoice
+      context is needed.
+    tables: [findings, compliance_rules]
 
 # Display hints (§10.5): the money columns as the pack author knows
 # them. Consumer: run_sql tags result columns (and aliases ending in
@@ -500,11 +528,13 @@ column_formats:
 examples:
   - question: How many invoices received last week had findings?
     guidance: >-
-      Join invoices to findings on invoice_id; COUNT(DISTINCT
-      invoices.id); window on invoices.received_at anchored to the
-      data's end (see data_coverage — "last week" means the final
-      seven days ending 2026-05-30, i.e. received_at >= '2026-05-23
-      00:00:00' AND received_at < '2026-05-30 00:00:00').
+      Join invoices to findings on invoice_id — an inner join: a LEFT
+      JOIN counts every received invoice, not the flagged ones;
+      COUNT(DISTINCT invoices.id); window on invoices.received_at
+      anchored to the data's end (see data_coverage — "last week"
+      means the final seven days ending 2026-05-30, i.e. received_at
+      >= '2026-05-23 00:00:00' AND received_at < '2026-05-30
+      00:00:00').
   - question: Which supplier draws the most rate-variance findings?
     guidance: >-
       findings WHERE rule_name = 'rate_variance', joined through
