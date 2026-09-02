@@ -407,3 +407,37 @@ def test_expression_join_challenge_quotes_the_models_own_literal():
     assert original_fragment(sql, "a.k = LOWER( '' )") == "a.k = LOWER( 'X''y' )"
     # No match (the fragment never existed): the cleaned text, collapsed.
     assert original_fragment(sql, "a.k  =  ''") == "a.k = ''"
+
+
+# --- Duration pass: S2's recommended indicator shape ------------------
+
+S2_EXISTS_AVG = (
+    "SELECT AVG(CASE WHEN EXISTS (SELECT 1 FROM findings f "
+    "WHERE f.invoice_id = l.invoice_id AND f.line_number = l.line_number "
+    "AND f.rule_name = 'service_hours_excessive') THEN 1.0 ELSE 0.0 END) "
+    "AS item_flag_rate FROM invoice_lines l WHERE l.item_code = 'SVC-4410'"
+)
+S2_EXISTS_SUM = (
+    "SELECT SUM(CASE WHEN EXISTS (SELECT 1 FROM findings f "
+    "WHERE f.invoice_id = l.invoice_id AND f.line_number = l.line_number "
+    "AND f.rule_name = 'service_hours_excessive') THEN 1 ELSE 0 END) * 1.0 "
+    "/ COUNT(*) AS item_flag_rate FROM invoice_lines l WHERE l.item_code = 'SVC-4410'"
+)
+S2_LEFT_JOIN_INDICATOR = (
+    "SELECT AVG(CASE WHEN f.id IS NOT NULL THEN 1.0 ELSE 0.0 END) AS item_flag_rate "
+    "FROM invoice_lines l LEFT JOIN findings f ON l.invoice_id = f.invoice_id "
+    "AND l.line_number = f.line_number AND f.rule_name = 'service_hours_excessive' "
+    "WHERE l.item_code = 'SVC-4410'"
+)
+
+
+def test_the_exists_indicator_never_meets_the_lint_and_the_left_join_one_does():
+    """Post-coverage S2: the gotcha's recommended LEFT JOIN indicator drew
+    the fan-out challenge on two reps (both invoice_id columns are FKs
+    to invoices; the composite join is not declared one-to-one). The
+    EXISTS indicator hoists to a subquery the outer scope never joins,
+    so a recommended shape never meets a lint."""
+    assert lint_fan_out(S2_EXISTS_AVG, DICTIONARY, MAP) is None
+    assert lint_fan_out(S2_EXISTS_SUM, DICTIONARY, MAP) is None
+    reason = lint_fan_out(S2_LEFT_JOIN_INDICATOR, DICTIONARY, MAP)
+    assert reason is not None and reason.startswith("Fan-out check:")

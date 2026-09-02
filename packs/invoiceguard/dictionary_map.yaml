@@ -769,10 +769,16 @@ gotchas:
       joined COUNTs is the fan-out shape the lint challenges and the
       Verifier marks unverified (the post-Block-2 S2 overrides, and rep
       5's 1.0476 = 66 lines under a fanned 69). The indicator itself is
-      CASE WHEN <match>.id IS NOT NULL THEN 1 ELSE 0 END per population
-      row — never a COUNT(<match>.id) grouped per row: a count is not
-      an indicator (a row with two matches counts 2 and the "rate"
-      runs past 1.0).
+      CASE WHEN EXISTS (SELECT 1 FROM findings f WHERE f.invoice_id =
+      l.invoice_id AND f.line_number = l.line_number AND f.rule_name =
+      '<rule>') THEN 1 ELSE 0 END per population row — the
+      correction_application_rate template's shape, which never meets
+      the fan-out check. Never a LEFT JOIN indicator: <match>.id IS NOT
+      NULL over a joined findings row is the composite line join the
+      fan-out check challenges (a line may carry more than one finding
+      by schema, so the join is not declared one-to-one), and never a
+      COUNT(<match>.id) grouped per row: a count is not an indicator
+      (a row with two matches counts 2 and the "rate" runs past 1.0).
     tables: [invoice_lines, findings]
     provenance:
       source: human
@@ -782,7 +788,10 @@ gotchas:
         Hand-authored from the 2026-08-31 pin pass (S2); indicator
         shape added after the 2026-09-02 re-run (Phase 5 Block 2); the
         joined-COUNT alternative replaced by the one-scope SUM(CASE)
-        after the post-Block-2 bank (S2 3/5 -> 2/5).
+        after the post-Block-2 bank (S2 3/5 -> 2/5); the LEFT JOIN
+        indicator replaced by EXISTS after the post-coverage bank (S2
+        0/5: the recommended shape itself drew the fan-out challenge
+        on two reps). EXISTS returns 63/66 = 0.9545 in this world.
   - name: compliance_dual_signal
     summary: >-
       Critical compliance uses two deliberately different signals —

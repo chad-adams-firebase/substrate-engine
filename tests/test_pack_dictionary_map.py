@@ -179,3 +179,23 @@ def test_time_in_status_gotcha_names_the_unit_shapes(pack_map):
     assert "EPOCH(" in gotcha.detail
     assert "DATE_DIFF('hour'" in gotcha.detail
     assert "/ 86400" in gotcha.detail  # the wrong shape, named
+
+
+def test_rate_gotcha_recommends_the_exists_indicator(pack_map):
+    """Post-coverage S2: two reps were warn-capped by fan_out_override on
+    the gotcha's OWN recommended shape — a CASE indicator over the
+    line-grain LEFT JOIN, which the fan-out check challenges because a
+    line may carry more than one finding by schema. The recommended
+    shape is now EXISTS, the correction_application_rate template's,
+    and never meets the lint; the join stays undeclared (not
+    one_to_one — correct by luck is not correct)."""
+    gotcha = next(g for g in pack_map.gotchas if g.name == "rate_needs_unflagged_side")
+    assert "CASE WHEN EXISTS (SELECT 1 FROM findings f" in gotcha.detail
+    assert "IS NOT NULL THEN 1" not in gotcha.detail
+    assert "correction_application_rate" in gotcha.detail
+    assert not any(
+        {s.from_table, s.to_table} == {"invoice_lines", "findings"}
+        for path in pack_map.join_paths
+        if path.cardinality == "one_to_one"
+        for s in path.steps
+    )

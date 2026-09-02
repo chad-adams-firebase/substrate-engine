@@ -218,11 +218,19 @@
     exit: [0]
     assertions:
       - {kind: nonempty}
-      - {kind: contains, pattern: '\byes\b', regex: true}
+      - {kind: contains, pattern: "SVC-4410"}
       - {kind: numeric_from_gold, field: rate}
   note: >-
     Story 2 — composite (invoice_id, line_number) join required;
-    invoice_id-only cross-multiplies.
+    invoice_id-only cross-multiplies. Post-coverage (2026-09-02): all
+    five reps computed 0.9545 and three verified — as a one-cell rate
+    table rendering 95.5%, which the prose assertion `\byes\b` failed
+    (a table answers the question; nothing says yes). The numeric is
+    the check (the ×100 arm matches 95.5%); the item-code contains
+    reads body and caption, so it pins that the SQL filtered on
+    SVC-4410 rather than that prose named it. The other two reps were
+    warn-capped by fan_out_override on the gotcha's own LEFT JOIN
+    indicator shape; the gotcha now recommends EXISTS.
 
 - id: S3
   provenance: scripted

@@ -93,3 +93,17 @@ def test_w3_grades_its_duration_in_seconds():
     (numeric,) = [a for a in row.expect.assertions if a.kind == "numeric_from_gold"]
     assert numeric.unit == "hours"
     assert row.expected_gold == {"avg_hours": 1.0}
+
+
+def test_s2_grades_the_number_it_computes():
+    """Post-coverage S2 (0/5): every rep computed 0.9545 and the table
+    reps failed a prose assertion (`\\byes\\b`) a table never says. The
+    numeric is the check; the item-code contains pins the SQL's filter
+    through the caption."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    row = next(r for r in bank.rows if r.id == "S2")
+    kinds = [(a.kind, getattr(a, "pattern", None)) for a in row.expect.assertions]
+    assert ("contains", "SVC-4410") in kinds
+    assert not any(pattern and "yes" in pattern for _, pattern in kinds)
+    (numeric,) = [a for a in row.expect.assertions if a.kind == "numeric_from_gold"]
+    assert numeric.field == "rate"
