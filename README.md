@@ -83,14 +83,44 @@ No answer text is ever streamed before its verdict exists (Brief
 §9.2, §10.2 as amended in v2.2). The browser reads the stream with
 `fetch` (POST) and a small frame parser in `static/app.js`.
 
-**Money rendering.** `Table.column_formats` carries a per-column hint
-(`{"kind": "money", "symbol": "$"}`) that run_sql resolves from the
-pack — the Dictionary Map's `column_formats` list of money columns
-plus `display.money` in `config.yaml` (symbol, alias glob patterns,
-the marker tokens that veto an alias such as `opportunity_pct`). The
-CLI, the eval grader's answer text, prose placeholder injection, and
-the browser all render the hint by one rule
-(`src/engine/harness/render.py`): `$8,308.92`, never a float tail.
+**Cell rendering.** `Table.column_formats` carries a per-column hint
+that run_sql resolves from the pack, and the CLI, the eval grader's
+answer text, prose placeholder injection, and the browser all render
+it by one rule (`src/engine/harness/render.py`):
+
+- `{"kind": "money", "symbol": "$"}` — from the Dictionary Map's
+  `column_formats` list of money columns plus `display.money` in
+  `config.yaml` (symbol, alias glob patterns, the marker tokens that
+  veto an alias such as `opportunity_pct`). Renders `$8,308.92`,
+  never a float tail.
+- `{"kind": "duration", "unit": "days"}` — from `display.duration`
+  alone: alias globs per unit (`days`, `hours`, `minutes`, `seconds`)
+  for numeric cells, plus `clock` for aliases whose cells are
+  `H:MM:SS` strings, which carry their own unit. Renders in the
+  largest unit filled, one decimal: `1.1 days`, `1 hour`, `30
+  minutes`.
+- NULL cells render as an em dash, never blank.
+
+Rounding is the browser's: the exact double, half-up, so the engine
+and `app.js` print identical digits on every value.
+
+**Values, not passages.** A placeholder that resolves to a whole
+description, a document snippet, or a block of source is a passage.
+Under the pack's `harness.inline_value_max_chars` (anything longer on
+one line, or anything multi-line), a passage resolves only inside a
+fenced code block; anywhere else the draft is retried with feedback
+naming the rule, and when the retries run out the passage ships as
+written rather than costing the answer. The drafter prompt states the
+rule and the fenced-code convention (a language label, a quoted
+function starting at its `def` line).
+
+**Fail-closed cards.** A refusal's `reason` and `what_would_work` are
+plain language for the person who asked; the engineer's diagnosis
+(which bound tripped, by how much) is `RefuseOutcome.detail`, which
+the CLI prints and no card renders — the inspector will.
+`src/engine/web/render.py` renders every outcome kind as text exactly
+as the page shows it, for tests and for text surfaces that show past
+turns.
 
 **Frontend.** Vanilla JS + vendored marked.js and highlight.js (the
 common-languages build), pinned in
