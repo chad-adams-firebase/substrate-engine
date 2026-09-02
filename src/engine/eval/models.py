@@ -82,6 +82,10 @@ from engine.verifier.models import VerifierVerdict
 # caught. A block whose XPASS is stable across three runs on one pin
 # comes off with that sentence in the row's note. ASSOC is unaffected:
 # W4's pairing is a checked-nowhere property, not a stable habit.
+# Duration pass (2026-09-02): a block whose property is checked
+# nowhere carries keep_until naming the milestone that retires it, so
+# an XPASS reads as a deliberate keep instead of drawing the deletion
+# prompt every run (W4 XPASS 4/5 post-coverage, again by habit).
 XfailRef = Literal[
     "O1",
     "ASSOC",
@@ -95,6 +99,13 @@ class Xfail(BaseModel):
     # The root-cause annotation the gate verdict requires — why this
     # row is expected to fail, in terms of the anomaly's mechanism.
     note: str
+    # The milestone whose landing retires this block. While set, an
+    # XPASS is a deliberate keep — the grader says so instead of asking
+    # for deletion — because the property the block names is checked
+    # nowhere yet (ASSOC: W4's pairing is right by the pinned model's
+    # habit, not by construction). The block still comes off in a
+    # reviewed bank edit, never on a pass rate.
+    keep_until: str | None = None
 
 
 # --- Assertions --------------------------------------------------------

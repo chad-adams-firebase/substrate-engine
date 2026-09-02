@@ -105,6 +105,9 @@ class RowGrade(BaseModel):
     threshold: float
     status: Literal["ok", "fail", "xfail", "xpass", "rot", "inconclusive"]
     xfail_ref: str | None = None
+    # The row's keep_until milestone, when its xfail block carries one:
+    # an XPASS under it is a deliberate keep, not a deletion prompt.
+    xfail_keep_until: str | None = None
     # Rows with a setup block: how many reps reached the scenario.
     # None means the row has no setup and every rep counts.
     reached: int | None = None
@@ -818,6 +821,7 @@ def grade(
                         row_id=row.id, category=row.category,
                         reps=len(row_records), passes=0, threshold=threshold,
                         status="rot", xfail_ref=_xfail_ref(row),
+                        xfail_keep_until=_xfail_keep_until(row),
                         notes=[str(exc)],
                     )
                 )
@@ -831,6 +835,7 @@ def grade(
                         row_id=row.id, category=row.category,
                         reps=len(row_records), passes=0, threshold=threshold,
                         status="rot", xfail_ref=_xfail_ref(row),
+                        xfail_keep_until=_xfail_keep_until(row),
                         notes=[f"gold rot: {m}" for m in mismatches],
                     )
                 )
@@ -877,7 +882,8 @@ def grade(
             RowGrade(
                 row_id=row.id, category=row.category, reps=len(graded),
                 passes=passes, threshold=threshold, status=status,
-                xfail_ref=_xfail_ref(row), failure_classes=failure_classes,
+                xfail_ref=_xfail_ref(row),
+                        xfail_keep_until=_xfail_keep_until(row), failure_classes=failure_classes,
                 notes=notes, reached=len(reached) if has_setup else None,
             )
         )
@@ -912,3 +918,7 @@ def grade(
 
 def _xfail_ref(row: BankRow) -> str | None:
     return row.xfail.ref if row.xfail is not None else None
+
+
+def _xfail_keep_until(row: BankRow) -> str | None:
+    return row.xfail.keep_until if row.xfail is not None else None

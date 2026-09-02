@@ -237,3 +237,12 @@ def test_numeric_from_gold_unit_is_a_duration_unit(tmp_path):
     write_bank(tmp_path / "bad", rows=rows)
     with pytest.raises(BankLoadError, match="unit"):
         load_bank(tmp_path / "bad")
+
+
+def test_xfail_keep_until_is_optional_and_loads(tmp_path):
+    rows = ROW_B5 + '  xfail: {ref: O1, note: "why", keep_until: "association verification"}\n'
+    bank = load_bank(write_bank(tmp_path / "kept", rows=rows))
+    assert bank.rows[0].xfail.keep_until == "association verification"
+    rows = ROW_B5 + '  xfail: {ref: O1, note: "why"}\n'
+    bank = load_bank(write_bank(tmp_path / "plain", rows=rows))
+    assert bank.rows[0].xfail.keep_until is None

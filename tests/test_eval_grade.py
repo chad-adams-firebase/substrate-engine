@@ -1180,3 +1180,31 @@ def test_a_unitless_numeric_gold_grades_exactly_as_before(tmp_path):
     bank, header, world, pack = make_env(tmp_path, ROW_DATA)
     records = [make_record("B5", 1, make_turn("146 last week."))]
     assert grade(bank, header, records, world, pack_root=pack).rows[0].status == "ok"
+
+
+def test_a_kept_xfail_xpasses_as_a_deliberate_keep(tmp_path):
+    """Duration pass (W4 XPASS 4/5 post-coverage, again by habit): a
+    block whose property is checked nowhere carries keep_until, and an
+    XPASS under it is reported as a deliberate keep — never the
+    deletion prompt, and the ledger names the milestone."""
+    rows = ROW_DATA + (
+        '  xfail: {ref: O1, note: "text-block dump", '
+        'keep_until: "association verification"}\n'
+    )
+    bank, header, world, pack = make_env(tmp_path, rows)
+    result = grade(
+        bank, header, [make_record("B5", 1, make_turn())], world, pack_root=pack
+    )
+    assert result.exit_code() == 0
+    (row,) = result.rows
+    assert row.status == "xpass"
+    assert row.xfail_keep_until == "association verification"
+    text = render(result)
+    assert "deliberate keep until association verification" in text
+    assert "pass rates do not retire it" in text
+    assert "delete the xfail block" not in text
+    assert "O1: B5 (kept until association verification)" in text
+
+    failing = [make_record("B5", 1, make_turn(exit_equiv=2))]
+    text = render(grade(bank, header, failing, world, pack_root=pack))
+    assert "[XFAIL]" in text and "kept until" in text

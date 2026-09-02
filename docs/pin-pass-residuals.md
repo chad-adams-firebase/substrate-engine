@@ -213,3 +213,99 @@ W-B, W-C, R-A, F1), and landed the guards. What it deliberately left:
 - **The verbatim rule reaches run_sql only.** The router still
   paraphrases for other tools; the work store showed the loss only on
   run_sql's grounding, where the map's vocabulary lives.
+
+## Duration pass riders (2026-09-02, after the post-coverage run)
+
+The post-coverage run (report `2026-09-02-post-coverage`, committed
+`b8ffdaa`) breached twice, both on W3, while everything else was clean
+or better than predicted (Play-#2 rows 5/5, W4 reached 5/5, B2 5/5 —
+the third clean B2 in nine runs). Both W3 breaches were durations, and
+they made the third instance of one pattern: a model SQL habit through
+a guard gap in a formatting class. Money got sum caps in the play pass
+(W1's fanned totals), rates got bounds and saturation in the pin and
+coverage passes (S2's NULL-padded AVG, G-A's scale-suspect), durations
+got a humanizer in Block 2 and nothing else. The rule those three
+derive is written here as a rule, not a note:
+
+- **Every display-hint kind carries a plausibility bound.** A hint is
+  the renderer's knowledge of what a column means; the Verifier reads
+  the same hint, so a bound never disagrees with the digits shown.
+  Money: SUM ≤ mean × non-null count, AVG within [min, max]. Rates:
+  within [0, 1] or [0, 100] at the hint's scale; saturation and
+  scale-suspect warn. Durations (this pass): an aggregate below one
+  second warns (the floor, suppressed by a same-row count under the
+  basis, as with rates), and a cell longer than the queried data's
+  timestamp span fails (the ceiling; a SUM is exempt, an item the parse
+  cannot classify warns). A new kind lands with its bound in the same
+  commit, or it does not land.
+- **W3 rep 4 — interval arithmetic, off by 86,400×.** The model paired
+  the entering and leaving transitions exactly as the gotcha asked,
+  then wrote `AVG(r.at - rr.at) / 86400 AS avg_time_in_days` across a
+  CTE. Both are INTERVALs in DuckDB; dividing the average interval by
+  86400 yields an interval of 41,667 µs, serialized `0:00:00.041667`,
+  which the humanizer read honestly as "0 seconds". Verified: a string
+  cell is not 0, so the zero challenge never saw it, and nothing could
+  see interval arithmetic. Fixed three ways: the interval-arithmetic
+  lint challenges a timestamp difference scaled by a literal before it
+  runs (the select-list parse resolves the subtraction through the CTE;
+  EPOCH/DATE_DIFF/JULIAN forms are Opaque and silent by construction);
+  the degenerate-duration floor takes the badge off an override; the
+  `time_in_status` gotcha now names the unit shapes. Expected to flip:
+  the rep-4 shape costs one repair round and ships EPOCH-first, or an
+  override ships `[UNVERIFIED]` and cannot breach.
+- **W3 rep 5 — the humanizer boundary and the unit-blind grader.**
+  Correct SQL (`JULIAN(r.at) - JULIAN(e.at)`, averaged) put one hour at
+  0.04166666651144624 days = 3599.99998 s, a hair under the boundary:
+  the humanizer chose minutes, printed "60 minutes", and the grader
+  extracted 60 against gold 1.0. Both humanizers now round to the
+  millisecond before choosing a unit (floor of x × 1000 + 0.5 on both
+  surfaces, so a tie rounds the same way in Python and JavaScript), and
+  `numeric_from_gold` gains `unit`: W3's gold compares in seconds, so
+  "60 minutes", "1 hour" and "1:00:00" all match and "0 seconds" and
+  "1.0 days" do not — a bare number is not a stated duration under a
+  unit, which closes the false pass unit-blindness allowed. Expected to
+  flip: 5/5.
+- **REC-SQL — the verbatim rule's exception (5/5 → 2/5, attributable).**
+  The rule sent the SQL-shaped question through verbatim, the bounce
+  fired as designed, and three reps refused instead of rephrasing: the
+  rule read as forbidding the one rephrase the bounce asks for. The
+  router bullet and the tool description now carry the exception
+  beside the rule — after a bounce, the question in plain English is
+  the licensed retry, not a paraphrase — pinned together so they cannot
+  drift apart. Expected to flip: back to 5/5.
+- **S2 — the row grades the number it computes; the indicator is
+  EXISTS (0/5, bank lag plus the gotcha's own shape).** All five reps
+  computed 0.9545. Three verified as a one-cell rate table rendering
+  95.5% and failed `contains \byes\b` — a prose assertion against a
+  table answer, the table-MUST watch item's cost, evidence for a later
+  revisit rather than the revisit. The numeric is now the check; an
+  item-code contains pins the SQL's filter through the caption. Two reps
+  were warn-capped by `fan_out_override` on the gotcha's own
+  recommended shape, the CASE indicator over the line-grain LEFT JOIN.
+  The recommended shape is now `CASE WHEN EXISTS (...)`, the
+  `correction_application_rate` template's, which never meets the lint
+  (63/66 = 0.9545 in the world). The line-grain join is deliberately
+  not declared `one_to_one`: a line may carry more than one finding by
+  schema even if none does here — the pin-pass S2 reps were correct by
+  luck, and a cardinality claim would make the lint vouch for luck.
+  Expected: ≥ 4/5.
+- **W4 and W2 keep their ASSOC blocks as deliberate keeps.** W4 XPASS
+  4/5 with reached 5/5 (the setup gate did its job; the refusal storm
+  did not recur), W2 XFAIL 0/5 as predicted. No association code has
+  landed, so the grader's deletion prompt every run was asking for the
+  wrong thing. The xfail block gains `keep_until`, naming the milestone
+  that retires it; an XPASS under it reads "deliberate keep until
+  association verification" and the ledger says so. The block still
+  comes off in a reviewed bank edit, never on a pass rate.
+- **What this pass leaves.** One-argument `AGE(x)` and `NOW() - col`
+  are outside the interval lint (unknown functions bail the parse to
+  Opaque; wall-clock SQL is already steered away by the coverage line).
+  The humanizer does not promote at the unit ratio: 3598 s still reads
+  "60 minutes", honest at one decimal, and the unit-aware grader reads
+  it as 3600 s. Byte identity of the two humanizers is pinned by source
+  text, not by executing JavaScript — the work machine needs no node. A
+  legitimate AVG duration without a same-row count ships `[UNVERIFIED]`
+  under the floor, the basis rule's known cost, as with rates; and an
+  EPOCH-shaped item past the ceiling warns rather than refuses, since
+  the parse cannot rule out a SUM there. Association verification
+  itself stays queued.

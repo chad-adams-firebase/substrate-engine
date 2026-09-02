@@ -69,6 +69,7 @@
   threshold: 0.6
   xfail:
     ref: ASSOC
+    keep_until: association verification
     note: >-
       Play W2: every aggregate was COUNT(DISTINCT …) — lint-exempt by
       design and not numerically fanned — yet the join attributed
@@ -259,6 +260,7 @@
   threshold: 0.8
   xfail:
     ref: ASSOC
+    keep_until: association verification
     note: >-
       Play W4: the drafter zipped the 12 descriptions against the
       node list offset by 6 — every rule name real, every description

@@ -107,3 +107,13 @@ def test_s2_grades_the_number_it_computes():
     assert not any(pattern and "yes" in pattern for _, pattern in kinds)
     (numeric,) = [a for a in row.expect.assertions if a.kind == "numeric_from_gold"]
     assert numeric.field == "rate"
+
+
+def test_assoc_rows_are_deliberate_keeps():
+    """Duration pass: W4 and W2 keep their ASSOC blocks until association
+    verification lands; the grader reports a keep, never a deletion
+    prompt, on their XPASSes."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    rows = {r.id: r for r in bank.rows}
+    for row_id in ("W4", "W2"):
+        assert rows[row_id].xfail.keep_until == "association verification", row_id

@@ -91,7 +91,15 @@ def render(report: GradeReport) -> str:
         if row.failure_classes:
             summary += f"  failures: {', '.join(row.failure_classes)}"
         lines.append(summary)
-        if row.status == "xpass":
+        if row.status == "xpass" and row.xfail_keep_until:
+            # A deliberate keep: the property the block names is checked
+            # nowhere yet, so a pass rate proves a habit, not a fix.
+            lines.append(
+                "        - passed its threshold; the xfail block is a "
+                f"deliberate keep until {row.xfail_keep_until} — pass "
+                "rates do not retire it"
+            )
+        elif row.status == "xpass":
             lines.append(
                 "        - passed its threshold despite the xfail "
                 "annotation. This grader observes pass rates, not code: "
@@ -119,11 +127,17 @@ def render(report: GradeReport) -> str:
     if xfails:
         lines.append("")
         lines.append("Xfail ledger:")
-        by_ref: dict[str, list[str]] = {}
+        by_ref: dict[str, list] = {}
         for row in xfails:
-            by_ref.setdefault(row.xfail_ref or "", []).append(row.row_id)
-        for ref, ids in sorted(by_ref.items()):
-            lines.append(f"  {ref}: {', '.join(ids)}")
+            by_ref.setdefault(row.xfail_ref or "", []).append(row)
+        for ref, rows in sorted(by_ref.items()):
+            milestones = {row.xfail_keep_until for row in rows}
+            kept = (
+                f" (kept until {next(iter(milestones))})"
+                if len(milestones) == 1 and None not in milestones
+                else ""
+            )
+            lines.append(f"  {ref}: {', '.join(row.row_id for row in rows)}{kept}")
 
     lines.append("")
     exit_code = report.exit_code()

@@ -15,7 +15,10 @@ Layout per bank (`evals/<name>/`):
   `engine.eval.models.BankRow`). Expected-fail rows carry an `xfail`
   block naming the anomaly (N5, O1, WBV-*) and its root
   cause; flipping a row to expected-pass = deleting that block, a
-  reviewed bank edit. Probe rows may carry a `setup` block on an
+  reviewed bank edit. A block carrying `keep_until` stays through an
+  XPASS until the named milestone lands: the grader reports a
+  deliberate keep instead of asking for deletion (ASSOC — the
+  property is checked nowhere yet). Probe rows may carry a `setup` block on an
   expect (scenario preconditions over the rep's recorded
   invocations: `min_invocations`, `min_errored`, `min_ok`,
   optionally per-`tool`); a rep failing setup is
