@@ -59,7 +59,7 @@ def test_exit_codes_and_stream_separation(monkeypatch, capsys, tool_pack):
             2,
             "[UNVERIFIED]",
         ),
-        (RefuseOutcome(reason="out of scope", what_would_work="data"), 3, "REFUSED"),
+        (RefuseOutcome(reason="out of scope", what_would_work="data", detail="budget: 8 steps"), 3, "REFUSED"),
         (ClarifyOutcome(question="which week?"), 4, "CLARIFY"),
         (EscalateOutcome(reason="policy"), 5, "ESCALATED"),
     ]
@@ -68,6 +68,8 @@ def test_exit_codes_and_stream_separation(monkeypatch, capsys, tool_pack):
         assert main(["ask", "--pack", str(tool_pack), "q"]) == code
         captured = capsys.readouterr()
         assert needle in captured.out
+        if needle == "REFUSED":
+            assert "Detail: budget: 8 steps" in captured.out  # the engineer's surface
         assert "conversation 7 · turn 3" in captured.err
         assert "conversation" not in captured.out  # stdout stays pure
 

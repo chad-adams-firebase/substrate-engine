@@ -140,6 +140,10 @@
       else box.appendChild(renderMarkdown(outcome.body.text));
       return box;
     }
+    // Cards speak to the person who asked: reason and remedy, in the
+    // engine's plain language. outcome.detail (the engineer's
+    // diagnosis) is never rendered here — the inspector shows it.
+    // Titles mirror engine/web/render.py CARD_TITLES verbatim.
     if (outcome.kind === "refuse") {
       return renderCard("refuse", "This can't be answered", [
         ["Why", outcome.reason], ["What would work", outcome.what_would_work]]);
@@ -244,7 +248,10 @@
     } catch (err) {
       const chip = el("span", "chip error", "✗ Error");
       turn.insertBefore(chip, trail);
-      turn.appendChild(renderCard("error", "The engine hit an error", [["Detail", String(err.message || err)]]));
+      turn.appendChild(renderCard("error", "Something went wrong", [
+        ["What happened", "The engine stopped before it could answer; nothing was verified or saved for this turn."],
+        ["What would work", "Asking again in a moment. If it keeps happening, the server log has the cause."],
+        ["Detail", String(err.message || err)]]));
     } finally {
       send.disabled = false;
       input.focus();

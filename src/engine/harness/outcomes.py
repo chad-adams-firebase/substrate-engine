@@ -47,13 +47,19 @@ class AnswerOutcome(BaseModel):
 
 class RefuseOutcome(BaseModel):
     """Fail-closed: what can't be answered, why, and what would work —
-    a first-class outcome, styled as a card in Phase 5 (§10.5)."""
+    a first-class outcome, styled as a card in Phase 5 (§10.5). The
+    card speaks to the person who asked: reason and what_would_work
+    are plain language, never a step count or a tolerance. The
+    engineer's diagnosis — which bound tripped, by how much — travels
+    in detail, which no card renders; the CLI prints it and the
+    Phase 5 inspector reads it."""
 
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["refuse"] = "refuse"
     reason: str
     what_would_work: str = ""
+    detail: str = ""
 
 
 class ClarifyOutcome(BaseModel):

@@ -146,15 +146,22 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 "route", "finish", "tool budget exhausted — refusing"
             )
             return {
-                "decision": RouteDecision(
-                    kind="refuse",
+                "decision": RouteDecision(kind="refuse"),
+                "outcome": RefuseOutcome(
                     reason=(
-                        "Could not assemble sufficient evidence within "
-                        f"the {deps.settings.max_router_iterations}-step "
-                        "tool budget."
+                        "I couldn't gather enough evidence to answer this "
+                        "reliably, so I'm not guessing."
                     ),
-                    what_would_work="A narrower or more specific question.",
-                )
+                    what_would_work=(
+                        "A narrower question — one table, one component, "
+                        "or one date range at a time."
+                    ),
+                    detail=(
+                        "tool budget exhausted: "
+                        f"{deps.settings.max_router_iterations} router "
+                        "steps without a terminal decision"
+                    ),
+                ),
             }
 
         messages = build_router_messages(
@@ -270,10 +277,17 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 return {
                     "outcome": RefuseOutcome(
                         reason=(
-                            "Could not produce a faithful draft: evidence "
-                            "references failed to resolve after "
-                            f"{attempts} attempt(s)."
-                        )
+                            "I found evidence for this but couldn't write "
+                            "it up faithfully, so I'm not showing it."
+                        ),
+                        what_would_work=(
+                            "Asking for the underlying data directly, or "
+                            "a narrower question."
+                        ),
+                        detail=(
+                            "placeholder resolution failed after "
+                            f"{attempts} attempt(s): {failed}"
+                        ),
                     )
                 }
             problems = ", ".join(resolution.failures + resolution.misplaced)
@@ -394,13 +408,7 @@ def build_graph(deps: GraphDeps, checkpointer=None):
         )
         deps.events.emit("verify", "finish", f"verdict: {verdict.disposition}")
         if result.disposition == "refused":
-            outcome = RefuseOutcome(
-                reason=verdict.reason or "The answer failed verification.",
-                what_would_work=(
-                    "Rephrasing the question, or asking for the underlying "
-                    "data directly."
-                ),
-            )
+            outcome = _verifier_refusal(verdict)
         elif (
             state.draft.kind == "markdown"
             and not result.attempt_record.claims
@@ -419,6 +427,10 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 what_would_work=(
                     "Asking about data or code the connected substrates "
                     "cover, or naming the specific record to look up."
+                ),
+                detail=(
+                    "verified but content-free: zero claims and "
+                    "insufficiency prose (Addendum N7)"
                 ),
             )
         else:
@@ -441,7 +453,10 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             elif decision is not None and decision.kind == "escalate":
                 outcome = EscalateOutcome(reason=decision.reason)
             else:  # unreachable by construction; refuse beats crashing
-                outcome = RefuseOutcome(reason="No outcome was produced.")
+                outcome = RefuseOutcome(
+                    reason="No answer could be produced for this question.",
+                    detail="finalize reached with neither a decision nor an outcome",
+                )
         deps.events.emit("finalize", "finish", outcome.kind)
         return {
             "outcome": outcome,
@@ -503,6 +518,32 @@ def build_graph(deps: GraphDeps, checkpointer=None):
     )
     builder.add_edge("finalize", END)
     return builder.compile(checkpointer=checkpointer)
+
+
+def _verifier_refusal(verdict) -> RefuseOutcome:
+    """The Verifier's refusal, said for the person who asked. The
+    verdict's reason is the engineer's diagnosis (the check name, the
+    numbers, the tolerance) and rides in detail; the card gets the
+    plain version of which gate closed."""
+    if any(record.severity == "fail" for record in verdict.plausibility):
+        reason = (
+            "The figures this query produced don't hold up against what "
+            "the data can support, so the answer was withheld rather than "
+            "shown unchecked."
+        )
+    else:
+        reason = (
+            "The draft made statements the evidence doesn't support, even "
+            "after redrafting, so it was withheld."
+        )
+    return RefuseOutcome(
+        reason=reason,
+        what_would_work=(
+            "Rephrasing the question, or asking for the underlying data "
+            "directly."
+        ),
+        detail=verdict.reason or "the answer failed verification",
+    )
 
 
 def _transcript_text(outcome) -> str:

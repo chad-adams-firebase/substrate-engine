@@ -65,9 +65,13 @@ _CONTROL_DESCRIPTIONS = {
     "refuse": (
         "The question is out of scope, unanswerable from the available "
         "substrates, or asks for action rather than information. State "
-        "why, and what would work instead."
+        "why, and what would work instead — in plain language for a "
+        "business reader, never tool names, step counts, or SQL."
     ),
-    "clarify": "The question is ambiguous; ask one clarifying question.",
+    "clarify": (
+        "The question is ambiguous; ask one clarifying question, phrased "
+        "for a business reader."
+    ),
     "escalate": "Answering needs a human decision; say why.",
 }
 

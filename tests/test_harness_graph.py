@@ -230,7 +230,11 @@ def test_implausible_evidence_becomes_a_refusal(tool_pack):
     result = session.ask("how many?")
 
     assert result.outcome.kind == "refuse"
-    assert "COUNT contradicts stats" in result.outcome.reason
+    # The verdict's diagnosis is detail; the reason names the gate in
+    # plain words (Block 2's manager-language cards).
+    assert "COUNT contradicts stats" in result.outcome.detail
+    assert "COUNT contradicts stats" not in result.outcome.reason
+    assert "don't hold up against what the data can support" in result.outcome.reason
     assert result.verdict.disposition == "refused"
 
 
@@ -268,7 +272,11 @@ def test_iteration_cap_is_a_refuse_outcome_without_an_llm_call(tool_pack):
     result = session.ask("loop forever")
 
     assert result.outcome.kind == "refuse"
-    assert "budget" in result.outcome.reason
+    # Block 2: the card speaks plainly; the step count is engineer
+    # detail for the CLI and the inspector, never the reason.
+    assert "budget" in result.outcome.detail and "6 router steps" in result.outcome.detail
+    assert "budget" not in result.outcome.reason and "6" not in result.outcome.reason
+    assert result.outcome.what_would_work
     from engine.config.models import PortName
 
     llm = ports.get(PortName.LLM)

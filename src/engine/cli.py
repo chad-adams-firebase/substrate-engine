@@ -679,6 +679,8 @@ def _ask(
         print(f"REFUSED: {outcome.reason}")
         if outcome.what_would_work:
             print(f"What would work: {outcome.what_would_work}")
+        if outcome.detail:
+            print(f"Detail: {outcome.detail}")
     elif outcome.kind == "clarify":
         print(f"CLARIFY: {outcome.question}")
     else:

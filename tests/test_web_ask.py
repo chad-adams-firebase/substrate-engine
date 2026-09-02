@@ -149,6 +149,7 @@ def test_refusal_is_a_result_frame_with_its_exit_code():
     assert frames[-1][1]["exit_code"] == 3
     assert frames[-1][1]["result"]["outcome"] == {
         "kind": "refuse", "reason": "out of scope", "what_would_work": "a data question",
+        "detail": "",
     }
 
 
