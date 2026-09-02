@@ -194,6 +194,10 @@ def test_grounding_carries_map_gotchas_and_metrics(snapshot_outputs):
     assert "flag_rate" in rendered
     assert "invoices.id = findings.invoice_id" in rendered
     assert "half-open range" in rendered  # the window convention (C4)
+    # The coverage pass's header rules (Play Session #2: F1, S-C, S-A).
+    assert "return NULL, not 0" in rendered
+    assert "Every LIMIT follows an ORDER BY" in rendered
+    assert "fractions in [0, 1]" in rendered
 
 
 def test_a_question_naming_a_metric_gets_its_template_first(

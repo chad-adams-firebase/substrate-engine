@@ -84,6 +84,17 @@ def render_grounding(
         "never a calendar week (the data's last day is not a week end and",
         "week-start conventions differ); \"this month\" is the calendar",
         "month containing last_day, the reporting unit.",
+        "When a group has nothing to sum, return NULL, not 0: SUM over no",
+        "rows is NULL and the UI renders it as a dash. Write",
+        "COALESCE(SUM(x), 0) only when zero is literally the fact — a count",
+        "of nothing is 0; the invoiced total of a supplier who invoiced",
+        "nothing is not $0.00.",
+        "Every LIMIT follows an ORDER BY — an unordered LIMIT picks",
+        "arbitrary rows, so \"an example\" would change between runs.",
+        "Rates and shares are fractions in [0, 1] — COUNT(...) * 1.0 /",
+        "COUNT(*), or the average of a 0/1 indicator — never multiplied by",
+        "100 unless the alias says so (_pct, percent); the UI renders a",
+        "fraction as a percentage.",
     ]
 
     # A question that names a canonical metric gets that metric's

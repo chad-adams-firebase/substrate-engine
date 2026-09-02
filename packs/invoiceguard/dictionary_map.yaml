@@ -99,8 +99,18 @@ concepts:
     definition: >-
       suppliers.network = 1 means in-network: their invoices enter the
       audit pipeline. Out-of-network suppliers' invoices are born
-      LAPSED (out of audit scope), not scored.
-    tables: [suppliers, invoices]
+      LAPSED (out of audit scope), not scored. Those invoices carry NULL
+      invoice_total and no invoice_lines — a total over them is NULL
+      (no data, rendered as a dash), never $0 — and two suppliers have
+      no invoices at all.
+    tables: [suppliers, invoices, invoice_lines]
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        NULL-total sentence hand-authored from the 2026-09-02 play
+        session (F1: six no-data suppliers rendered as $0.00).
   - name: audit rules
     definition: >-
       "Rules" has three senses. (1) The 12 audit rules in the rules
@@ -123,6 +133,77 @@ concepts:
         Hand-authored from the 2026-08-31 play session (W5: rules-per-
         invoice counted compliance_reports; W6: rule averages read the
         wrong grain).
+
+  - name: review report
+    definition: >-
+      An auditor's correction request on a closed invoice. One
+      review_reports row per reviewed invoice (review_reports.invoice_id
+      is the invoice that was audited — the PRIOR revision once a
+      resubmission exists) and one review_report_lines row per line the
+      auditor wants changed. disposition is the AUDITOR's verdict on the
+      invoice — APPROVED or CORRECTIONS_REQUESTED — and says nothing
+      about what the supplier did (that is invoices.supplier_acceptance;
+      see supplier response). A review with no corrections is APPROVED,
+      so APPROVED is rare by construction. Lines have no kind column: a
+      RATE correction has requested_rate set and remove_requested = 0; a
+      REMOVAL has remove_requested = 1. requested_rate is a dollar unit
+      rate — always the supplier's active contract rate for the line's
+      item — never a percentage.
+    tables: [review_reports, review_report_lines, invoices]
+    synonyms:
+      - corrections we request
+      - corrections we requested
+      - requested corrections
+      - correction request
+      - correction requests
+      - audit adjustments
+      - what we asked them to change
+      - auditor corrections
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
+  - name: supplier response
+    definition: >-
+      What the supplier did about a review — recorded on the invoices
+      table, in two places, and nowhere else (there is no
+      supplier_acceptance table and no revisions table). (1) The
+      successor revision: a resubmission is a new invoices row with the
+      same supplier_id and invoice_number, revision + 1, and
+      prior_revision_id pointing at the reviewed invoice; its
+      invoice_lines are what the supplier actually billed after the
+      review. (2) invoices.supplier_acceptance on the REVIEWED (prior)
+      invoice: ACCEPTED when every requested correction was applied on
+      the successor, REJECTED when any one was ignored — written only
+      when a successor arrives, so a review that never drew a
+      resubmission leaves it NULL. About 40% of reviews never draw a
+      resubmission: NULL is "no response yet", not a rejection, and
+      absence of a revision is not refusal.
+    tables: [invoices, invoice_lines]
+    synonyms:
+      - supplier acceptance
+      - accepted the correction
+      - accepted our corrections
+      - applied the correction
+      - applied the corrections
+      - ignored the correction
+      - ignored our corrections
+      - resubmitted invoice
+      - did they fix it
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
 
 metrics:
   - name: flag_rate
@@ -283,6 +364,230 @@ metrics:
       system.stale-sweep, system.line-mapping) are not auditors —
       filter users.role = 'auditor'.
 
+  - name: requested_rate_is_contract_rate
+    description: >-
+      The rate auditors ask suppliers to correct to — a dollar unit rate
+      (review_report_lines.requested_rate), and always the supplier's
+      active contract rate for the line's item. The answer to "what rate
+      do they ask for" is "the contract rate", shown as the count of
+      rate corrections that match it beside the total, or as the
+      requested rates themselves. Not a percentage of anything.
+    tables: [review_report_lines, review_reports, invoices, invoice_lines, contracts]
+    synonyms:
+      - what rate do they ask for
+      - what rate do auditors ask for
+      - rate do they ask for
+      - rate auditors request
+      - rate we request
+      - requested rate
+      - corrected rate
+      - rate they ask suppliers to charge
+    filter_sql: "rrl.requested_rate IS NOT NULL AND rrl.remove_requested = 0"
+    aggregation_sql: >-
+      COUNT(DISTINCT rrl.id), COUNT(DISTINCT CASE WHEN c.contract_rate =
+      rrl.requested_rate THEN rrl.id END)
+    template_sql: |
+      SELECT COUNT(DISTINCT rrl.id) AS rate_corrections,
+             COUNT(DISTINCT CASE WHEN c.contract_rate = rrl.requested_rate THEN rrl.id END) AS at_contract_rate,
+             MIN(rrl.requested_rate) AS lowest_requested_rate,
+             MAX(rrl.requested_rate) AS highest_requested_rate
+      FROM review_report_lines rrl
+      JOIN review_reports rr ON rr.id = rrl.review_report_id
+      JOIN invoices inv ON inv.id = rr.invoice_id
+      JOIN invoice_lines il ON il.invoice_id = inv.id AND il.line_number = rrl.line_number
+      LEFT JOIN contracts c ON c.supplier_id = inv.supplier_id
+                           AND c.item_code = il.item_code
+                           AND c.effective_to IS NULL
+      WHERE rrl.requested_rate IS NOT NULL AND rrl.remove_requested = 0
+    notes: >-
+      contracts is versioned — several rows per (supplier_id, item_code);
+      c.effective_to IS NULL pins the active one, otherwise the join
+      doubles the superseded pairs. COUNT(DISTINCT rrl.id), never
+      COUNT(*), over these joins.
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
+  - name: correction_application_rate
+    description: >-
+      Share of requested corrections the supplier actually applied on the
+      resubmission. Population: review_report_lines whose reviewed
+      invoice has a successor revision — a correction never resubmitted
+      against cannot be judged and is not "ignored". Applied: for a RATE
+      correction the successor's same-numbered line bills exactly
+      requested_rate or is gone; for a REMOVAL the line is gone. The
+      ignored lines are exactly the correction_ignored findings, so
+      applied + ignored = population and the three figures agree.
+    tables: [review_report_lines, review_reports, invoices, invoice_lines]
+    synonyms:
+      - apply the corrections we request
+      - apply our corrections
+      - corrections applied
+      - applied corrections
+      - correction application
+      - marked as applied
+      - act on our corrections
+      - comply with corrections
+      - correction compliance
+    filter_sql: ""
+    aggregation_sql: >-
+      SUM(CASE WHEN <the successor line applied the correction> THEN 1
+      ELSE 0 END) * 1.0 / COUNT(*)
+    template_sql: |
+      SELECT COUNT(*) AS corrections_with_resubmission,
+             SUM(CASE WHEN NOT EXISTS (
+                        SELECT 1 FROM invoice_lines sl
+                        WHERE sl.invoice_id = succ.id
+                          AND sl.line_number = rrl.line_number
+                          AND (rrl.remove_requested = 1
+                               OR sl.unit_rate <> rrl.requested_rate))
+                      THEN 1 ELSE 0 END) AS corrections_applied,
+             SUM(CASE WHEN NOT EXISTS (
+                        SELECT 1 FROM invoice_lines sl
+                        WHERE sl.invoice_id = succ.id
+                          AND sl.line_number = rrl.line_number
+                          AND (rrl.remove_requested = 1
+                               OR sl.unit_rate <> rrl.requested_rate))
+                      THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS application_rate
+      FROM review_report_lines rrl
+      JOIN review_reports rr ON rr.id = rrl.review_report_id
+      JOIN invoices inv ON inv.id = rr.invoice_id
+      JOIN invoices succ ON succ.prior_revision_id = inv.id
+    notes: >-
+      The successor line is tested with NOT EXISTS, not a LEFT JOIN — the
+      composite line join is the shape the fan-out check challenges.
+      review_reports.disposition is the auditor's verdict and answers
+      nothing about the supplier (APPROVED / all reviews = 1/109 in this
+      data — the wrong answer). application_rate is a fraction; the UI
+      renders it as a percentage.
+    interpretations:
+      - name: per correction
+        meaning: >-
+          correction lines applied / correction lines with a
+          resubmission — the default (55/73 here).
+      - name: per review
+        meaning: >-
+          reviews whose resubmission applied everything
+          (invoices.supplier_acceptance = 'ACCEPTED') / reviews with a
+          resubmission (supplier_acceptance IS NOT NULL) — 44/61 here;
+          name it if used.
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
+  - name: corrections_ignored_by_supplier
+    description: >-
+      How many requested corrections each supplier ignored on its
+      resubmission — the app's own correction_ignored findings, one per
+      ignored correction line, written on the SUCCESSOR invoice (amount
+      0, category CORRECTION).
+    tables: [findings, invoices, suppliers]
+    synonyms:
+      - ignores our corrections
+      - ignored our corrections
+      - ignores corrections
+      - ignored corrections
+      - corrections ignored
+      - ignored the most corrections
+      - disregards our corrections
+      - did not apply corrections
+    filter_sql: "f.rule_name = 'correction_ignored'"
+    aggregation_sql: "COUNT(*)"
+    template_sql: |
+      SELECT s.code, s.name, COUNT(*) AS corrections_ignored
+      FROM findings f
+      JOIN invoices i ON i.id = f.invoice_id
+      JOIN suppliers s ON s.id = i.supplier_id
+      WHERE f.rule_name = 'correction_ignored'
+      GROUP BY s.code, s.name
+      ORDER BY corrections_ignored DESC, s.code
+    notes: >-
+      The finding is the unit and already encodes the applied-vs-ignored
+      comparison. Counting reviewed invoices that were never ACCEPTED
+      counts the ~40% of reviews that drew no resubmission as ignored
+      (28 for the leading supplier where 9 corrections were ignored, in
+      a world with 18 ignored corrections in total). Counting invoices
+      with supplier_acceptance = 'REJECTED' counts resubmissions, not
+      corrections (one resubmission can ignore two). Use the findings.
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
+  - name: corrections_ignored_by_auditor
+    description: >-
+      Ignored corrections attributed to the auditor who requested them.
+      Neither findings nor review_reports carry a reviewer column: the
+      requesting auditor is the actor who CLOSED the reviewed (prior)
+      revision — from the correction_ignored finding's invoice (the
+      successor) to its prior_revision_id, then that prior's
+      invoice_history row with to_status = 'CLOSED' (exactly one per
+      invoice). actor is a users.short_name.
+    tables: [findings, invoices, invoice_history, users]
+    synonyms:
+      - audit rejections by reviewer
+      - audit rejections
+      - rejections by reviewer
+      - rejections by auditor
+      - ignored corrections by auditor
+      - ignored corrections by reviewer
+      - corrections ignored per auditor
+    filter_sql: "f.rule_name = 'correction_ignored' AND h.to_status = 'CLOSED'"
+    aggregation_sql: "COUNT(*)"
+    template_sql: |
+      SELECT x.reviewer, COUNT(*) AS corrections_ignored
+      FROM (
+        SELECT (SELECT h.actor FROM invoice_history h
+                WHERE h.invoice_id = prior.id AND h.to_status = 'CLOSED') AS reviewer
+        FROM findings f
+        JOIN invoices i ON i.id = f.invoice_id
+        JOIN invoices prior ON prior.id = i.prior_revision_id
+        WHERE f.rule_name = 'correction_ignored'
+      ) x
+      GROUP BY x.reviewer
+      ORDER BY corrections_ignored DESC, x.reviewer
+    notes: >-
+      "Rejection" here is the supplier rejecting the auditor's correction
+      — the default reading. There is no REJECTED invoice status:
+      invoice_history.to_status holds only the seven lifecycle states and
+      review_reports.disposition only APPROVED / CORRECTIONS_REQUESTED.
+      The closer is looked up in a scalar subquery so the aggregate
+      scope carries no join to invoice_history. Join users on
+      users.short_name = reviewer for names or teams.
+    interpretations:
+      - name: ignored corrections
+        meaning: >-
+          correction_ignored findings per requesting auditor — the
+          supplier rejected the correction; the default.
+      - name: corrections requested
+        meaning: >-
+          review_reports with disposition = 'CORRECTIONS_REQUESTED' per
+          auditor who closed the reviewed invoice — the auditor rejected
+          the invoice as billed; name it if used.
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
+
 join_paths:
   - name: invoices_to_lines
     steps:
@@ -334,6 +639,42 @@ join_paths:
       authority. Joining findings to compliance_rules through
       invoice_id pairs every finding with every rule on the invoice —
       count compliance_rules directly for severity questions.
+
+  - name: invoice_to_successor
+    steps:
+      - {from_table: invoices, from_column: id, to_table: invoices, to_column: prior_revision_id}
+    cardinality: one_to_one
+    notes: >-
+      succ.prior_revision_id = inv.id, a self-join. A reviewed invoice
+      has at most one successor (UNIQUE supplier_id, invoice_number,
+      revision; a resubmission is revision + 1), so the join multiplies
+      rows in neither direction. The successor carries the
+      correction_ignored findings; the prior carries supplier_acceptance.
+  - name: reviews_to_invoices
+    steps:
+      - {from_table: review_reports, from_column: invoice_id, to_table: invoices, to_column: id}
+    notes: The reviewed invoice — the prior revision once a resubmission exists.
+  - name: review_lines_to_reviews
+    steps:
+      - {from_table: review_report_lines, from_column: review_report_id, to_table: review_reports, to_column: id}
+  - name: review_lines_to_billed_lines
+    steps:
+      - {from_table: review_report_lines, from_column: line_number, to_table: invoice_lines, to_column: line_number}
+    notes: >-
+      Composite — always AND an invoice: il.invoice_id = the reviewed
+      invoice (what was billed before the review) or = its successor
+      (what was billed after). line_number alone repeats on every
+      invoice. Inside an aggregate, test the successor line with EXISTS /
+      NOT EXISTS (the correction_application_rate template) rather than
+      a LEFT JOIN the fan-out check will challenge.
+  - name: successor_to_requesting_auditor
+    steps:
+      - {from_table: invoices, from_column: prior_revision_id, to_table: invoices, to_column: id}
+      - {from_table: invoices, from_column: id, to_table: invoice_history, to_column: invoice_id}
+    notes: >-
+      Filter invoice_history.to_status = 'CLOSED' — one row per invoice,
+      the auditor who closed the review; actor is a users.short_name.
+      Neither findings nor review_reports name a reviewer.
 
 gotchas:
   - name: adjustment_totals
@@ -421,14 +762,17 @@ gotchas:
       unflagged line vanishes from the denominator and the rate
       saturates to exactly 1.0 (the pin pass's S2: 1.0 reported where
       the true rate was 63/66). Make the unflagged side an explicit
-      0: AVG(COALESCE(indicator, 0)), or COUNT the matches and divide
-      by the population's own COUNT. The indicator itself is CASE
-      WHEN <match>.id IS NOT NULL THEN 1 ELSE 0 END per population
+      0: AVG(COALESCE(indicator, 0)), or SUM(CASE WHEN <match> THEN 1
+      ELSE 0 END) * 1.0 / COUNT(*) over the population rows in ONE
+      scope — never a COUNT of matches in one query divided by a COUNT
+      of the population in another: a scalar-subquery pair or two
+      joined COUNTs is the fan-out shape the lint challenges and the
+      Verifier marks unverified (the post-Block-2 S2 overrides, and rep
+      5's 1.0476 = 66 lines under a fanned 69). The indicator itself is
+      CASE WHEN <match>.id IS NOT NULL THEN 1 ELSE 0 END per population
       row — never a COUNT(<match>.id) grouped per row: a count is not
       an indicator (a row with two matches counts 2 and the "rate"
-      runs past 1.0), and a per-row COUNT over the LEFT JOIN is the
-      fan-out shape the lint challenges and the Verifier marks
-      unverified (the post-pin-pass S2 overrides, two of five reps).
+      runs past 1.0).
     tables: [invoice_lines, findings]
     provenance:
       source: human
@@ -436,7 +780,9 @@ gotchas:
       needs_validation: false
       note: >-
         Hand-authored from the 2026-08-31 pin pass (S2); indicator
-        shape added after the 2026-09-02 re-run (Phase 5 Block 2).
+        shape added after the 2026-09-02 re-run (Phase 5 Block 2); the
+        joined-COUNT alternative replaced by the one-scope SUM(CASE)
+        after the post-Block-2 bank (S2 3/5 -> 2/5).
   - name: compliance_dual_signal
     summary: >-
       Critical compliance uses two deliberately different signals —
@@ -517,6 +863,58 @@ gotchas:
       context is needed.
     tables: [findings, compliance_rules]
 
+  - name: rate_means_dollars_here
+    summary: >-
+      In review and contract context "rate" is a dollar unit rate
+      (requested_rate, contract_rate, unit_rate), not a percentage.
+    detail: >-
+      "What rate do auditors ask for", "the rate we requested", "the
+      corrected rate" are dollars-per-unit questions answered from
+      review_report_lines.requested_rate (see
+      requested_rate_is_contract_rate) — never a share of findings.
+      Percentage questions say "share", "how often", "what fraction",
+      "what percent", and divide a count by its population; flag_rate,
+      item_flag_rate and correction_application_rate are that kind.
+      findings.category = 'CORRECTION' is the correction_ignored
+      findings, and its share of all findings answers no rate question
+      of either kind.
+    tables: [review_report_lines, contracts, invoice_lines, findings]
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
+  - name: corrections_never_resubmitted
+    summary: >-
+      A review that never drew a resubmission is neither applied nor
+      ignored — leave it out of application rates and never count it as
+      a rejection.
+    detail: >-
+      109 reviews; 61 drew a resubmission (invoices.supplier_acceptance
+      set on the reviewed invoice), 48 did not (supplier_acceptance
+      NULL). Applied and ignored are judged only where a successor
+      exists: 73 correction lines with a successor = 55 applied + 18
+      ignored, and the 18 are exactly the correction_ignored findings.
+      Counting the 48 unanswered reviews as ignored, or reading
+      review_reports.disposition (the auditor's verdict) as the
+      supplier's response, overstates or inverts the answer. The
+      per-line figure counts RATE and REMOVAL corrections alike; the
+      rate-only subset (48 lines, 34 applied) is not the headline.
+    tables: [review_reports, review_report_lines, invoices, findings]
+    provenance:
+      source: human
+      confidence: 0.9
+      needs_validation: false
+      note: >-
+        Hand-authored from the 2026-09-02 play session (W-A/W-B/W-C/R-A/
+        F1: the review subsystem had no map coverage), against
+        simulation/revisions.py and spine/prior_audit_compliance.py at
+        761a18e9.
+
 # Display hints (§10.5): the money columns as the pack author knows
 # them. Consumer: run_sql tags result columns (and aliases ending in
 # these names — total_opportunity) so every surface renders currency.
@@ -564,3 +962,36 @@ examples:
       recovered_opportunity per team/day (PRODUCTION_ROLLUP_SQL
       shape), windowed on invoice_history.at — anchored to the data's
       end, per data_coverage.
+  - question: When auditors request corrections, what rate do they ask for?
+    guidance: >-
+      Dollars, not a percentage (rate_means_dollars_here):
+      requested_rate_is_contract_rate — the answer is "the contract
+      rate", shown as rate corrections at the contract rate beside the
+      total, with the lowest and highest requested rates. Never the
+      share of findings in category CORRECTION.
+  - question: How often do suppliers actually apply the corrections we request?
+    guidance: >-
+      correction_application_rate (per correction, the default; name the
+      reading). review_reports.disposition is the auditor's verdict on
+      the invoice and says nothing about the supplier — APPROVED / all
+      reviews is the wrong answer by two orders of magnitude.
+  - question: Which supplier ignores our corrections the most, and how many?
+    guidance: >-
+      corrections_ignored_by_supplier — the correction_ignored findings,
+      never a count of reviews or invoices without ACCEPTED (that counts
+      reviews the supplier never answered).
+  - question: List audit rejections by reviewer.
+    guidance: >-
+      corrections_ignored_by_auditor (ignored corrections per requesting
+      auditor, the default; name the reading). REJECTED is not an
+      invoice status: to_status never holds it, and
+      review_reports.disposition holds only APPROVED /
+      CORRECTIONS_REQUESTED. The reviewer is the actor who CLOSED the
+      prior revision.
+  - question: Show total invoiced amount per supplier, including suppliers with no invoice lines.
+    guidance: >-
+      LEFT JOIN from suppliers and SUM(invoices.invoice_total) with no
+      COALESCE: suppliers with no invoices, and out-of-network suppliers
+      whose invoices are born LAPSED with NULL totals and no lines, come
+      back NULL — rendered as a dash, which is the truth ("nothing to
+      sum"), where $0.00 asserts they invoiced nothing.
