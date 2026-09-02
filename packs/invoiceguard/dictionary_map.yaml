@@ -422,13 +422,21 @@ gotchas:
       saturates to exactly 1.0 (the pin pass's S2: 1.0 reported where
       the true rate was 63/66). Make the unflagged side an explicit
       0: AVG(COALESCE(indicator, 0)), or COUNT the matches and divide
-      by the population's own COUNT.
+      by the population's own COUNT. The indicator itself is CASE
+      WHEN <match>.id IS NOT NULL THEN 1 ELSE 0 END per population
+      row — never a COUNT(<match>.id) grouped per row: a count is not
+      an indicator (a row with two matches counts 2 and the "rate"
+      runs past 1.0), and a per-row COUNT over the LEFT JOIN is the
+      fan-out shape the lint challenges and the Verifier marks
+      unverified (the post-pin-pass S2 overrides, two of five reps).
     tables: [invoice_lines, findings]
     provenance:
       source: human
       confidence: 0.9
       needs_validation: false
-      note: Hand-authored from the 2026-08-31 pin pass (S2).
+      note: >-
+        Hand-authored from the 2026-08-31 pin pass (S2); indicator
+        shape added after the 2026-09-02 re-run (Phase 5 Block 2).
   - name: compliance_dual_signal
     summary: >-
       Critical compliance uses two deliberately different signals —

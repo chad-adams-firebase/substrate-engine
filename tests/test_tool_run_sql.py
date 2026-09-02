@@ -355,3 +355,15 @@ def test_no_display_money_block_means_untagged_tables(tool_pack):
     registry, _ = build_tool_registry(tool_pack, [query])
     invocation = registry.invoke("run_sql", {"question": "total opportunity"})
     assert invocation.output.table.column_formats == {}
+
+
+def test_grounding_states_the_order_by_rule():
+    """Block 2 (S5's row reshuffle on every follow-up): a grouped
+    result carries an ORDER BY, so the same question returns rows in
+    the same order and "the third supplier" means the same supplier
+    next turn. One grounding line — the golden fixture carries it."""
+    from tests.golden_grounding import GOLDEN
+
+    text = GOLDEN.read_text(encoding="utf-8")
+    assert "A query with GROUP BY always carries an ORDER BY" in text
+    assert "follow-ups refer to rows" in text

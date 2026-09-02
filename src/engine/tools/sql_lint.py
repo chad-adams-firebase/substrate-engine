@@ -126,6 +126,33 @@ def _clean(sql: str) -> str:
     return _STRING_LITERAL.sub("''", _LINE_COMMENT.sub("", sql))
 
 
+def original_fragment(sql: str, cleaned: str) -> str:
+    """The model's own text for a fragment of a cleaned scope. _clean
+    blanks every string literal to '' and split_scopes hoists
+    subqueries, so a challenge that quotes the cleaned text would show
+    CONCAT('', cr.rule_code) for the CONCAT('compliance_', cr.rule_code)
+    the model wrote (Block 2 rider). Rebuild the fragment as a pattern
+    — literals and hoisted subqueries as wildcards, whitespace as any
+    whitespace — and find it in the original; fall back to the cleaned
+    text, whitespace-collapsed, when nothing matches (a comment inside
+    the fragment, say)."""
+    parts: list[str] = []
+    for token in re.split(r"(''|\(__subquery__\)|\s+)", cleaned):
+        if not token:
+            continue
+        if token == "''":
+            parts.append(r"'(?:[^']|'')*'")
+        elif token == _SUBQUERY:
+            parts.append(r"\((?:[^()]|\([^()]*\))*\)")
+        elif token.isspace():
+            parts.append(r"\s+")
+        else:
+            parts.append(re.escape(token))
+    match = re.search("".join(parts), sql, re.IGNORECASE | re.DOTALL)
+    text = match.group(0) if match else cleaned
+    return " ".join(text.split())
+
+
 def split_scopes(sql: str) -> list[str]:
     """Every SELECT scope in the statement, each with its nested
     subqueries replaced by a placeholder: the outer statement, each
@@ -301,7 +328,7 @@ def lint_fan_out(
                 # predicates only filter further) — so this arm is
                 # reached only when FK reasoning had nothing to read.
                 if not equalities and _derives_a_key(condition):
-                    snippet = " ".join(condition.split())
+                    snippet = original_fragment(sql, condition)
                     fan.append(
                         f"join to {joined} on {snippet} (the join "
                         "condition derives its key with an expression — "

@@ -388,3 +388,22 @@ def test_avg_over_a_plain_left_joined_table_is_challenged():
     assert reason is not None
     assert "AVG(ih.duration)" in reason
     assert "nullable side" in reason
+
+
+def test_expression_join_challenge_quotes_the_models_own_literal():
+    """Block 2 rider: the challenge shows the SQL the model wrote, not
+    _clean's literal-stripped copy — CONCAT('compliance_', …), never
+    CONCAT('', …). The rebuilt fragment survives both spellings and
+    the whitespace the model chose."""
+    from engine.tools.sql_lint import original_fragment
+
+    reason = lint_fan_out(MT2_EXPRESSION_JOIN, DICTIONARY, MAP)
+    assert "CONCAT('compliance_', cr.rule_code)" in reason
+    assert "CONCAT('', cr.rule_code)" not in reason
+    reason = lint_fan_out(CONCAT_OPERATOR_JOIN, DICTIONARY, MAP)
+    assert "'compliance_' || cr.rule_code" in reason
+
+    sql = "SELECT 1 FROM a JOIN b ON a.k = LOWER(  'X''y' ) -- note\n"
+    assert original_fragment(sql, "a.k = LOWER( '' )") == "a.k = LOWER( 'X''y' )"
+    # No match (the fragment never existed): the cleaned text, collapsed.
+    assert original_fragment(sql, "a.k  =  ''") == "a.k = ''"
