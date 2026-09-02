@@ -82,3 +82,20 @@ def test_flatten_answer_shapes():
     assert flatten_answer(refuse) == "no\nask counts"
     assert flatten_answer(ClarifyOutcome(question="which day?")) == "which day?"
     assert flatten_answer(None) == ""
+
+
+def test_extract_durations():
+    """Duration pass: the unit-aware pool — every phrase the humanizer
+    can print, plus clock strings, each with half a displayed decimal
+    of its own unit as tolerance."""
+    from engine.eval.tokens import extract_durations
+
+    text = (
+        "About 1 hour (60 minutes); the worst took 1.1 days, the best "
+        "twelve seconds, and -3 hours is impossible; 1:00:00 on the clock; "
+        "2026-05-29 18:00 is a time, 1,440 minutes a day"
+    )
+    seconds, tolerances = zip(*extract_durations(text))
+    assert seconds == pytest.approx((3600.0, 3600.0, 95040.0, 12.0, -10800.0, 86400.0, 3600.0))
+    assert tolerances == pytest.approx((180.0, 3.0, 4320.0, 0.05, 180.0, 3.0, 0.05))
+    assert extract_durations("146 invoices in 3 batches") == []

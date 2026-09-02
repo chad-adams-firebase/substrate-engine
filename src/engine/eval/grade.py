@@ -36,10 +36,12 @@ from engine.eval.tokens import (
     answer_body,
     answer_caption,
     answer_envelope,
+    extract_durations,
     extract_numbers,
     flatten_answer,
 )
 from engine.eval.world import World
+from engine.tools.durations import UNIT_SECONDS
 from engine.tools.envelope import ToolInvocation, loads_turn_evidence
 
 _CURRENCY = re.compile(r"\$\s?\d{1,3}(?:,\d{3})*\.\d{2}$")
@@ -245,6 +247,27 @@ def evaluate(
             if not isinstance(want, (int, float)) or isinstance(want, bool):
                 return False, f"gold field {field} is not numeric"
             wants.append(want)
+        if assertion.unit is not None:
+            # The unit arm (duration pass): the gold in seconds against
+            # the durations the answer states, never its bare digits.
+            size = UNIT_SECONDS[assertion.unit]
+            want_seconds = [float(want) * size for want in wants]
+            durations = extract_durations(view.body)
+            if any(
+                _seconds_match(seconds, tolerance, want)
+                for seconds, tolerance in durations
+                for want in want_seconds
+            ):
+                return True, ""
+            shown = [
+                f"{want} {assertion.unit} ({_fmt_seconds(want_s)} s)"
+                for want, want_s in zip(wants, want_seconds)
+            ]
+            label = shown[0] if len(shown) == 1 else f"any of {shown!r}"
+            return False, (
+                f"gold {label} absent from answer ({view.envelope}) "
+                f"durations {_head([s for s, _ in durations])} s"
+            )
         stated = extract_numbers(view.body)
         # Any listed reading satisfies the row (AMB2: READY or
         # not-CLOSED); for most rows the single field is the answer.
@@ -368,6 +391,18 @@ def _gold_value(gold: dict[str, Any] | None, field: str):
     if gold is None:
         return None
     return gold.get(field)
+
+
+def _seconds_match(stated: float, tolerance: float, want: float) -> bool:
+    """A stated duration matches the gold within half a displayed
+    decimal of its own unit (the humanizer prints one decimal), or
+    within float slop — so "60 minutes" is 3600 s and "0 seconds" is
+    not (duration pass, W3)."""
+    return abs(stated - want) <= max(tolerance, 1e-6 * max(abs(stated), abs(want)))
+
+
+def _fmt_seconds(seconds: float) -> str:
+    return format(seconds, ",.10g")
 
 
 def _numbers_match(stated: float, want: float) -> bool:

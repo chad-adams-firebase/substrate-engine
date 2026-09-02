@@ -18,6 +18,7 @@ Pure code: no ports, no I/O.
 """
 
 import json
+import math
 from decimal import ROUND_HALF_UP, Decimal
 
 from engine.tools.durations import UNIT_SECONDS, parse_clock
@@ -61,9 +62,17 @@ def format_money(value: int | float, symbol: str) -> str:
 def humanize_seconds(seconds: float) -> str:
     """An elapsed time in the largest unit it fills, one decimal,
     trailing .0 dropped, singular at exactly one: 3600 -> "1 hour",
-    93367 -> "1.1 days", 45 -> "45 seconds"."""
+    93367 -> "1.1 days", 45 -> "45 seconds".
+
+    The magnitude is rounded to the millisecond BEFORE the unit is
+    chosen (duration pass, W3 rep 5): a JULIAN day fraction put one
+    hour at 3599.99998 s, which chose minutes and printed "60 minutes"
+    — honest at one decimal, wrong to a unit-blind reader. Floor of
+    (x * 1000 + 0.5) rather than round(): Python rounds ties half-even
+    and JavaScript's Math.round half-up, and the page must print the
+    same digits for every double."""
     sign = "-" if seconds < 0 else ""
-    magnitude = abs(seconds)
+    magnitude = math.floor(abs(seconds) * 1000 + 0.5) / 1000
     for name, size in _HUMAN_UNITS:
         if magnitude >= size or size == 1:
             amount = _fixed(magnitude / size, 1)

@@ -48,12 +48,15 @@
 
   // Same rule as render.py humanize_seconds: the largest unit the
   // duration fills, one decimal, trailing .0 dropped, singular at 1.
+  // The magnitude is rounded to the millisecond before the unit is
+  // chosen (3599.99998 s is one hour, not "60 minutes"); floor of
+  // x * 1000 + 0.5 so a tie rounds the same way as the engine.
   const UNIT_SECONDS = { seconds: 1, minutes: 60, hours: 3600, days: 86400 };
   const HUMAN_UNITS = [["day", 86400], ["hour", 3600], ["minute", 60], ["second", 1]];
   const CLOCK = /^(\d+):([0-5]\d):([0-5]\d)(?:\.(\d+))?$/;
   function humanizeSeconds(seconds) {
     const sign = seconds < 0 ? "-" : "";
-    const magnitude = Math.abs(seconds);
+    const magnitude = Math.floor(Math.abs(seconds) * 1000 + 0.5) / 1000;
     let name, amount;
     for (const [unit, size] of HUMAN_UNITS) {
       if (magnitude >= size || size === 1) { name = unit; amount = (magnitude / size).toFixed(1); break; }

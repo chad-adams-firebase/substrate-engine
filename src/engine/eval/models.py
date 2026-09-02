@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from engine.config.models import ToolName
 from engine.harness.events import StatusEvent
 from engine.harness.outcomes import TurnOutcome
+from engine.tools.envelope import DurationUnit
 from engine.verifier.models import VerifierVerdict
 
 # The open-backlog anomaly refs an expected-fail row may carry
@@ -146,12 +147,22 @@ class NumericFromGoldAssertion(_AssertionBase):
     assertion — for ambiguity rows whose gold computes every
     documented reading (AMB2: READY or not-CLOSED). A number matching
     no listed reading is wrong content; the duality is declared per
-    row, never inferred."""
+    row, never inferred.
+
+    `unit` makes the comparison unit-aware (duration pass, W3 rep 5:
+    a correct "60 minutes" graded contradicted against gold 1.0
+    hours). With a unit declared the gold converts to seconds and the
+    answer's stated DURATIONS — "1 hour", "60 minutes", "1.1 days",
+    "twelve seconds", H:MM:SS — compare in seconds, within half a
+    displayed decimal of the phrase's own unit. A bare number is not a
+    stated duration under a unit: "1.0 days" must not pass a
+    1.0-hours gold on its digits."""
 
     content: ClassVar[bool] = True
 
     kind: Literal["numeric_from_gold"] = "numeric_from_gold"
     field: str | list[str]  # key(s) into the gold script's returned dict
+    unit: DurationUnit | None = None  # the gold's unit, when it is a duration
 
     @model_validator(mode="after")
     def _at_least_one_field(self) -> "NumericFromGoldAssertion":

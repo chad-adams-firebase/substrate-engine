@@ -53,6 +53,10 @@ def test_browser_cell_formatting_mirrors_the_engine_rules():
     assert "column_formats" in script
     assert "function formatDuration" in script and "function humanizeSeconds" in script
     assert "toFixed(1)" in script
+    # Duration pass: the unit is chosen after rounding to the
+    # millisecond, with the engine's exact expression (floor of
+    # x * 1000 + 0.5, so ties round the same way on both surfaces).
+    assert "Math.floor(Math.abs(seconds) * 1000 + 0.5) / 1000" in script
     assert '"\\u2014"' in script  # NULL_CELL, never an empty cell
     assert 'hint.kind === "duration"' in script
     # Rates (the coverage pass): one decimal, fraction x100, percent as is.

@@ -16,6 +16,7 @@ import re
 from engine.eval.models import EmittedTokens
 from engine.harness.outcomes import TurnOutcome
 from engine.harness.render import format_cell
+from engine.tools.durations import UNIT_SECONDS, parse_clock
 
 LINE_NUMBERS = re.compile(r"\blines?\s+\d+(?:\s*[–—-]\s*\d+)?", re.IGNORECASE)
 FILE_PATHS = re.compile(r"\b[\w./-]*\w\.(?:py|md|ya?ml|json|sql|txt)\b")
@@ -40,6 +41,15 @@ _WORD_NUMBER = re.compile(
     r"\b(" + "|".join(WORD_NUMBERS) + r")\b", re.IGNORECASE
 )
 _NUMBER = re.compile(r"\$?\d[\d,]*(?:\.\d+)?%?")
+# A stated duration: digits or a word-number, then a unit word the
+# humanizer prints ("1 hour", "60 minutes", "1.1 days", "twelve
+# seconds"); and an H:MM:SS clock string standing alone.
+_DURATION_PHRASE = re.compile(
+    r"(-?)\b(\d[\d,]*(?:\.\d+)?|" + "|".join(WORD_NUMBERS) + r")"
+    r"\s+(second|minute|hour|day)s?\b",
+    re.IGNORECASE,
+)
+_CLOCK_TEXT = re.compile(r"(?<![\d:])(\d+:[0-5]\d:[0-5]\d(?:\.\d+)?)(?![\d:])")
 
 
 def detect(text: str) -> EmittedTokens:
@@ -127,3 +137,28 @@ def extract_numbers(text: str) -> list[float]:
         for m in _WORD_NUMBER.finditer(text)
     )
     return values
+
+
+def extract_durations(text: str) -> list[tuple[float, float]]:
+    """(seconds, tolerance) for every duration the prose states — the
+    comparison pool for a numeric_from_gold assertion that declares a
+    unit (duration pass). The tolerance is half a displayed decimal in
+    the phrase's own unit, since the humanizer prints one decimal
+    ("1.1 days" covers 1.05–1.15 days); a clock string is exact to
+    half a second's tenth."""
+    durations: list[tuple[float, float]] = []
+    for match in _DURATION_PHRASE.finditer(text):
+        sign, amount, unit = match.groups()
+        lowered = amount.lower()
+        if lowered in WORD_NUMBERS:
+            count = float(WORD_NUMBERS[lowered])
+        else:
+            count = float(amount.replace(",", ""))
+        size = UNIT_SECONDS[f"{unit.lower()}s"]  # type: ignore[index]
+        seconds = count * size
+        durations.append((-seconds if sign else seconds, 0.05 * size))
+    for match in _CLOCK_TEXT.finditer(text):
+        seconds = parse_clock(match.group(1))
+        if seconds is not None:
+            durations.append((seconds, 0.05))
+    return durations

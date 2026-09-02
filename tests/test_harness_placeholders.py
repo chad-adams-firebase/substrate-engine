@@ -347,3 +347,20 @@ def test_a_path_into_a_text_field_is_a_failure_that_names_its_shape():
     assert resolution.failures == ["{{e1.text.QUANTITY_SPIKE_FACTOR}}", "{{e1.nowhere}}"]
     assert resolution.pathed_into_text == ["{{e1.text.QUANTITY_SPIKE_FACTOR}}"]
     assert "pkg.rule_rate_variance" in resolution.text
+
+
+def test_duration_prose_reads_in_the_unit_it_means_at_a_boundary():
+    """Duration pass: the post-coverage W3 rep 5 cell (a JULIAN day
+    fraction 1.3e-8 under one hour) injects as "1 hour", not "60
+    minutes" — the same millisecond-first rule the table uses."""
+    from engine.tools.envelope import ColumnFormat
+
+    evidence = _sql_evidence([{"avg_days": 0.04166666651144624}])
+    evidence[0].output.table.column_formats = {
+        "avg_days": ColumnFormat(kind="duration", unit="days"),
+    }
+    resolution = resolve_placeholders(
+        "About {{e0.table.rows[0].avg_days}} on average.", evidence
+    )
+    assert resolution.failures == []
+    assert resolution.text == "About 1 hour on average."

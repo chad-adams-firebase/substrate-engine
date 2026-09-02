@@ -1133,3 +1133,50 @@ def test_wbv_s4_is_no_longer_a_registered_xfail_ref(tmp_path):
     rows = ROW_DATA + '  xfail: {ref: WBV-S4, note: "back from the dead"}\n'
     with pytest.raises(BankLoadError, match="'O1' or 'ASSOC'"):
         make_env(tmp_path, rows)  # loads the bank; the literal rejects the ref
+
+
+ROW_DURATION = """\
+- id: W3X
+  provenance: user-sourced
+  category: data
+  question: "How long between RECEIVED and READY?"
+  gold: gold/g.py
+  expected_gold: {avg_hours: 1.0}
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: numeric_from_gold, field: avg_hours, unit: hours}
+"""
+GOLD_HOURS = "def gold(world):\n    return {'avg_hours': 1.0}\n"
+
+
+@pytest.mark.parametrize(
+    ("text", "passes"),
+    [
+        ("On average 60 minutes.", True),  # post-coverage W3 rep 5, once rounded
+        ("On average 1 hour.", True),
+        ("On average 1:00:00.", True),
+        ("About one hour on average.", True),
+        ("On average 0 seconds.", False),  # post-coverage W3 rep 4
+        ("On average 1.0 days.", False),  # the unit-blind false pass, closed
+        ("On average 1.0.", False),  # a bare number is not a stated duration
+        ("On average 59 minutes.", False),
+    ],
+)
+def test_a_duration_gold_compares_in_seconds(tmp_path, text, passes):
+    """Duration pass: with `unit: hours` declared, the gold is 3,600 s
+    and only the answer's stated durations count."""
+    bank, header, world, pack = make_env(tmp_path, ROW_DURATION, GOLD_HOURS)
+    records = [make_record("W3X", 1, make_turn(text))]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert (result.rows[0].status == "ok") is passes, result.rows[0]
+    if not passes:
+        (breach,) = result.breaches  # exit 0 with the wrong duration: contradicted
+        assert "gold 1.0 hours (3,600 s) absent from answer" in breach.detail
+        assert "durations" in breach.detail
+
+
+def test_a_unitless_numeric_gold_grades_exactly_as_before(tmp_path):
+    bank, header, world, pack = make_env(tmp_path, ROW_DATA)
+    records = [make_record("B5", 1, make_turn("146 last week."))]
+    assert grade(bank, header, records, world, pack_root=pack).rows[0].status == "ok"

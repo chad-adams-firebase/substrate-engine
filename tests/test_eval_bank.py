@@ -217,3 +217,23 @@ def test_setup_exit_gate_parses(tmp_path):
     bank = load_bank(write_bank(tmp_path, rows=rows))
     setup = bank.rows[0].expect.setup
     assert setup.exit == [0, 2] and setup.tool is None
+
+
+def test_numeric_from_gold_unit_is_a_duration_unit(tmp_path):
+    """Duration pass: `unit` is the envelope's DurationUnit literal —
+    a typo or a unit the humanizer never prints fails at load."""
+    rows = ROW_B5.replace(
+        "{kind: numeric_from_gold, field: value}",
+        "{kind: numeric_from_gold, field: value, unit: hours}",
+    )
+    bank = load_bank(write_bank(tmp_path / "ok", rows=rows))
+    (numeric,) = [a for a in bank.rows[0].expect.assertions if a.kind == "numeric_from_gold"]
+    assert numeric.unit == "hours"
+
+    rows = ROW_B5.replace(
+        "{kind: numeric_from_gold, field: value}",
+        "{kind: numeric_from_gold, field: value, unit: fortnights}",
+    )
+    write_bank(tmp_path / "bad", rows=rows)
+    with pytest.raises(BankLoadError, match="unit"):
+        load_bank(tmp_path / "bad")

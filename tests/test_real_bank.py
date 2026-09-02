@@ -82,3 +82,14 @@ def test_play_session_2_rows_carry_executed_gold():
     kinds = {a.kind for a in rows["W-C"].expect.assertions}
     assert {"name_from_gold", "numeric_from_gold"} <= kinds
     assert rows["F1"].expect.exit == [0, 2]
+
+
+def test_w3_grades_its_duration_in_seconds():
+    """Duration pass: W3's gold is hours and the assertion says so, so a
+    rendered "60 minutes" (post-coverage rep 5) is the gold and "0
+    seconds" (rep 4) is not — the unit-blind arm never sees the row."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    row = next(r for r in bank.rows if r.id == "W3")
+    (numeric,) = [a for a in row.expect.assertions if a.kind == "numeric_from_gold"]
+    assert numeric.unit == "hours"
+    assert row.expected_gold == {"avg_hours": 1.0}

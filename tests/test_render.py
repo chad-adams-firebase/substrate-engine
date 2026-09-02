@@ -22,6 +22,7 @@ FRACTION = ColumnFormat(kind="rate", scale="fraction")
 PERCENT = ColumnFormat(kind="rate", scale="percent")
 DAYS = ColumnFormat(kind="duration", unit="days")
 HOURS = ColumnFormat(kind="duration", unit="hours")
+SECONDS = ColumnFormat(kind="duration", unit="seconds")
 CLOCK = ColumnFormat(kind="duration")  # H:MM:SS strings carry their unit
 
 
@@ -74,10 +75,36 @@ def test_symbol_is_whatever_the_pack_says():
         ("36:00:00", CLOCK, "1.5 days"),
         ("0:00:45.5", CLOCK, "45.5 seconds"),
         ("1:00:00", DAYS, "1 hour"),  # a clock string carries its own unit
+        # Duration pass: the unit is chosen after rounding to the
+        # millisecond, so a value a hair under a boundary reads in the
+        # unit it means.
+        (0.04166666651144624, DAYS, "1 hour"),  # post-coverage W3 rep 5's cell
+        (86399.9996, SECONDS, "1 day"),
+        (59.9996, SECONDS, "1 minute"),
+        (-3599.9999, SECONDS, "-1 hour"),
+        # Below the millisecond the smaller unit stays, at one decimal:
+        # an honest reading the unit-aware grader parses as 3600 s.
+        (3598, SECONDS, "60 minutes"),
+        (3599.9994, SECONDS, "60 minutes"),
+        ("0:00:00.041667", DAYS, "0 seconds"),  # rep 4's interval, read honestly
     ],
 )
 def test_duration_cells_render_humanized(value, hint, expected):
     assert format_cell(value, hint) == expected
+
+
+def test_the_unit_boundary_is_decided_after_millisecond_rounding():
+    """Post-coverage W3 rep 5: JULIAN(r.at) - JULIAN(e.at) put one hour
+    at 3599.99998 s, the loop chose minutes and printed "60 minutes",
+    and the unit-blind grader read 60 against gold 1.0. Both surfaces
+    now round to the millisecond first — floor(x * 1000 + 0.5), never
+    round(), so Python's half-even and JavaScript's half-up cannot
+    disagree on a tie."""
+    assert humanize_seconds(3599.99999) == "1 hour"
+    assert humanize_seconds(3599.9995) == "1 hour"
+    assert humanize_seconds(3599.9994) == "60 minutes"
+    assert humanize_seconds(0.0005) == "0 seconds"  # the tie rounds up to 0.001
+    assert humanize_seconds(0.0015) == "0 seconds"
 
 
 def test_duration_hint_leaves_non_duration_cells_alone():

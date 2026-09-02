@@ -103,15 +103,23 @@
     exit: [0]
     assertions:
       - {kind: nonempty}
-      - {kind: numeric_from_gold, field: [avg_hours]}
+      - {kind: numeric_from_gold, field: [avg_hours], unit: hours}
       - {kind: not_contains, pattern: "0:00:00"}
   note: >-
     Play W3: the WHERE kept only the READY-transition row, both CASE
     branches read the same timestamp, and 0:00:00 shipped ✓. The
     time_in_status gotcha now pairs the entering and leaving
-    transitions; the answer is 1.0 hour. (The miss class is a zero
-    scalar — the zero challenge caps it at exit 2, so no breach
-    exposure.)
+    transitions; the answer is 1.0 hour. Post-coverage (2026-09-02):
+    two breaches on this row, neither the pairing. Rep 4 divided the
+    paired INTERVAL by 86400 — an interval of 0.041667 seconds,
+    humanized "0 seconds", a string the zero challenge never sees —
+    so the interval lint now challenges the shape before it runs and
+    the degenerate-duration floor takes the badge off an override.
+    Rep 5 was correct SQL whose JULIAN day fraction sat 1.3e-8 under
+    one hour, humanized "60 minutes", which the unit-blind grader read
+    as 60 against 1.0: the humanizers now round to the millisecond
+    before choosing a unit, and this assertion compares in seconds
+    (unit: hours), so "60 minutes" is the gold and "0 seconds" is not.
 
 - id: W5
   provenance: user-sourced
