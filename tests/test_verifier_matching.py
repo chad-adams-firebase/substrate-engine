@@ -772,3 +772,39 @@ def test_stats_top_values_ground_backticked_enum_claims():
     )
     assert result.disposition == "verified"
     assert llm.calls == []
+
+
+def test_a_labeled_fenced_quote_from_the_def_line_string_matches_read_source():
+    """Block 2's drafter rule: source goes in a language-labeled fence
+    opening on the def line. The fence label is markup, not quote
+    text, and the quote matcher is fence-agnostic — the block matches
+    the retrieved source exactly, no judge involved."""
+    text = (
+        'def rule_rate_variance(line):\n    """Billed above contract."""\n'
+        "    if line.rate > line.contract_rate * 1.15:\n        flag(line)\n"
+    )
+    source = ToolInvocation(
+        tool="read_source",
+        arguments={},
+        status="ok",
+        output=ReadSourceOutput(
+            qualified_name="pkg.mod.rule_rate_variance",
+            file_path="pkg/mod.py",
+            start_line=116,
+            end_line=149,
+            commit_sha="761a18e9",
+            text=text,
+        ),
+        substrates_read=[],
+    )
+    verifier, llm = make_verifier([])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text=f"Here:\n\n```python\n{text}```\n"),
+        evidence=[source],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+    (quote,) = [c for c in result.attempt_record.claims if c.kind == "quote"]
+    assert quote.status == "matched_exact" and quote.method == "quote"
+    assert llm.calls == []

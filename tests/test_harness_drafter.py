@@ -30,7 +30,7 @@ def test_draft_resolves_placeholders_from_real_evidence(tool_pack):
         "query_univariate_stats", {"table": "invoices", "column": "status"}
     )
     stub = ports.get(PortName.LLM)
-    drafter = Drafter(stub, "DRAFT SYSTEM")
+    drafter = Drafter(stub, "DRAFT SYSTEM", inline_value_max_chars=120)
     result = drafter.draft("how big is invoices?", [invocation])
 
     assert result.resolution.failures == []
@@ -50,7 +50,7 @@ def test_drafter_context_is_outputs_only_never_residue(tool_pack):
     )
     assert invocation.evidence is not None  # residue exists...
     stub = ports.get(PortName.LLM)
-    Drafter(stub, "SYS").draft("why 15%?", [invocation])
+    Drafter(stub, "SYS", inline_value_max_chars=120).draft("why 15%?", [invocation])
 
     sent = stub.calls[0]["messages"][1].content
     assert '"output"' in sent
@@ -198,3 +198,36 @@ def test_interpretation_terms_resolve_from_the_fixture_map(tool_pack):
     assert terms is not None
     assert "flag_rate:" in terms
     assert "substantive" in terms
+
+
+def test_drafter_prompt_carries_the_block_2_rendering_rules():
+    """Block 2: quoted source lives in a labeled fenced block that
+    opens on the def line (B4's rep 1 opened on the docstring), and
+    placeholders inject values, never passages (O1)."""
+    from engine.harness.prompts import render_drafter_prompt
+
+    prompt = render_drafter_prompt(app_name="a")
+    assert "inside a fenced code block labeled with its language" in prompt
+    assert "starts at its def line" in prompt
+    assert "never open the block on the docstring" in prompt
+    assert "Placeholders inject values" in prompt
+    assert "never pasted into a sentence" in prompt
+    assert "say what it says in your own words" in prompt
+
+
+def test_drafter_resolves_with_the_configured_inline_limit(tool_pack):
+    """The guard's one number reaches the resolver from HarnessSettings
+    through the Drafter — no engine constant."""
+    registry, ports = _evidence(
+        tool_pack,
+        [LLMResponse(content="Rows: {{e0.rows[0].column_name}}.", model="s")],
+    )
+    invocation = registry.invoke(
+        "query_univariate_stats", {"table": "invoices", "column": "status"}
+    )
+    stub = ports.get(PortName.LLM)
+    tight = Drafter(stub, "SYS", inline_value_max_chars=3)
+    result = tight.draft("q", [invocation])
+    assert result.resolution.misplaced == ["{{e0.rows[0].column_name}}"]
+    shipped = tight.resolve(result.raw, [invocation], allow_passages_inline=True)
+    assert shipped.text == "Rows: status."

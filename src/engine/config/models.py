@@ -172,6 +172,16 @@ class HarnessSettings(BaseModel):
     # Table rows shown back to the router in tool-result feedback;
     # the drafter and verifier always see the full retained output.
     max_rows_in_context: int = 30
+    # The longest single-line string a placeholder may inject into a
+    # sentence. Anything longer, or anything multi-line, is a passage
+    # — a description, a document snippet, source text — and resolves
+    # only inside a fenced code block; mid-sentence it is a resolution
+    # failure the drafter retries (Phase 5 Block 2, the play session's
+    # O1 text-block injection: whole descriptions pasted inline,
+    # snippets cut mid-word). The retry budget is max_draft_retries;
+    # when it runs out the passage ships as written rather than
+    # costing the answer.
+    inline_value_max_chars: int = 120
     # Dictionary columns ("table.column") whose enum values are
     # lifecycle vocabulary — rendered into the router prompt's
     # definitional bullet so "difference between RECEIVED and READY"

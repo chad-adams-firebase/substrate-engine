@@ -6,6 +6,13 @@ code, deterministically. The LLM never types the number (Brief §9.4);
 what it types anyway, the Verifier catches. Resolution failures are
 returned, not raised: the drafter retries with them as feedback.
 
+Values, not passages (Phase 5 Block 2): a placeholder that resolves to
+a whole description, a document snippet, or a block of source is a
+passage, and a passage pasted mid-sentence reads as a lumpy seam or a
+mid-word cut. Under an inline limit, a passage resolves only inside a
+fenced code block; anywhere else it is reported as misplaced, and the
+drafter retries told to quote it fenced or say it in its own words.
+
 Pure code, heavily unit-tested: no ports, no I/O.
 """
 
@@ -21,6 +28,9 @@ from engine.verifier.models import InjectedSpan
 _PLACEHOLDER = re.compile(r"\{\{e(\d+)\.([^{}]+)\}\}")
 _SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)((?:\[\d+\])*)$")
 _INDEXES = re.compile(r"\[(\d+)\]")
+# A fenced code block in the draft (an unclosed fence runs to the
+# end): the one place a passage-valued placeholder may sit.
+_FENCE = re.compile(r"```[^\n]*\n.*?(?:```|\Z)", re.DOTALL)
 
 
 class Resolution(BaseModel):
@@ -33,6 +43,11 @@ class Resolution(BaseModel):
     injected_spans: list[InjectedSpan] = []
     # Placeholders that did not resolve, verbatim, for retry feedback.
     failures: list[str] = []
+    # Placeholders that resolved to a passage — multi-line, or longer
+    # than the inline limit — outside a fenced code block. Left
+    # verbatim like a failure; the drafter retries with the
+    # values-not-passages feedback (Block 2's text-block guard).
+    misplaced: list[str] = []
 
 
 def referenced_indices(surfaces: list[str]) -> list[int]:
@@ -106,12 +121,31 @@ def _column_format(tree: object, path: str) -> ColumnFormat | None:
     return ColumnFormat.model_validate(hint) if hint else None
 
 
+def is_passage(rendered: str, inline_value_max_chars: int) -> bool:
+    """A value is one line and short; a passage is anything else."""
+    return "\n" in rendered or len(rendered) > inline_value_max_chars
+
+
+def _fenced_ranges(text: str) -> list[tuple[int, int]]:
+    return [(m.start(), m.end()) for m in _FENCE.finditer(text)]
+
+
 def resolve_placeholders(
-    text: str, evidence: list[ToolInvocation]
+    text: str,
+    evidence: list[ToolInvocation],
+    *,
+    inline_value_max_chars: int | None = None,
+    allow_passages_inline: bool = False,
 ) -> Resolution:
+    """Inject every placeholder's value. With an inline limit set, a
+    passage-valued placeholder outside a fenced code block is reported
+    as misplaced instead of injected — unless allow_passages_inline,
+    the exhaustion path, where it ships as written."""
     parts: list[str] = []
     spans: list[InjectedSpan] = []
     failures: list[str] = []
+    misplaced: list[str] = []
+    fences = _fenced_ranges(text)
     length = 0
     cursor = 0
 
@@ -143,6 +177,15 @@ def resolve_placeholders(
             failures.append(surface)
             parts.append(surface)  # leave it visible; the draft retries
             length += len(surface)
+        elif (
+            inline_value_max_chars is not None
+            and not allow_passages_inline
+            and is_passage(rendered, inline_value_max_chars)
+            and not any(start <= match.start() < end for start, end in fences)
+        ):
+            misplaced.append(surface)
+            parts.append(surface)  # verbatim, like a failure
+            length += len(surface)
         else:
             parts.append(rendered)
             spans.append(
@@ -156,5 +199,8 @@ def resolve_placeholders(
 
     parts.append(text[cursor:])
     return Resolution(
-        text="".join(parts), injected_spans=spans, failures=failures
+        text="".join(parts),
+        injected_spans=spans,
+        failures=failures,
+        misplaced=misplaced,
     )

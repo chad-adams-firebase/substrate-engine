@@ -396,3 +396,56 @@ def test_status_events_reach_the_listener_and_the_result(tool_pack):
     assert "tool:query_univariate_stats" in nodes
     assert "draft" in nodes and "verify" in nodes and "finalize" in nodes
     assert [e.node for e in seen] == nodes  # one emission, two destinations
+
+
+# --- Block 2: values, not passages --------------------------------------
+
+READ_SOURCE = tool_call(
+    "read_source", {"node": "invoiceguard.spine.rules_engine.rule_rate_variance"}
+)
+INLINE_PASTE = LLMResponse(
+    content="The source is {{e0.text}} which flags a line.", model="s"
+)
+FENCED_QUOTE = LLMResponse(
+    content="The rule, verbatim:\n\n```python\n{{e0.text}}\n```\n", model="s"
+)
+
+
+def test_a_passage_pasted_mid_sentence_is_retried_with_the_rule(tool_pack):
+    responses = [READ_SOURCE, GIVE_PROSE, INLINE_PASTE, FENCED_QUOTE]
+    session, ports, verifier = build_ask_session(tool_pack, responses)
+    result = session.ask("show me the source of rule_rate_variance")
+
+    assert result.outcome.kind == "answer"
+    text = result.outcome.body.text
+    assert text.startswith("The rule, verbatim:")
+    assert "```python\ndef rule_rate_variance(" in text
+    # The retry told the drafter exactly what to do with a passage.
+    from engine.config.models import PortName
+
+    llm = ports.get(PortName.LLM)
+    feedback = llm.calls[-1]["messages"][-1].content
+    assert "{{e0.text}}" in feedback and "passage" in feedback
+    assert "fenced code block" in feedback
+    (call,) = verifier.calls  # the retry never bypassed the Verifier
+    assert call["draft"].injected_spans
+    draft_events = [e.detail for e in result.events if e.node == "draft"]
+    assert any("{{e0.text}}" in d and "retrying (1/2)" in d for d in draft_events)
+
+
+def test_passages_still_inline_at_exhaustion_ship_as_written(tool_pack):
+    """A lumpy seam must not cost the answer: with every placeholder
+    resolving and only the placement wrong, the retries run out and
+    the passage ships inline — evented, and verified like any prose."""
+    responses = [READ_SOURCE, GIVE_PROSE] + [INLINE_PASTE] * 3
+    session, _, verifier = build_ask_session(tool_pack, responses)
+    result = session.ask("show me the source of rule_rate_variance")
+
+    assert result.outcome.kind == "answer"
+    text = result.outcome.body.text
+    assert text.startswith("The source is def rule_rate_variance(")
+    assert "{{e0.text}}" not in text
+    (call,) = verifier.calls
+    assert call["draft"].injected_spans
+    draft_events = [e.detail for e in result.events if e.node == "draft"]
+    assert any("shipping as written" in d and "{{e0.text}}" in d for d in draft_events)

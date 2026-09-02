@@ -272,7 +272,11 @@ def test_full_graph_ask_to_answer_with_complete_provenance():
         llm=llm,
         registry=registry,
         verifier=build_verifier(pack, ports),
-        drafter=Drafter(llm, render_drafter_prompt(app_name=pack.config.name)),
+        drafter=Drafter(
+            llm,
+            render_drafter_prompt(app_name=pack.config.name),
+            inline_value_max_chars=pack.config.harness.inline_value_max_chars,
+        ),
         settings=pack.config.harness,
         router_prompt=render_router_prompt(
             app_name=pack.config.name,

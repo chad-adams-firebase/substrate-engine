@@ -215,9 +215,32 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             previous_draft=state.draft_raw,
             feedback=state.draft_feedback or None,
         )
-        if result.resolution.failures:
+        resolution = result.resolution
+        if resolution.failures or resolution.misplaced:
             attempts = state.draft_attempts + 1
-            failed = ", ".join(result.resolution.failures)
+            failed = ", ".join(resolution.failures)
+            if attempts > deps.settings.max_draft_retries and not resolution.failures:
+                # Only passages sit mid-sentence: every placeholder
+                # resolves. A lumpy seam must not cost the answer, so
+                # the passages ship as written — evented, and still
+                # verified like any prose.
+                resolution = deps.drafter.resolve(
+                    result.raw, state.evidence, allow_passages_inline=True
+                )
+                deps.events.emit(
+                    "draft",
+                    "finish",
+                    "passage placeholder(s) still mid-sentence after "
+                    f"{deps.settings.max_draft_retries} retries: "
+                    f"{', '.join(result.resolution.misplaced)} — shipping "
+                    "as written",
+                )
+                return {
+                    "draft": MarkdownAnswer(text=resolution.text),
+                    "draft_raw": result.raw,
+                    "injected_spans": resolution.injected_spans,
+                    "draft_feedback": [],
+                }
             if attempts > deps.settings.max_draft_retries:
                 # §6: when the answer's substance is a result set the
                 # store already returned, deliver it as a table
@@ -253,10 +276,11 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                         )
                     )
                 }
+            problems = ", ".join(resolution.failures + resolution.misplaced)
             deps.events.emit(
                 "draft",
                 "finish",
-                f"placeholder(s) failed: {failed} — retrying "
+                f"placeholder(s) failed: {problems} — retrying "
                 f"({attempts}/{deps.settings.max_draft_retries})",
             )
             return {
@@ -265,14 +289,23 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 "draft_feedback": [
                     f"The placeholder {failure} did not resolve against "
                     "the evidence — use an index and path that exist."
-                    for failure in result.resolution.failures
+                    for failure in resolution.failures
+                ]
+                + [
+                    f"The placeholder {surface} resolves to a passage, not "
+                    "a value, and sits inside a sentence. Placeholders "
+                    "inject values; a passage is quoted on its own line "
+                    "inside a fenced code block when it is code, and "
+                    "otherwise said in your own words — never pasted "
+                    "mid-sentence."
+                    for surface in resolution.misplaced
                 ],
             }
         deps.events.emit("draft", "finish", "draft ready")
         return {
-            "draft": MarkdownAnswer(text=result.resolution.text),
+            "draft": MarkdownAnswer(text=resolution.text),
             "draft_raw": result.raw,
-            "injected_spans": result.resolution.injected_spans,
+            "injected_spans": resolution.injected_spans,
             "draft_feedback": [],
         }
 

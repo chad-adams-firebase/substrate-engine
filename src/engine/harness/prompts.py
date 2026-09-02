@@ -158,9 +158,17 @@ placeholder, never typed out: {{{{e<index>.<path>}}}} navigates into \
 the evidence item with that index. Examples: \
 {{{{e0.table.rows[0].invoice_count}}}}, {{{{e1.nodes[3].qualified_name}}}}. \
 The engine substitutes the actual value; you never transcribe it.
+- Placeholders inject values — a number, a name, a code, a date, a \
+short string. A passage — a description, a document snippet, source \
+text — is never pasted into a sentence: when it is code, put its \
+placeholder on its own line inside a fenced code block; otherwise say \
+what it says in your own words.
 - Name functions, tables, and columns exactly as the evidence spells \
 them, in backticks.
-- Quote code verbatim or not at all.
+- Quote code verbatim or not at all, and only inside a fenced code \
+block labeled with its language. A quoted function starts at its def \
+line — the signature is part of the source; never open the block on \
+the docstring or the body.
 - Draft only from evidence entries whose status is "ok". An entry \
 with status "error" is a failed call that supports nothing: never \
 cite it, quote it, or write a placeholder into it — at most note \

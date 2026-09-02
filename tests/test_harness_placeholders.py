@@ -237,3 +237,98 @@ def test_duration_hinted_cells_inject_humanized():
     )
     assert resolution.failures == []
     assert resolution.text == "On average 1.1 days, or 1 hour at best."
+
+
+# --- Values, not passages (Phase 5 Block 2's text-block guard) --------
+
+SNIPPET = ("Scores each received invoice against the twelve audit rules and " * 4)[:240]
+SOURCE = "def rule_rate_variance(line):\n    if line.rate > contract:\n        flag(line)"
+
+
+def _passage_evidence():
+    from engine.tools.envelope import DocSearchHit, DocSearchOutput, ReadSourceOutput
+
+    return [
+        ToolInvocation(
+            tool="search_business_docs",
+            arguments={},
+            status="ok",
+            output=DocSearchOutput(
+                hits=[DocSearchHit(slug="s", title="Scoring", heading="h", snippet=SNIPPET, score=3)]
+            ),
+            substrates_read=[],
+        ),
+        ToolInvocation(
+            tool="read_source",
+            arguments={},
+            status="ok",
+            output=ReadSourceOutput(
+                qualified_name="pkg.rule_rate_variance",
+                file_path="pkg.py",
+                start_line=1,
+                end_line=3,
+                commit_sha="abc",
+                text=SOURCE,
+            ),
+            substrates_read=[],
+        ),
+    ]
+
+
+def test_a_passage_mid_sentence_is_misplaced_not_injected():
+    resolution = resolve_placeholders(
+        "Scoring works like this: {{e0.hits[0].snippet}} and the code is "
+        "{{e1.text}} which flags lines; see {{e0.hits[0].title}}.",
+        _passage_evidence(),
+        inline_value_max_chars=120,
+    )
+    assert resolution.failures == []
+    assert resolution.misplaced == ["{{e0.hits[0].snippet}}", "{{e1.text}}"]
+    # Verbatim, like a failure, so the retry sees what it wrote; the
+    # short value still injects.
+    assert "{{e0.hits[0].snippet}}" in resolution.text
+    assert "{{e1.text}}" in resolution.text
+    assert "see Scoring." in resolution.text
+    assert [span.ref for span in resolution.injected_spans] == ["e0.hits[0].title"]
+
+
+def test_a_passage_inside_a_fenced_code_block_resolves():
+    text = "Here is the rule:\n```python\n{{e1.text}}\n```\nIt flags lines."
+    resolution = resolve_placeholders(
+        text, _passage_evidence(), inline_value_max_chars=120
+    )
+    assert resolution.misplaced == [] and resolution.failures == []
+    assert "```python\ndef rule_rate_variance(line):" in resolution.text
+    (span,) = resolution.injected_spans
+    assert resolution.text[span.start : span.end] == SOURCE
+
+
+def test_an_unclosed_fence_still_counts_as_fenced():
+    resolution = resolve_placeholders(
+        "```python\n{{e1.text}}", _passage_evidence(), inline_value_max_chars=120
+    )
+    assert resolution.misplaced == []
+
+
+def test_the_limit_is_the_line_length_and_multi_line_is_always_a_passage():
+    evidence = _passage_evidence()
+    # A 240-char snippet clears a generous limit; the source never does.
+    generous = resolve_placeholders(
+        "A: {{e0.hits[0].snippet}} B: {{e1.text}}", evidence, inline_value_max_chars=1000
+    )
+    assert generous.misplaced == ["{{e1.text}}"]
+    # No limit (the resolver's unit-test default) means no guard at all.
+    unguarded = resolve_placeholders("A: {{e1.text}}", evidence)
+    assert unguarded.misplaced == [] and SOURCE in unguarded.text
+
+
+def test_exhaustion_path_ships_the_passage_as_written():
+    resolution = resolve_placeholders(
+        "Code: {{e1.text}} end.",
+        _passage_evidence(),
+        inline_value_max_chars=120,
+        allow_passages_inline=True,
+    )
+    assert resolution.misplaced == []
+    assert resolution.text == f"Code: {SOURCE} end."
+    assert len(resolution.injected_spans) == 1

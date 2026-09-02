@@ -124,6 +124,12 @@ harness:
   max_router_iterations: 8
   max_draft_retries: 2
   max_rows_in_context: 30
+  # A placeholder injects a value; anything longer than this on one
+  # line, or anything multi-line, is a passage and belongs in a fenced
+  # code block or in the drafter's own words (Block 2's text-block
+  # guard). 120 clears qualified names and file paths, and catches
+  # component descriptions and the 240-char doc snippets.
+  inline_value_max_chars: 120
   # to_status carries all seven lifecycle values (invoices.status
   # never shows RECEIVED/CLAIMED/IN_REVIEW — NP6's 4-vs-7 tension);
   # rendered into the router's definitional bullet so lifecycle

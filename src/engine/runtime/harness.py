@@ -50,6 +50,7 @@ def build_harness(
                 app_name=pack.config.name,
                 interpretation_terms=resolve_interpretation_terms(pack, ports),
             ),
+            inline_value_max_chars=pack.config.harness.inline_value_max_chars,
         ),
         settings=pack.config.harness,
         router_prompt=render_router_prompt(

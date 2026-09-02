@@ -79,9 +79,28 @@ def build_drafting_messages(
 
 
 class Drafter:
-    def __init__(self, llm: LLMPort, system_prompt: str) -> None:
+    def __init__(
+        self, llm: LLMPort, system_prompt: str, *, inline_value_max_chars: int
+    ) -> None:
         self._llm = llm
         self._system_prompt = system_prompt
+        # HarnessSettings.inline_value_max_chars — the passage guard's
+        # one number, pack config like every other bound.
+        self._inline_value_max_chars = inline_value_max_chars
+
+    def resolve(
+        self,
+        raw: str,
+        evidence: list[ToolInvocation],
+        *,
+        allow_passages_inline: bool = False,
+    ) -> Resolution:
+        return resolve_placeholders(
+            raw,
+            evidence,
+            inline_value_max_chars=self._inline_value_max_chars,
+            allow_passages_inline=allow_passages_inline,
+        )
 
     def draft(
         self,
@@ -94,5 +113,6 @@ class Drafter:
             self._system_prompt, question, evidence, previous_draft, feedback
         )
         response = self._llm.complete(messages, temperature=0.0)
-        resolution = resolve_placeholders(response.content, evidence)
-        return DraftResult(raw=response.content, resolution=resolution)
+        return DraftResult(
+            raw=response.content, resolution=self.resolve(response.content, evidence)
+        )
