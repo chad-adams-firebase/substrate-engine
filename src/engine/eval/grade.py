@@ -439,6 +439,11 @@ def _check_route(assertion, tools_used: list[str]) -> tuple[bool, str]:
             all(tool in tools_used for tool in tools),
             f"missing required tool(s) from {tools}; {detail}",
         )
+    if assertion.mode == "must_include_any_of":
+        return (
+            any(tool in tools_used for tool in tools),
+            f"none of {tools} used; {detail}",
+        )
     if assertion.mode == "must_not_include":
         return (
             not any(tool in tools_used for tool in tools),

@@ -238,7 +238,18 @@ class RouteAssertion(_AssertionBase):
     order, duplicates and failed invocations included."""
 
     kind: Literal["route"] = "route"
-    mode: Literal["first", "must_include", "must_not_include", "exact_set"]
+    # must_include requires every listed tool; must_include_any_of
+    # requires at least one — the outcome-over-mechanism arm (pin
+    # pass, PLAY-R1: either app_primer or lookup_data_dictionary
+    # answers a definitional question; PLAY-R3 keeps the pure
+    # must_include as the mechanism probe).
+    mode: Literal[
+        "first",
+        "must_include",
+        "must_include_any_of",
+        "must_not_include",
+        "exact_set",
+    ]
     tools: list[ToolName]
 
 

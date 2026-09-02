@@ -435,6 +435,38 @@ def test_route_pair_split_is_reported(tmp_path):
     assert result.rows[1].status == "fail"  # route first failed too
 
 
+ROW_ANY_OF = """\
+- id: RT-any
+  provenance: scripted
+  category: routing
+  question: "What's the difference between RECEIVED and READY?"
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: route, mode: must_include_any_of, tools: [app_primer, lookup_data_dictionary]}
+"""
+
+
+def test_route_must_include_any_of_accepts_either_mechanism(tmp_path):
+    """Pin pass (PLAY-R1): outcome over mechanism — a definitional
+    question answered from the dictionary instead of the primer is
+    the right outcome by another road; only missing the list fails."""
+    bank, header, world, pack = make_env(tmp_path, ROW_ANY_OF)
+    dictionary_road = [
+        make_record(
+            "RT-any",
+            1,
+            make_turn(tools=("lookup_data_dictionary", "lookup_data_dictionary")),
+        )
+    ]
+    result = grade(bank, header, dictionary_road, world, pack_root=pack)
+    assert result.rows[0].status == "ok"
+
+    neither = [make_record("RT-any", 1, make_turn(tools=("run_sql",)))]
+    result = grade(bank, header, neither, world, pack_root=pack)
+    assert result.rows[0].status == "fail"
+
+
 ROW_RECOVERY = """\
 - id: REC-SQL
   provenance: scripted

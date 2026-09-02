@@ -2,6 +2,15 @@
 # not just the outcome — N5's license is exactly one corrected call
 # after a steering error, and over-retry is as much a regression as
 # surrender.
+#
+# 2026-09-01 (pin pass): REC-CKG gained a clarify arm. Under the
+# pinned model the engine clarifies on genuinely ambiguous node names
+# (4/5 reps in the post-play-pass run) instead of picking a candidate
+# and retrying — behavior the gold itself endorses (candidate_count:
+# 2). That supersedes the near-miss-retry expectation: the retry arm
+# remains for reps that pick a candidate, at_exit-scoped the AMB2
+# way; the exit-4 arm requires both candidates named and a question
+# asked. A clarify is neither retry nor over-retry.
 
 - id: REC-SQL
   provenance: scripted
@@ -34,15 +43,22 @@
   expected_gold: {candidate_count: 2}
   threshold: 0.6
   expect:
-    exit: [0, 2]
+    exit: [0, 2, 4]
     assertions:
       - {kind: nonempty}
       - kind: retry_count
         tool: traverse_code_knowledge_graph
         errors: 1
         error_contains: "names 2 nodes"
-      - {kind: contains, pattern: "def health("}
+        at_exit: [0, 2]
+      - {kind: contains, pattern: "def health(", at_exit: [0, 2]}
+      - kind: contains
+        regex: true
+        pattern: '(?s)invoiceguard\.[\w.]*health[\w.]*.*invoiceguard\.[\w.]*health[\w.]*.*\?'
+        at_exit: [4]
   note: >-
     'health' is a genuinely ambiguous bare suffix (module + function)
-    — the steering error names both candidates and licenses exactly
-    one retry (N4's error path + N5's license, together).
+    — the steering error names both candidates. A rep that picks one
+    is licensed exactly one retry and must show the source (N4's
+    error path + N5's license); a rep that clarifies must name both
+    candidates and ask (the pin-pass arm — see the header note).

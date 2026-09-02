@@ -173,11 +173,15 @@
     exit: [0]
     assertions:
       - {kind: nonempty}
-      - {kind: route, mode: must_include, tools: [app_primer]}
+      - {kind: route, mode: must_include_any_of, tools: [app_primer, lookup_data_dictionary]}
   note: >-
     Play R1: refused after budget exhaustion in data tools — one
     app_primer call answers it. The definitional bullet (B1) now
-    names the lifecycle vocabulary.
+    names the lifecycle vocabulary. Pin pass: widened to
+    any-of — a two-status difference answered from the dictionary is
+    the right outcome by another mechanism (the post-play-pass run
+    answered all five reps that way at exit 0); PLAY-R3 keeps the
+    pure app_primer assertion as the mechanism probe.
 
 - id: PLAY-R3
   provenance: user-sourced

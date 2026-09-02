@@ -236,6 +236,11 @@ def test_router_prompt_renders_definitional_terms_only_when_given():
     assert "RECEIVED" in bullet
     assert "app_primer first" in bullet
     assert "never a run_sql question" in bullet
+    # Pin pass (PLAY-R3): "define each one" over a lifecycle is the
+    # same question at plural scale — one primer call, not a
+    # dictionary call per term.
+    assert "defining several terms or every status at once" in bullet
+    assert "only for a single term" in bullet
 
     without = render_router_prompt(
         app_name="a", app_description="d", max_iterations=6

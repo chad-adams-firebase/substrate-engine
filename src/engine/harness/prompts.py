@@ -44,14 +44,19 @@ def render_router_prompt(
     # lifecycle status values, concept names — resolved at composition
     # (play pass B1, the N6 shape again): "difference between RECEIVED
     # and READY" must reach app_primer first, not exhaust the budget
-    # in data tools. None (nothing declared) renders no bullet.
+    # in data tools. "Define each one" over a whole lifecycle is the
+    # same question at plural scale (pin pass, PLAY-R3: six dictionary
+    # calls ground into a budget refusal where one primer call
+    # answers). None (nothing declared) renders no bullet.
     definitional_line = (
         "\n- Definitional and lifecycle questions — what a term or "
         "status means, the difference between two statuses, how the "
-        "workflow moves — including these: "
+        "workflow moves, or defining several terms or every status at "
+        "once — including these: "
         + ", ".join(definitional_terms)
-        + " -> app_primer first (lookup_data_dictionary for a single "
-        "term); a definition is never a run_sql question."
+        + " -> app_primer first (one call covers the whole set; "
+        "lookup_data_dictionary only for a single term); a definition "
+        "is never a run_sql question."
         if definitional_terms
         else ""
     )
