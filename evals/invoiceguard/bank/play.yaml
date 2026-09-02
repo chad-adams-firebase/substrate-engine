@@ -263,9 +263,16 @@
       no association code has landed, so the pairing is right by
       the model's habit, not by construction — stochastic, and the
       block stays until the Verifier checks association (Phase 5
-      Block 2 ruling).
+      Block 2 ruling). Post-Block-2 (2026-09-02): 0/5, every rep a
+      refusal — four surrendered after the primer and the documents
+      returned no list (the refuse verb's Block 2 description invited
+      it), one pathed {{e3.text.CONSTANT}} into read_source's text.
+      Neither is the association gap this block names, so the row now
+      gates on reaching a drafted answer (setup exit 0 or 2): a refusal
+      is scenario-not-reached, never an expected failure.
   expect:
     exit: [0]
+    setup: {exit: [0, 2]}
     assertions:
       - {kind: nonempty}
       - {kind: contains, pattern: "rate_variance"}
@@ -276,3 +283,130 @@
     A correct answer describes rule_rate_variance with its contracted-
     rate meaning in the same breath; contains never alarms, so this
     measures without gating the invariant.
+
+# Play Session #2 rows (2026-09-02, browser at 864114d): three
+# wrong-but-verified answers in the one schema region the Dictionary
+# Map had never covered (review_reports, review_report_lines,
+# invoices.supplier_acceptance, correction application), one refused
+# layup, one render defect — locked in with executed gold after the
+# coverage pass covered the region. The WBV rate tracks substrate
+# coverage: same engine, same guards as the bank's INVARIANT: ok run
+# the same day. Question texts are the session's verbatim (work.db
+# conversation 2, and conversation 1 turn 2 for F1).
+
+- id: W-A
+  provenance: user-sourced
+  category: data
+  question: "When auditors request corrections, what rate do they ask for?"
+  gold: gold/wa_requested_rate_is_contract.py
+  expected_gold: {rate_corrections: 85, at_contract_rate: 85}
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: contains, pattern: "contract"}
+      - {kind: not_contains, pattern: "'CORRECTION'"}
+      - {kind: not_contains, pattern: '\b0\.\d+\s?%', regex: true}
+      - {kind: numeric_from_gold, field: [rate_corrections, at_contract_rate], breach: false}
+  note: >-
+    Play #2 W-A: 0.298% verified — "rate" read as a percentage, the
+    router paraphrasing it into "what percentage of findings" and the
+    SQL landing on findings.category = 'CORRECTION'. Truth: a dollar
+    rate, always the contract rate, 85/85. The category literal in the
+    caption is the mechanism's tripwire; the percent guard is narrow (a
+    sub-1% figure) so "100% match the contract rate" stays legal.
+    Grounded by requested_rate_is_contract_rate and the router's
+    verbatim rule.
+
+- id: W-B
+  provenance: user-sourced
+  category: data
+  question: "How often do suppliers actually apply the corrections we request?"
+  gold: gold/wb_correction_application.py
+  expected_gold: {population: 73, applied: 55, rate: 0.7534, reviews_with_resubmission: 61, reviews_accepted: 44, review_rate: 0.7213}
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: [rate, review_rate]}
+      - {kind: not_contains, pattern: "'APPROVED'"}
+  note: >-
+    Play #2 W-B: 0.917% verified (1/109 APPROVED dispositions — the
+    auditor's verdict read as the supplier's response) against 75.3%
+    (55/73 correction lines with a resubmission applied). Two readings
+    are declared on correction_application_rate; the per-review 44/61
+    is accepted too. 'APPROVED' in the caption is the mechanism's
+    tripwire.
+
+- id: W-C
+  provenance: user-sourced
+  category: data
+  question: "Which supplier ignores our corrections the most? How many?"
+  gold: gold/wc_corrections_ignored.py
+  expected_gold: {supplier: "Ravenswood Extrusion", code: "RVX01", value: 9, world_total: 18}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: name_from_gold, field: [supplier, code]}
+      - {kind: numeric_from_gold, field: value}
+  note: >-
+    Play #2 W-C: Ravenswood 28 verified — invoices with an unaccepted
+    review, counting the ~40% of reviews that never drew a
+    resubmission. Truth 9, from the correction_ignored findings; the
+    world holds 18 in total, so 28 exceeded every ignored correction in
+    existence. A verified wrong count here is a breach.
+
+- id: R-A
+  provenance: user-sourced
+  category: data
+  question: "List audit rejections by reviewer"
+  gold: gold/ra_rejections_by_reviewer.py
+  expected_gold: {top: "finch", top_count: 6, reviewers: 6, total: 18, requested_top_count: 26}
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: name_from_gold, field: top}
+      - {kind: numeric_from_gold, field: [top_count, requested_top_count]}
+      - {kind: not_contains, pattern: "to_status\\s*=\\s*'REJECTED'", regex: true}
+  note: >-
+    Play #2 R-A: to_status = 'REJECTED' (not a status) — zero rows, a
+    generic unverified badge, an empty render. Answerable: the
+    correction_ignored findings attributed to the auditor who closed
+    the prior revision (finch 6, ava 4, bo 3, orin 2, nova 2, tass 1);
+    the "corrections requested" reading (finch 26) is declared and
+    accepted. The enum-literal lint is the mechanism's backstop; the
+    corrections_ignored_by_auditor template is the grounding.
+
+- id: F1
+  provenance: user-sourced
+  category: data
+  question: "Show total invoiced amount per supplier, including suppliers with no invoice lines."
+  gold: gold/f1_no_data_suppliers.py
+  expected_gold: {no_invoice_suppliers: ["Opaline Salvage", "Tether Freight Brokerage"], null_total_example: "Kestrel Surplus Traders"}
+  threshold: 0.6
+  expect:
+    exit: [0, 2]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: contains, pattern: "—"}
+      - {kind: not_contains, pattern: '\$0\.00', regex: true}
+      - {kind: name_from_gold, field: null_total_example, breach: false}
+  note: >-
+    Play #2 F1: SUM(COALESCE(..., 0)) rendered six no-data suppliers as
+    $0.00 — "invoiced nothing" where the truth is "nothing to sum".
+    Two kinds: two suppliers with no invoices, four whose invoices are
+    LAPSED-born with NULL totals and no lines. Exit 2 is expected — the
+    LEFT JOIN from suppliers draws the fan-out challenge and the
+    licensed resend ships [UNVERIFIED]; the row measures the render:
+    a dash, never $0.00, and the no-data suppliers present.

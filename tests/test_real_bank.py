@@ -52,16 +52,33 @@ def test_claude_md_carries_the_pin_hygiene_law():
 
 
 def test_block_2_ledger_state():
-    """Phase 5 Block 2 rulings on the bank: P-N11 is retired (its
-    scenario starved by the definitional vocabulary), W4/W2 keep the
-    ASSOC block (no association code has landed), S4 keeps WBV-S4
-    (its XPASS attributes to the model pin, not a fix), and B2's dump
-    guard keeps its per-assertion O1 ref until a live run passes it.
-    Each deletion is a deliberate bank edit that updates this test."""
+    """Phase 5 Block 2 and coverage-pass rulings on the bank: P-N11 is
+    retired (its scenario starved by the definitional vocabulary),
+    W4/W2 keep the ASSOC block (no association code has landed) and W4
+    gates on reaching a drafted answer, S4's WBV-S4 block came off
+    (three stable XPASS runs on one model pin attribute to the pin —
+    the standard is revised), and B2's dump guard keeps its
+    per-assertion O1 ref until a live run passes it. Each change is a
+    deliberate bank edit that updates this test."""
     bank = load_bank(ROOT / "evals" / "invoiceguard")
     rows = {r.id: r for r in bank.rows}
     assert "P-N11" not in rows
     assert rows["W4"].xfail.ref == "ASSOC" and rows["W2"].xfail.ref == "ASSOC"
-    assert rows["S4"].xfail.ref == "WBV-S4"
+    assert rows["W4"].expect.setup.exit == [0, 2]
+    assert rows["S4"].xfail is None
     (dump,) = [a for a in rows["B2"].expect.assertions if a.kind == "no_text_block_dump"]
     assert dump.xfail_ref == "O1"
+
+
+def test_play_session_2_rows_carry_executed_gold():
+    """The coverage pass's rows: each names a gold script and, where
+    the session's wrong answer had a caption tripwire, a not_contains
+    that breaches on the mechanism."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    rows = {r.id: r for r in bank.rows}
+    for row_id in ("W-A", "W-B", "W-C", "R-A", "F1"):
+        assert rows[row_id].gold is not None, row_id
+        assert rows[row_id].provenance == "user-sourced"
+    kinds = {a.kind for a in rows["W-C"].expect.assertions}
+    assert {"name_from_gold", "numeric_from_gold"} <= kinds
+    assert rows["F1"].expect.exit == [0, 2]

@@ -556,7 +556,11 @@ def _check_verdict(assertion, record: TurnRecord) -> tuple[bool, str]:
 
 
 def _check_setup(spec: SetupSpec, view: _TurnView) -> bool:
-    """Scenario preconditions over the turn's recorded invocations."""
+    """Scenario preconditions over the turn's recorded invocations and,
+    for a row that measures a drafted answer, its exit: a refusal is
+    scenario-not-reached, not an expected failure (W4)."""
+    if spec.exit is not None and view.record.exit_equiv not in spec.exit:
+        return False
     invocations = view.invocations
     if spec.tool is not None:
         invocations = [

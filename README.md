@@ -99,7 +99,21 @@ it by one rule (`src/engine/harness/render.py`):
   `H:MM:SS` strings, which carry their own unit. Renders in the
   largest unit filled, one decimal: `1.1 days`, `1 hour`, `30
   minutes`.
-- NULL cells render as an em dash, never blank.
+- `{"kind": "rate", "scale": "fraction"}` — from `display.rate` alone:
+  alias globs per scale (`fraction` cells are 0–1 and show ×100,
+  `percent` cells were already multiplied by 100). Renders one
+  decimal: `92.2%`. The Verifier's rate bounds and saturation checks
+  read the same hint, so a percent column is bounded on 0–100 and a
+  percent column whose values all sit at or below 1.0 loses its badge
+  (a fraction written into a `_pct` alias).
+- NULL cells render as an em dash, never blank; a zero-row table
+  renders "No rows matched" instead of an empty box.
+
+Hints resolve from the statement before the alias
+(`src/engine/tools/sql_select.py`): `AVG(invoices.opportunity)`
+inherits its source column's format, `extended_price - amount` is
+money, a CTE column resolves through the CTE's own select item, and
+the alias's spelling decides only what the parse cannot classify.
 
 Rounding is the browser's: the exact double, half-up, so the engine
 and `app.js` print identical digits on every value.

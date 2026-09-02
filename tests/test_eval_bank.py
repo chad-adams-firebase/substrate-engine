@@ -206,3 +206,14 @@ def test_numeric_from_gold_rejects_an_empty_field_list(tmp_path):
     write_bank(tmp_path, rows=rows)
     with pytest.raises(BankLoadError, match="at least one gold field"):
         load_bank(tmp_path)
+
+
+def test_setup_exit_gate_parses(tmp_path):
+    """W4's shape (coverage pass): the rep counts only when the turn
+    reached a drafted answer — exit 0 or 2; refusals are not reached."""
+    rows = ROW_B5.replace(
+        "    exit: [0]\n", "    exit: [0]\n    setup: {exit: [0, 2]}\n"
+    )
+    bank = load_bank(write_bank(tmp_path, rows=rows))
+    setup = bank.rows[0].expect.setup
+    assert setup.exit == [0, 2] and setup.tool is None

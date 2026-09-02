@@ -247,31 +247,25 @@
   question: "How many invoices have totals that don't match their line sums but were never flagged?"
   gold: gold/s4_silent_adjustments.py
   expected_gold: {value: 114, flagged_mismatches: 42}
-  xfail:
-    ref: WBV-S4
-    note: >-
-      4b baseline 1/5 verified 0: adjustment_flag = 0 (the gotcha
-      says = 1) and NOT EXISTS (any finding) instead of rule_name =
-      'total_mismatch' — the gotcha's exact query, ignored. Fix pass
-      3's zero challenge caps a 0 at unverified. fp3-confirm 3/5:
-      the residual is stochastic wrong-question SQL with every miss
-      capped at exit 2 by the zero-challenge — the designed trade,
-      kept annotated. XPASS 5/5 on 2026-08-30 and 2026-09-02, checked
-      for attribution in Phase 5 Block 2: all ten reps wrote the
-      gotcha's exact query, but the gotcha is unchanged since the
-      pack's first commit (da53ee0) and no engine or pack change since
-      the play pass touches this mechanism — the only difference from
-      the 4/5 post-Block-1 run (old model, rep 1 wrote adjustment_flag
-      = 0 and NOT EXISTS any finding) is the model pin (98b3232). A
-      habit shift is not a fix; the block stays until a landed change
-      explains the flip.
   expect:
     exit: [0]
     assertions:
       - {kind: nonempty}
       - {kind: route, mode: must_include, tools: [run_sql]}
       - {kind: numeric_from_gold, field: value}
-  note: Story 4 gotcha — silent adjustments are sanctioned, not errors.
+  note: >-
+    Story 4 gotcha — silent adjustments are sanctioned, not errors.
+    Carried the WBV-S4 xfail from the 4b baseline (1/5 verified 0:
+    adjustment_flag = 0 and NOT EXISTS any finding — the gotcha's exact
+    query, ignored) through fp3-confirm 3/5 (misses zero-challenge-
+    capped at exit 2). XPASS 5/5 on 2026-08-30, 2026-09-02 (post-pin-
+    pass) and 2026-09-02 (post-Block-2), every rep the gotcha's exact
+    query; the flip attributes to the model pin (98b3232), and the
+    block came off in the coverage pass with the standard revised: a
+    pinned, reproducible model is not luck, and an xfail that predicts
+    nothing masks the regression it would have caught. An ordinary row
+    now — a miss here is a threshold failure, a verified wrong count a
+    breach.
 
 - id: S5
   provenance: scripted

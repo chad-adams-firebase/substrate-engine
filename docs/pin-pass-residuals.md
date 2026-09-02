@@ -169,3 +169,47 @@ the report shows about the guards, mechanism by mechanism:
   passage-valued placeholder now resolves only inside a fenced code
   block and retries otherwise. Test-verified, not live-witnessed; the
   per-assertion xfail comes off on the first live run that passes it.
+
+## Coverage pass riders (2026-09-02, after Play Session #2)
+
+Play Session #2 (browser at `864114d`, 11 free-play turns) produced
+three wrong-but-verified answers in the one schema region the map had
+never covered — reviews, corrections, supplier acceptance — while the
+bank's same-day run read `INVARIANT: ok`. The coverage pass covered the
+region (four executed metric templates, two concepts, two gotchas, five
+join paths, five where-to-look entries), locked it into the bank (W-A,
+W-B, W-C, R-A, F1), and landed the guards. What it deliberately left:
+
+- **S4's WBV-S4 block retired; the standard is revised.** XPASS 5/5 on
+  three consecutive runs (2026-08-30, post-pin-pass, post-Block-2)
+  under one model pin (`98b3232`), every rep the gotcha's exact query.
+  A pinned, reproducible model is not luck: three stable runs on one
+  pin attribute to the pin, and an xfail that predicts nothing masks
+  the regression it would have caught. The ref leaves the `XfailRef`
+  literal; the row's note carries the sentence. ASSOC is unaffected —
+  W4's pairing is a checked-nowhere property, not a stable habit.
+- **W4 gates on reaching a drafted answer.** Post-Block-2 0/5 was five
+  refusals (four early surrenders after the primer and the documents,
+  one `{{e3.text.CONSTANT}}` path into source text) graded as expected
+  failures under a block that names the association gap. `setup:
+  {exit: [0, 2]}` makes a refusal scenario-not-reached; the ASSOC
+  block stays on the pairing assertion until association verification
+  lands (W2/W4, still queued).
+- **The fixture is not extended to negotiation.** Partial compliance,
+  justification text, negotiated middles: the production pack's question
+  class, not InvoiceGuard's. Accepted and recorded, not built.
+- **G-A's false downgrade on genuinely saturated rates stays.** A true
+  100% on a large basis ships [UNVERIFIED] by design (the saturation
+  warn cannot tell it from a NULL-padded AVG); the trade is accepted,
+  not tuned.
+- **A fraction written into a percent alias is warn-capped.** The
+  display scale is the alias author's word; `ROUND(x, 2) AS flag_pct`
+  over a 0–1 x renders 1.0% and sits inside the 0–100 bound. The
+  `rate_scale_suspect` warn (a percent column whose values all sit at
+  or below 1.0) takes the badge off; the digits stay the author's.
+- **`_ratio` aliases carry no rate hint.** A ratio may exceed 1 and is
+  not a percent; such a column renders as a plain number with no rate
+  bound — the pack's `display.rate` lists say so.
+- **The verbatim rule reaches run_sql only.** The router still
+  paraphrases for other tools; the work store showed the loss only on
+  run_sql's grounding, where the map's vocabulary lives.

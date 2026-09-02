@@ -1078,3 +1078,58 @@ def test_a_rendered_percent_matches_its_gold_fraction_at_one_decimal():
     assert _numbers_match(75.3, 0.7534)
     assert not _numbers_match(75.4, 0.7534)
     assert not _numbers_match(96.0, 0.9545)
+
+
+ROW_EXIT_SETUP = """\
+- id: W4X
+  provenance: user-sourced
+  category: code
+  question: "What are the rules?"
+  threshold: 0.8
+  expect:
+    exit: [0]
+    setup: {exit: [0, 2]}
+    assertions:
+      - {kind: nonempty}
+      - {kind: contains, pattern: "rate_variance"}
+"""
+
+
+def test_a_refusal_is_not_reached_under_an_exit_setup_gate(tmp_path):
+    """Post-Block-2 W4: 0/5, every rep a refusal, graded as expected
+    failures under the ASSOC block that names a different gap. With
+    the exit gate, refusals leave the denominator: two drafted reps
+    decide the row, three refusals are not-reached."""
+    bank, header, world, pack = make_env(tmp_path, ROW_EXIT_SETUP)
+    records = [
+        make_record("W4X", 1, make_turn(text="rate_variance flags rates", exit_equiv=0)),
+        make_record("W4X", 2, make_turn(text="rate_variance flags rates", exit_equiv=2)),
+        make_record("W4X", 3, make_turn(text="I can't answer.", exit_equiv=3)),
+        make_record("W4X", 4, make_turn(text="I can't answer.", exit_equiv=3)),
+        make_record("W4X", 5, make_turn(text="I can't answer.", exit_equiv=3)),
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    (row,) = result.rows
+    assert row.reached == 2
+    assert row.passes == 1  # the exit-2 rep reached, then failed exit [0]
+    assert row.status == "fail"  # 1/2 under 0.8 — graded on the reached reps
+    assert "reached 2/5" in render(result)
+
+    only_refusals = [
+        make_record("W4X", rep, make_turn(text="I can't answer.", exit_equiv=3))
+        for rep in range(1, 6)
+    ]
+    result = grade(bank, header, only_refusals, world, pack_root=pack)
+    assert result.rows[0].status == "inconclusive"
+    assert result.rows[0].reached == 0
+
+
+def test_wbv_s4_is_no_longer_a_registered_xfail_ref(tmp_path):
+    """The block came off with the standard revised (three stable
+    XPASS runs on one model pin attribute to the pin); the ref is
+    retired from the literal so it cannot quietly return."""
+    from engine.eval.bank import BankLoadError
+
+    rows = ROW_DATA + '  xfail: {ref: WBV-S4, note: "back from the dead"}\n'
+    with pytest.raises(BankLoadError, match="'O1' or 'ASSOC'"):
+        make_env(tmp_path, rows)  # loads the bank; the literal rejects the ref

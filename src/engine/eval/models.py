@@ -73,9 +73,16 @@ from engine.verifier.models import VerifierVerdict
 # play pass's declared out-of-scope). Association/attribution
 # verification is a queued design item; these rows measure the gap
 # until it lands.
+# WBV-S4 retired on the coverage pass (Phase 5 interlude, 2026-09-02):
+# XPASS 5/5 on three consecutive runs under one model pin (98b3232).
+# The standard is revised with its reason: a pinned, reproducible model
+# is not luck — three stable runs on one pin attribute to the pin, and
+# an xfail that predicts nothing masks the regression it would have
+# caught. A block whose XPASS is stable across three runs on one pin
+# comes off with that sentence in the row's note. ASSOC is unaffected:
+# W4's pairing is a checked-nowhere property, not a stable habit.
 XfailRef = Literal[
     "O1",
-    "WBV-S4",
     "ASSOC",
 ]
 
@@ -334,6 +341,12 @@ class SetupSpec(BaseModel):
     min_invocations: int | None = None
     min_errored: int | None = None
     min_ok: int | None = None
+    # The rep reached its scenario only if the turn's exit equivalent
+    # is one of these — W4's shape (coverage pass): a row that measures
+    # a drafted answer's pairing is not reached by a refusal, which is
+    # scenario-not-reached, not an expected failure. Mirrors
+    # Expectation.exit's vocabulary (0 verified · 2 unverified · ...).
+    exit: list[int] | None = None
 
 
 class Expectation(BaseModel):
