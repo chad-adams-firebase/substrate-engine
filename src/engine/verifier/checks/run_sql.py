@@ -43,25 +43,47 @@ Known limitations, documented rather than hidden:
   does not touch. What remains uncaught is a wrong-but-nonzero
   result; the fan-out lint and canonical-metric grounding in run_sql
   address the shapes the baseline found (MT2, U5, C4).
+- THE DURATION PASS (every display-hint kind carries a plausibility
+  bound): money had sum caps, rates had bounds and saturation,
+  durations had a humanizer and nothing else — and the post-coverage
+  W3 rep 4 shipped a verified "0 seconds" for a one-hour gap
+  (AVG(interval) / 86400 is an interval of 0.041667 seconds). Now a
+  duration-hinted aggregate below one second warns (a floor; a
+  same-row count under the basis suppresses it, as with rates), and a
+  duration longer than the queried tables' timestamp span fails (a
+  ceiling; a SUM is exempt, an item the parse cannot classify warns).
+  The interval-arithmetic lint's overridden challenge is read from the
+  evidence attempts like the other two and caps the answer at
+  unverified.
 """
 
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from engine.config.models import ToolName
 from engine.substrates.models import StatsRow
+from engine.tools.durations import duration_seconds, is_timestamp_type
 from engine.tools.envelope import (
     ColumnFormat,
     RunSqlEvidence,
     RunSqlOutput,
     ToolInvocation,
 )
+from engine.tools.interval_lint import AGGREGATE_WORD
 from engine.verifier.checks.base import (
     PlausibilityContext,
     SubstrateCheck,
     identifier_tokens,
 )
-from engine.tools.sql_select import ResolvedColumn, resolve_select_columns
+from engine.tools.sql_select import (
+    Aggregate,
+    Arith,
+    Expr,
+    Opaque,
+    ResolvedColumn,
+    resolve_select_columns,
+    resolve_select_items,
+)
 from engine.verifier.models import (
     CorpusText,
     EvidenceContribution,
@@ -112,6 +134,60 @@ def _as_date(text: str | None) -> date | None:
         return date.fromisoformat(match.group(0))
     except ValueError:
         return None
+
+
+def _as_datetime(text: str | None) -> datetime | None:
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.strip())
+    except ValueError:
+        return None
+
+
+def _timestamp_span_seconds(
+    queried: list[str], stats_by_table: dict[str, list[StatsRow]]
+) -> float | None:
+    """Seconds between the earliest and latest timestamp the stats
+    substrate records across the queried tables' timestamp columns —
+    the longest elapsed time the data can contain. None when no
+    queried table has a timestamp column with both bounds, or when
+    the span is not positive (a single-moment table bounds nothing)."""
+    lows: list[datetime] = []
+    highs: list[datetime] = []
+    for table_name in queried:
+        for row in stats_by_table.get(table_name, []):
+            if not is_timestamp_type(row.data_type):
+                continue
+            low = _as_datetime(row.min_value)
+            high = _as_datetime(row.max_value)
+            if low is not None:
+                lows.append(low)
+            if high is not None:
+                highs.append(high)
+    if not lows or not highs:
+        return None
+    span = (max(highs) - min(lows)).total_seconds()
+    return span if span > 0 else None
+
+
+def _aggregate_names(expr: Expr | None) -> set[str]:
+    """The aggregate functions an item's tree applies. An Opaque item
+    (an EPOCH(...) form the parse declines) is read lexically from its
+    source text — for the degenerate-duration warn only, where a false
+    positive costs a badge and a false negative is a verified zero."""
+    if expr is None:
+        return set()
+    if isinstance(expr, Opaque):
+        return {name.lower() for name in AGGREGATE_WORD.findall(expr.text)}
+    if isinstance(expr, Aggregate):
+        names = {expr.func}
+        if expr.arg is not None:
+            names |= _aggregate_names(expr.arg)
+        return names
+    if isinstance(expr, Arith):
+        return _aggregate_names(expr.left) | _aggregate_names(expr.right)
+    return set()
 
 
 def _zero_findings(table) -> list[PlausibilityFinding]:
@@ -271,6 +347,23 @@ class RunSqlCheck(SubstrateCheck):
                         ),
                     )
                 )
+            # 0d: an interval-arithmetic challenge the model overrode
+            # (duration pass, W3 rep 4): the executed statement still
+            # scales a timestamp difference by a literal, so its
+            # duration cells are off by a unit factor — [UNVERIFIED]
+            # for this stated reason.
+            if final.interval_lint is not None and final.error is None:
+                findings.append(
+                    PlausibilityFinding(
+                        check="run_sql.interval_arithmetic_override",
+                        severity="warn",
+                        detail=(
+                            "the executed statement still scales an interval "
+                            "it was challenged on: "
+                            f"{final.interval_lint}"
+                        ),
+                    )
+                )
 
         is_single_cell = (
             len(queried) == 1
@@ -394,6 +487,20 @@ class RunSqlCheck(SubstrateCheck):
         if settings.challenge_saturated_rates:
             findings.extend(self._saturated_rate_findings(table, settings))
             findings.extend(self._rate_scale_findings(table))
+
+        # 2b4: the duration class's floor and ceiling (duration pass,
+        # W3). A duration-hinted aggregate below one second warns; a
+        # duration longer than the queried data's timestamp span fails
+        # (a SUM is exempt, an unclassifiable item warns).
+        if (
+            settings.challenge_degenerate_durations
+            or settings.enforce_duration_span_bound
+        ) and table.rows:
+            findings.extend(
+                self._duration_findings(
+                    sql, table, queried, stats_by_table, settings
+                )
+            )
 
         # 2c: aggregate-vs-stats bounds for result columns the
         # select-list parse resolves (play pass — §9.3 finally
@@ -581,6 +688,113 @@ class RunSqlCheck(SubstrateCheck):
                     ),
                 )
             )
+        return findings
+
+    @staticmethod
+    def _duration_findings(
+        sql: str,
+        table,
+        queried: list[str],
+        stats_by_table: dict[str, list[StatsRow]],
+        settings,
+    ) -> list[PlausibilityFinding]:
+        """The duration class's bounds, read through the same hint the
+        renderer uses. Floor: an aggregate cell below one second warns
+        (an instant transition is legal, but so was W3's scaled
+        interval), suppressed by a same-row count under the basis.
+        Ceiling: a cell longer than the queried data's timestamp span
+        fails when the parse can see the item is not a SUM, warns when
+        it cannot classify the item, and is silent for a SUM. One
+        finding per column per bound."""
+        hinted = {
+            column: hint
+            for column in table.columns
+            if (hint := table.column_formats.get(column)) is not None
+            and hint.kind == "duration"
+        }
+        if not hinted:
+            return []
+        items = resolve_select_items(sql)
+        span = (
+            _timestamp_span_seconds(queried, stats_by_table)
+            if settings.enforce_duration_span_bound
+            else None
+        )
+        findings: list[PlausibilityFinding] = []
+        for column, hint in hinted.items():
+            tree = items.get(column)
+            aggregated = bool(_aggregate_names(tree) & {"avg", "sum", "min", "max"})
+            summed = "sum" in _aggregate_names(tree) and not isinstance(tree, Opaque)
+            unclassified = tree is None or isinstance(tree, Opaque)
+            floor_done = False
+            ceiling_done = False
+            for row_index, row in enumerate(table.rows):
+                cell = row.get(column)
+                seconds = duration_seconds(cell, hint.unit)
+                if seconds is None:
+                    continue
+                where = f"rows[{row_index}].{column}"
+                if (
+                    settings.challenge_degenerate_durations
+                    and not floor_done
+                    and aggregated
+                    and abs(seconds) < 1.0
+                ):
+                    bases = [
+                        float(other)
+                        for name, other in row.items()
+                        if name != column
+                        and isinstance(other, (int, float))
+                        and not isinstance(other, bool)
+                        and float(other) >= 0
+                        and float(other) == int(other)
+                    ]
+                    if not (
+                        bases
+                        and max(bases) < settings.degenerate_duration_min_basis
+                    ):
+                        floor_done = True
+                        findings.append(
+                            PlausibilityFinding(
+                                check="run_sql.duration_degenerate",
+                                severity="warn",
+                                detail=(
+                                    f"{where} = {cell!r} is a degenerate "
+                                    "duration — an aggregate below one "
+                                    "second. Legitimate for an instant "
+                                    "transition, but also exactly what "
+                                    "interval arithmetic scaled by a unit "
+                                    "produces (AVG(a - b) / 86400 is "
+                                    "0.041667 seconds, not days)"
+                                ),
+                            )
+                        )
+                if (
+                    span is not None
+                    and not ceiling_done
+                    and not summed
+                    and seconds > span
+                ):
+                    ceiling_done = True
+                    detail = (
+                        f"{where} = {cell!r} ({_fmt(seconds / 86400)} days) "
+                        "exceeds the span of the queried data's timestamps "
+                        f"({_fmt(span / 86400)} days)"
+                    )
+                    if unclassified:
+                        detail += (
+                            "; the select-list parse cannot classify the "
+                            "column, so this warns rather than refuses"
+                        )
+                    findings.append(
+                        PlausibilityFinding(
+                            check="run_sql.duration_span_bound",
+                            severity="warn" if unclassified else "fail",
+                            detail=detail,
+                        )
+                    )
+                if floor_done and (ceiling_done or span is None):
+                    break
         return findings
 
     def _aggregate_findings(

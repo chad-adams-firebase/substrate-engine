@@ -45,6 +45,7 @@ from engine.tools.envelope import (
 )
 from engine.tools.enum_lint import lint_enum_literals
 from engine.tools.grounding import render_grounding
+from engine.tools.interval_lint import lint_interval_arithmetic
 from engine.tools.sql_lint import lint_fan_out
 
 _SQL_FENCE = re.compile(r"```(?:sql)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
@@ -189,6 +190,7 @@ class RunSql(Tool):
         # trace (and, via the Verifier, costs the verified badge).
         fan_out_challenged = False
         enum_challenged = False
+        interval_challenged = False
 
         for _ in range(self._settings.max_repair_attempts + 1):
             response = self._llm.complete(messages, temperature=0.0)
@@ -196,6 +198,7 @@ class RunSql(Tool):
             row_count: int | None = None
             lint_reason: str | None = None
             enum_reason: str | None = None
+            interval_reason: str | None = None
             blocking: list[str] = []
             if sql is None:
                 error = (
@@ -209,12 +212,17 @@ class RunSql(Tool):
                     lint_reason = lint_fan_out(sql, dictionary, dictionary_map)
                 if self._settings.enum_literal_lint:
                     enum_reason = lint_enum_literals(sql, dictionary)
+                if self._settings.interval_arithmetic_lint:
+                    interval_reason = lint_interval_arithmetic(sql, dictionary)
                 if lint_reason is not None and not fan_out_challenged:
                     fan_out_challenged = True
                     blocking.append(lint_reason)
                 if enum_reason is not None and not enum_challenged:
                     enum_challenged = True
                     blocking.append(enum_reason)
+                if interval_reason is not None and not interval_challenged:
+                    interval_challenged = True
+                    blocking.append(interval_reason)
             if sql is not None and guard_select_only(sql) is None and blocking:
                 error = " ".join(blocking)
             elif sql is not None and guard_select_only(sql) is None:
@@ -242,6 +250,7 @@ class RunSql(Tool):
                                 row_count=len(rows),
                                 lint=lint_reason,
                                 enum_lint=enum_reason,
+                                interval_lint=interval_reason,
                             )
                         )
                         return self.ok(
@@ -273,6 +282,7 @@ class RunSql(Tool):
                     row_count=row_count,
                     lint=lint_reason,
                     enum_lint=enum_reason,
+                    interval_lint=interval_reason,
                 )
             )
             messages.append(Message(role="assistant", content=response.content))

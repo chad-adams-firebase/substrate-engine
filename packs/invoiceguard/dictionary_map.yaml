@@ -837,13 +837,22 @@ gotchas:
       invoice_id. Reading both timestamps from the single READY
       transition row (CASE branches over from_status/to_status inside
       a WHERE to_status = 'READY' scope) subtracts a timestamp from
-      itself and yields exactly 0:00:00 — the play session's W3.
+      itself and yields exactly 0:00:00 — the play session's W3. Units:
+      leaving.at - entering.at is an INTERVAL, not a number. Scale it
+      only after EPOCH — AVG(EPOCH(lv.at - en.at)) / 3600.0 AS
+      avg_hours — or count units with DATE_DIFF('hour', en.at, lv.at).
+      AVG(lv.at - en.at) / 86400 AS avg_time_in_days (the post-coverage
+      W3) divides an interval by a number and yields an interval of
+      0.041667 seconds, not 0.0417 days.
     tables: [invoice_history]
     provenance:
       source: human
       confidence: 0.9
       needs_validation: false
-      note: Hand-authored from the 2026-08-31 play session (W3).
+      note: >-
+        Hand-authored from the 2026-08-31 play session (W3); the units
+        paragraph added after the 2026-09-02 post-coverage bank (W3 rep
+        4: interval / 86400 humanized "0 seconds", verified).
   - name: rule_name_prefixes
     summary: >-
       findings.rule_name drops the code's rule_ prefix, and

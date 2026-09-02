@@ -122,6 +122,11 @@ class RunSqlSettings(BaseModel):
     # observed values (coverage pass, R-A: to_status = 'REJECTED' is not
     # a status); the model may resend unchanged and the override warns.
     enum_literal_lint: bool = True
+    # A timestamp difference multiplied or divided by a numeric literal
+    # draws one repair round (duration pass, W3 rep 4: AVG(a - b) / 86400
+    # is an interval of 0.041667 seconds, not 0.0417 days, and it
+    # verified); the model may resend unchanged and the override warns.
+    interval_arithmetic_lint: bool = True
 
 
 class SearchBusinessDocsSettings(BaseModel):
@@ -272,6 +277,29 @@ class PlausibilitySettings(BaseModel):
     # renderer uses, so a bound never disagrees with the digits shown.
     challenge_saturated_rates: bool = True
     saturated_rate_min_basis: int = 20
+    # The duration class's floor (duration pass, W3 rep 4: AVG over an
+    # interval scaled by 86400 humanized to "0 seconds" and verified).
+    # A duration-hinted AGGREGATE cell below one second loses the
+    # verified badge — warn only, never fail, since an instant
+    # transition is a legitimate zero. A count-like cell in the same
+    # row below the minimum basis suppresses the warn, as with
+    # saturated rates: a tiny population can be instant. Which columns
+    # are durations, and in what unit, is the table's own ColumnFormat
+    # hint (display.duration) — the same resolution every renderer
+    # uses. When the select-list parse cannot classify the item (an
+    # EPOCH(...) form), the aggregate is read lexically: a false
+    # positive costs a badge, a false negative is the verified zero
+    # the play session already met once.
+    challenge_degenerate_durations: bool = True
+    degenerate_duration_min_basis: int = 20
+    # The duration class's ceiling: a duration cell longer than the
+    # span between the earliest and latest timestamp in the queried
+    # tables (the stats substrate's min/max on their timestamp
+    # columns) cannot be an average, a minimum, a maximum or one row's
+    # elapsed time — fail. A SUM over a population may honestly exceed
+    # the span and is exempt; an item the parse cannot classify warns
+    # instead of failing, since the parse cannot rule out a SUM there.
+    enforce_duration_span_bound: bool = True
 
 
 class VerifierSettings(BaseModel):

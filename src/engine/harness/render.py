@@ -18,10 +18,22 @@ Pure code: no ports, no I/O.
 """
 
 import json
-import re
 from decimal import ROUND_HALF_UP, Decimal
 
+from engine.tools.durations import UNIT_SECONDS, parse_clock
 from engine.tools.envelope import ColumnFormat, DurationUnit, RateScale, Table
+
+__all__ = [
+    "NO_ROWS",
+    "NULL_CELL",
+    "format_cell",
+    "format_duration",
+    "format_money",
+    "format_rate",
+    "humanize_seconds",
+    "parse_clock",
+    "render_table_text",
+]
 
 NULL_CELL = "—"
 # A zero-row table says so, on every surface, instead of rendering as
@@ -29,17 +41,8 @@ NULL_CELL = "—"
 # nothing at all).
 NO_ROWS = "No rows matched"
 
-_UNIT_SECONDS: dict[DurationUnit, int] = {
-    "seconds": 1,
-    "minutes": 60,
-    "hours": 3600,
-    "days": 86400,
-}
 # Largest unit first: a duration reads in the biggest unit it fills.
 _HUMAN_UNITS = (("day", 86400), ("hour", 3600), ("minute", 60), ("second", 1))
-# SQLite's time()/strftime output for an elapsed interval: H:MM:SS,
-# hours unpadded or padded, optional fraction.
-_CLOCK = re.compile(r"^(\d+):([0-5]\d):([0-5]\d)(?:\.(\d+))?$")
 
 
 def _fixed(value: int | float, places: int) -> str:
@@ -70,27 +73,17 @@ def humanize_seconds(seconds: float) -> str:
     return f"{sign}{text} {label}"
 
 
-def parse_clock(text: str) -> float | None:
-    """Seconds in an H:MM:SS string, or None when the text is not one."""
-    match = _CLOCK.match(text.strip())
-    if match is None:
-        return None
-    hours, minutes, seconds, fraction = match.groups()
-    total = int(hours) * 3600 + int(minutes) * 60 + int(seconds)
-    if fraction:
-        total += float(f"0.{fraction}")
-    return float(total)
-
-
 def format_duration(value: object, unit: DurationUnit | None) -> str | None:
     """A duration cell as text: a number is measured in the column's
     unit; an H:MM:SS string carries its own. None when the cell is
-    neither (the caller falls back to the plain rule)."""
+    neither (the caller falls back to the plain rule). The seconds
+    arithmetic lives in tools/durations.py, shared with the Verifier's
+    duration bound so the bound reads exactly what renders."""
     if isinstance(value, str):
         seconds = parse_clock(value)
         return None if seconds is None else humanize_seconds(seconds)
     if unit is not None and isinstance(value, (int, float)) and not isinstance(value, bool):
-        return humanize_seconds(value * _UNIT_SECONDS[unit])
+        return humanize_seconds(value * UNIT_SECONDS[unit])
     return None
 
 

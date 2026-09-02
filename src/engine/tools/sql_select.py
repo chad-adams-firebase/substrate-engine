@@ -33,7 +33,7 @@ Pure code: no ports, no I/O.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Union
 
 from engine.tools.sql_lint import select_list_of, split_scopes, table_aliases
@@ -161,7 +161,13 @@ class Arith:
 @dataclass(frozen=True)
 class Opaque:
     """CASE, a window function, a subquery, a string, an unknown
-    function: the parse declines to guess."""
+    function: the parse declines to guess. `text` keeps the item's
+    source for a consumer that falls back to a lexical read (the
+    Verifier's degenerate-duration warn looks for an aggregate name in
+    an EPOCH(...) item, the duration pass); it never takes part in
+    equality — an Opaque is an Opaque."""
+
+    text: str = field(default="", compare=False)
 
 
 Expr = Union[Column, Aggregate, Number, Arith, Opaque]
@@ -169,6 +175,10 @@ Expr = Union[Column, Aggregate, Number, Arith, Opaque]
 # Functions whose value has the shape of their first argument.
 _TRANSPARENT = {"coalesce", "round", "abs", "cast", "ifnull", "nullif"}
 _AGGREGATES = {"sum", "avg", "min", "max", "count"}
+# AGE(a, b) is a - b: an INTERVAL over two timestamps, so the interval
+# lint sees it as the subtraction it is. One-argument AGE (against the
+# wall clock) stays Opaque.
+_INTERVAL_DIFFERENCE = {"age"}
 
 _TOKEN = re.compile(
     r"\s*(?:"
@@ -332,6 +342,7 @@ class _Parser:
         ]
         self.pos = 0
         self.sources = sources
+        self.text = text.strip()
 
     def peek(self) -> tuple[str, str] | None:
         return self.tokens[self.pos] if self.pos < len(self.tokens) else None
@@ -345,8 +356,8 @@ class _Parser:
         try:
             expr = self.expr()
         except _Bail:
-            return Opaque()
-        return expr if self.peek() is None else Opaque()
+            return Opaque(self.text)
+        return expr if self.peek() is None else Opaque(self.text)
 
     def expr(self) -> Expr:
         left = self.term()
@@ -404,6 +415,12 @@ class _Parser:
             arg = self.expr()
             self.expect(")")
             return Aggregate(name, arg)
+        if name in _INTERVAL_DIFFERENCE:
+            left = self.expr()
+            self.expect(",")
+            right = self.expr()
+            self.expect(")")
+            return Arith("-", left, right)
         if name in _TRANSPARENT:
             first = self.expr()
             depth = 0

@@ -41,21 +41,25 @@ def sql_invocation(
     truncated=False,
     final_lint: str | None = None,
     final_enum_lint: str | None = None,
+    final_interval_lint: str | None = None,
     column_formats: dict | None = None,
 ) -> ToolInvocation:
     columns = list(rows[0].keys()) if rows else []
     evidence = None
-    if final_lint is not None or final_enum_lint is not None:
+    lints = (final_lint, final_enum_lint, final_interval_lint)
+    if any(reason is not None for reason in lints):
         # The overridden-challenge shape: the executed (final, clean-
         # error) attempt still carries the lint reason(s).
-        error = " ".join(r for r in (final_lint, final_enum_lint) if r)
+        error = " ".join(r for r in lints if r)
         evidence = RunSqlEvidence(
             grounding_prompt="",
             attempts=[
                 SqlAttempt(raw_response=sql, sql=sql, error=error,
-                           lint=final_lint, enum_lint=final_enum_lint),
+                           lint=final_lint, enum_lint=final_enum_lint,
+                           interval_lint=final_interval_lint),
                 SqlAttempt(raw_response=sql, sql=sql, row_count=len(rows),
-                           lint=final_lint, enum_lint=final_enum_lint),
+                           lint=final_lint, enum_lint=final_enum_lint,
+                           interval_lint=final_interval_lint),
             ],
         )
     return ToolInvocation(
@@ -90,3 +94,28 @@ def make_verifier(
         lambda: stats or [],
     )
     return verifier, llm
+
+
+# The post-coverage bank's W3 rep 4 (2026-09-02), verbatim: the
+# subtraction in a CTE, the AVG and the scaling outside. Both are
+# INTERVALs; the result was 0:00:00.041667, humanized "0 seconds",
+# verified. Shared by the lint tests and the plausibility tests.
+W3_REP4_SQL = """WITH received_to_ready AS (
+    SELECT 
+        r.invoice_id,
+        r.at - rr.at AS time_in_seconds
+    FROM 
+        invoice_history rr
+    JOIN 
+        invoice_history r
+    ON 
+        rr.invoice_id = r.invoice_id
+    WHERE 
+        rr.to_status = 'RECEIVED' 
+        AND r.from_status = 'RECEIVED' 
+        AND r.to_status = 'READY'
+)
+SELECT 
+    AVG(time_in_seconds) / 86400 AS avg_time_in_days
+FROM 
+    received_to_ready"""

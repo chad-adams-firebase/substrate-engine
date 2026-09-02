@@ -159,3 +159,28 @@ def test_the_verifier_view_still_sees_the_outer_scope_only():
     verifier = resolve_select_columns(TURN_2_12)
     assert verifier["original_cost"].table == "example_invoice"
     assert resolve_select_items(TURN_2_12)["original_cost"].table == "invoice_lines"
+
+
+def test_two_argument_age_is_the_subtraction_it_is():
+    """Duration pass: AGE(a, b) is a - b, an INTERVAL over two
+    timestamps, so the interval lint sees it; one-argument AGE is
+    against the wall clock and stays Opaque."""
+    items = resolve_select_items(
+        "SELECT AGE(lv.at, en.at) AS gap, AGE(lv.at) AS since "
+        "FROM invoice_history en JOIN invoice_history lv ON lv.invoice_id = en.invoice_id"
+    )
+    assert items["gap"] == Arith(
+        "-", Column("invoice_history", "at"), Column("invoice_history", "at")
+    )
+    assert items["since"] == Opaque()
+
+
+def test_an_opaque_item_keeps_its_source_text_outside_equality():
+    """The Verifier's degenerate-duration warn reads an EPOCH(...) item
+    lexically; the text rides on the Opaque and never affects
+    equality, so `== Opaque()` still means 'the parse declined'."""
+    items = resolve_select_items(
+        "SELECT AVG(EPOCH(i.scored_at - i.received_at)) / 3600.0 AS avg_hours FROM invoices i"
+    )
+    assert items["avg_hours"] == Opaque()
+    assert items["avg_hours"].text == "AVG(EPOCH(i.scored_at - i.received_at)) / 3600.0"

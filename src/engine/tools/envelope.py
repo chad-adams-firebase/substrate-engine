@@ -261,6 +261,12 @@ class SqlAttempt(BaseModel):
     # attempt when the licensed resend still filters on a value the
     # column never holds — the Verifier's run_sql.enum_literal_override.
     enum_lint: str | None = None
+    # The interval-arithmetic challenge (duration pass, W3 rep 4),
+    # recorded the same way: beside error on the blocking round, and on
+    # an EXECUTED attempt when the licensed resend still scales an
+    # interval by a literal — the Verifier's
+    # run_sql.interval_arithmetic_override.
+    interval_lint: str | None = None
 
 
 class RunSqlEvidence(BaseModel):

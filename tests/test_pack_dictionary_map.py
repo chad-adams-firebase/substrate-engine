@@ -155,3 +155,27 @@ def test_grounding_renders_the_new_entries(pack_map, pack_dictionary, pack_stats
     assert "- rate_means_dollars_here:" in rest
     assert "- invoice_to_successor: invoices.id = invoices.prior_revision_id" in rest
     assert "Q: List audit rejections by reviewer." in rest
+
+
+def test_templates_never_scale_an_interval(pack_map, pack_dictionary):
+    """Duration pass: the interval-arithmetic lint over every canonical
+    template — a recommended shape must never meet a lint (the S2
+    lesson, where the gotcha's own indicator shape drew the fan-out
+    challenge)."""
+    from engine.tools.interval_lint import lint_interval_arithmetic
+
+    for metric in pack_map.metrics:
+        if metric.template_sql:
+            assert lint_interval_arithmetic(metric.template_sql, pack_dictionary) is None, (
+                metric.name
+            )
+
+
+def test_time_in_status_gotcha_names_the_unit_shapes(pack_map):
+    """Post-coverage W3 rep 4: the gotcha's pairing advice was followed
+    and the interval was then divided by 86400. The gotcha now says
+    EPOCH first, or DATE_DIFF, and names the wrong shape."""
+    gotcha = next(g for g in pack_map.gotchas if g.name == "time_in_status")
+    assert "EPOCH(" in gotcha.detail
+    assert "DATE_DIFF('hour'" in gotcha.detail
+    assert "/ 86400" in gotcha.detail  # the wrong shape, named

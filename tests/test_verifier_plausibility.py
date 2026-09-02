@@ -1037,3 +1037,179 @@ def test_overridden_enum_challenge_warns_with_its_reason():
     assert "run_sql.empty_result" in checks
     assert "never takes 'REJECTED'" in checks["run_sql.enum_literal_override"].detail
     assert checks["run_sql.enum_literal_override"].severity == "warn"
+
+
+# --- Duration pass: the duration class's floor and ceiling (W3) -------
+
+from engine.config.models import PlausibilitySettings  # noqa: E402
+from tests.verifier_support import W3_REP4_SQL  # noqa: E402
+
+DAYS = {"avg_time_in_days": ColumnFormat(kind="duration", unit="days")}
+HOURS = {"avg_hours": ColumnFormat(kind="duration", unit="hours")}
+CLOCK = {"avg_wait": ColumnFormat(kind="duration")}
+# invoice_history.at spans 88.4 days in the seed-42 world.
+HISTORY_STATS = [
+    stats_row("invoice_history", "invoice_id", row_count=6000),
+    stats_row(
+        "invoice_history",
+        "at",
+        data_type="TIMESTAMP",
+        row_count=6000,
+        min_value="2026-03-02T08:00:00",
+        max_value="2026-05-29T18:00:00",
+    ),
+]
+PAIRED = (
+    "SELECT {select} FROM invoices i "
+    "JOIN invoice_history h ON h.invoice_id = i.id"
+)
+
+
+def _verify(invocation, stats, settings=None):
+    verifier, _ = make_verifier(stats=stats, settings=settings)
+    return verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="The average is shown."),
+        evidence=[invocation],
+        attempt=1,
+    )
+
+
+def test_the_post_coverage_w3_cell_ships_unverified_never_refused():
+    """W3 rep 4's exact table: AVG(interval) / 86400 returned the clock
+    string 0:00:00.041667 under a days hint — 0.041667 seconds, an
+    aggregate below one second. The floor takes the badge off; the
+    zero challenge never saw it (a string is not 0)."""
+    rep4 = sql_invocation(
+        W3_REP4_SQL, [{"avg_time_in_days": "0:00:00.041667"}], column_formats=DAYS
+    )
+    result = _verify(rep4, HISTORY_STATS)
+    assert result.disposition == "unverified"
+    (finding,) = result.plausibility
+    assert (finding.check, finding.severity) == ("run_sql.duration_degenerate", "warn")
+    assert "0:00:00.041667" in finding.detail
+
+
+def test_a_small_basis_beside_a_zero_duration_stands_the_floor_down():
+    """Twelve invoices scored the instant they arrived is an honest
+    zero — a count cell in the same row under the basis suppresses the
+    warn; a count over the basis does not."""
+    sql = PAIRED.format(select="COUNT(*) AS invoice_count, AVG(h.at - i.received_at) AS avg_wait")
+    honest = sql_invocation(
+        sql, [{"invoice_count": 12, "avg_wait": "0:00:00"}], column_formats=CLOCK
+    )
+    assert _verify(honest, []).disposition == "verified"
+
+    large = sql_invocation(
+        sql, [{"invoice_count": 400, "avg_wait": "0:00:00"}], column_formats=CLOCK
+    )
+    result = _verify(large, [])
+    assert result.disposition == "unverified"
+    assert {f.check for f in result.plausibility} == {"run_sql.duration_degenerate"}
+
+
+def test_a_listing_of_zero_durations_is_not_degenerate():
+    """The floor is for aggregates: a per-invoice listing may hold
+    zeros legitimately, and a lone plain cell is the zero challenge's
+    business, not this one's."""
+    listing = sql_invocation(
+        "SELECT i.invoice_number, i.scored_at - i.received_at AS wait FROM invoices i",
+        [{"invoice_number": "A-1", "wait": "0:00:00"}, {"invoice_number": "A-2", "wait": "0:00:00"}],
+        column_formats={"wait": ColumnFormat(kind="duration")},
+    )
+    assert _verify(listing, []).disposition == "verified"
+
+
+def test_an_epoch_form_reads_its_aggregate_lexically():
+    """The recommended EPOCH-first shape is Opaque to the parse; the
+    original play-session W3 (self-subtraction, exactly 0) would come
+    through it silent. The floor reads the aggregate name from the
+    item's text instead — a warn, so the cost of a false read is a
+    badge."""
+    epoch = sql_invocation(
+        PAIRED.format(select="AVG(EPOCH(h.at - i.received_at)) / 3600.0 AS avg_hours, COUNT(*) AS n"),
+        [{"avg_hours": 0.0, "n": 1983}],
+        column_formats=HOURS,
+    )
+    result = _verify(epoch, [])
+    assert result.disposition == "unverified"
+    assert {f.check for f in result.plausibility} == {"run_sql.duration_degenerate"}
+
+
+def test_an_average_past_the_data_span_is_refused():
+    """The ceiling: an average wait of 200 days in data whose timestamps
+    span 88 cannot be — the parse sees the AVG, so this fails."""
+    too_long = sql_invocation(
+        PAIRED.format(select="AVG(h.at - i.received_at) AS avg_wait"),
+        [{"avg_wait": "4800:00:00"}],
+        column_formats=CLOCK,
+    )
+    result = _verify(too_long, HISTORY_STATS)
+    assert result.disposition == "refused"
+    (finding,) = result.plausibility
+    assert (finding.check, finding.severity) == ("run_sql.duration_span_bound", "fail")
+    assert "200 days" in finding.detail and "88.4" in finding.detail
+
+
+def test_a_sum_may_exceed_the_span_and_an_opaque_item_only_warns():
+    total = sql_invocation(
+        PAIRED.format(select="SUM(h.at - i.received_at) AS total_wait"),
+        [{"total_wait": "4800:00:00"}],
+        column_formats={"total_wait": ColumnFormat(kind="duration")},
+    )
+    assert _verify(total, HISTORY_STATS).disposition == "verified"
+
+    epoch = sql_invocation(
+        PAIRED.format(select="AVG(EPOCH(h.at - i.received_at)) / 3600.0 AS avg_hours"),
+        [{"avg_hours": 4800.0}],
+        column_formats=HOURS,
+    )
+    result = _verify(epoch, HISTORY_STATS)
+    assert result.disposition == "unverified"
+    (finding,) = result.plausibility
+    assert (finding.check, finding.severity) == ("run_sql.duration_span_bound", "warn")
+    assert "cannot classify" in finding.detail
+    # Without timestamp stats there is no span to bound against.
+    assert _verify(epoch, []).disposition == "verified"
+
+
+def test_duration_bounds_are_pack_knobs():
+    off = VerifierSettings(
+        plausibility=PlausibilitySettings(
+            challenge_degenerate_durations=False, enforce_duration_span_bound=False
+        )
+    )
+    rep4 = sql_invocation(
+        W3_REP4_SQL, [{"avg_time_in_days": "0:00:00.041667"}], column_formats=DAYS
+    )
+    assert _verify(rep4, HISTORY_STATS, off).disposition == "verified"
+    too_long = sql_invocation(
+        PAIRED.format(select="AVG(h.at - i.received_at) AS avg_wait"),
+        [{"avg_wait": "4800:00:00"}],
+        column_formats=CLOCK,
+    )
+    assert _verify(too_long, HISTORY_STATS, off).disposition == "verified"
+
+
+def test_overridden_interval_challenge_warns_with_its_reason():
+    """The licensed resend still executes; the recorded challenge costs
+    the badge for a stated reason, beside the floor's own warn."""
+    overridden = sql_invocation(
+        W3_REP4_SQL,
+        [{"avg_time_in_days": "0:00:00.041667"}],
+        final_interval_lint="Interval-arithmetic check: `avg_time_in_days` scales a timestamp difference",
+        column_formats=DAYS,
+    )
+    result = _verify(overridden, HISTORY_STATS)
+    assert result.disposition == "unverified"
+    checks = {f.check: f for f in result.plausibility}
+    assert checks["run_sql.interval_arithmetic_override"].severity == "warn"
+    assert "scales a timestamp difference" in checks["run_sql.interval_arithmetic_override"].detail
+    assert "run_sql.duration_degenerate" in checks
+
+    repaired = sql_invocation(
+        PAIRED.format(select="AVG(EPOCH(h.at - i.received_at)) / 3600.0 AS avg_hours"),
+        [{"avg_hours": 1.0}],
+        column_formats=HOURS,
+    )
+    assert _verify(repaired, HISTORY_STATS).disposition == "verified"

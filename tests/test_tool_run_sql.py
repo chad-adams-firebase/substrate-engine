@@ -471,3 +471,70 @@ def test_both_lints_challenge_together_in_one_round(tool_pack):
     # The resend executes with both override traces.
     assert attempts[1].error is None
     assert attempts[1].lint and attempts[1].enum_lint
+
+
+INTERVAL_SCALED = LLMResponse(
+    content=(
+        "```sql\nSELECT AVG(i.scored_at - i.received_at) / 3600 AS avg_hours "
+        "FROM invoices i\n```"
+    ),
+    model="scripted",
+)
+INTERVAL_EPOCH = LLMResponse(
+    content=(
+        "```sql\nSELECT AVG(EPOCH(i.scored_at - i.received_at)) / 3600 AS avg_hours "
+        "FROM invoices i\n```"
+    ),
+    model="scripted",
+)
+TRIPLE_BAD = LLMResponse(
+    content=(
+        "```sql\nSELECT COUNT(*) AS n, AVG(h.at - i.received_at) / 3600 AS avg_hours "
+        "FROM invoices i JOIN invoice_history h ON h.invoice_id = i.id "
+        "WHERE h.to_status = 'REJECTED'\n```"
+    ),
+    model="scripted",
+)
+
+
+def test_interval_lint_draws_one_repair_round_before_execution(tool_pack):
+    """Duration pass (post-coverage W3 rep 4): an interval divided by
+    3600 is challenged before it runs; the EPOCH-first statement
+    executes clean."""
+    registry, ports = build_tool_registry(tool_pack, [INTERVAL_SCALED, INTERVAL_EPOCH])
+    invocation = registry.invoke("run_sql", {"question": "how long to score?"})
+    assert invocation.status == "ok", invocation.error
+    assert "EPOCH" in invocation.output.sql
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert attempts[0].error.startswith("Interval-arithmetic check: `avg_hours`")
+    assert attempts[0].interval_lint == attempts[0].error
+    assert attempts[0].lint is None and attempts[0].enum_lint is None
+    assert attempts[0].row_count is None  # never executed
+    assert attempts[1].error is None and attempts[1].interval_lint is None
+    stub = ports.get(PortName.LLM)
+    assert attempts[0].error in stub.calls[1]["messages"][-1].content
+
+
+def test_interval_override_is_recorded_on_the_executed_attempt(tool_pack):
+    registry, _ = build_tool_registry(tool_pack, [INTERVAL_SCALED, INTERVAL_SCALED])
+    invocation = registry.invoke("run_sql", {"question": "how long to score?"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert attempts[1].error is None and attempts[1].row_count == 1
+    assert attempts[1].interval_lint.startswith("Interval-arithmetic check:")
+
+
+def test_all_three_lints_challenge_together_in_one_round(tool_pack):
+    registry, _ = build_tool_registry(tool_pack, [TRIPLE_BAD, TRIPLE_BAD])
+    invocation = registry.invoke("run_sql", {"question": "rejected wait?"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    first = attempts[0].error
+    assert "Fan-out check:" in first and "Enum check:" in first
+    assert "Interval-arithmetic check:" in first
+    assert attempts[0].lint and attempts[0].enum_lint and attempts[0].interval_lint
+    assert attempts[1].error is None
+    assert attempts[1].lint and attempts[1].enum_lint and attempts[1].interval_lint
+

@@ -183,6 +183,22 @@ verifier:
     # saturate honestly (SVC-4410's 66 lines do not).
     challenge_saturated_rates: true
     saturated_rate_min_basis: 20
+    # Degenerate durations (duration pass, W3 rep 4's backstop): an
+    # aggregate duration below one second is legal (an instant
+    # transition) but is also exactly what interval arithmetic scaled
+    # by a unit produces — AVG(a - b) / 86400 is an interval of
+    # 0.041667 seconds, humanized "0 seconds", and it verified. Warn
+    # only, so a legitimate zero ships [UNVERIFIED] rather than refused;
+    # a count cell under 20 in the same row suppresses it.
+    challenge_degenerate_durations: true
+    degenerate_duration_min_basis: 20
+    # Duration span bound (duration pass, the class's ceiling): a
+    # duration longer than the queried tables' timestamp span
+    # (invoice_history.at runs 88 days in this world) cannot be an
+    # average, a minimum, a maximum or one row's elapsed time — refuses.
+    # A SUM over a population is exempt; an EPOCH-shaped item the parse
+    # cannot classify warns instead.
+    enforce_duration_span_bound: true
 
 ui:
   app_name: InvoiceGuard Knowledge

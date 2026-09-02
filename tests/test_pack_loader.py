@@ -114,7 +114,11 @@ def test_harness_and_verifier_settings_default_and_override(make_pack):
     config["verifier"] = {
         "unmatched_final": "refuse",
         "judge": {"max_calls_per_turn": 2},
-        "plausibility": {"date_bound_grace_days": 0},
+        "plausibility": {
+            "date_bound_grace_days": 0,
+            "enforce_duration_span_bound": False,
+            "degenerate_duration_min_basis": 5,
+        },
     }
     pack = load_pack(make_pack(config, name="pack2"))
     assert pack.config.harness.max_router_iterations == 3
@@ -124,6 +128,10 @@ def test_harness_and_verifier_settings_default_and_override(make_pack):
     assert pack.config.verifier.judge.max_calls_per_turn == 2
     assert pack.config.verifier.judge.max_candidate_values == 10
     assert pack.config.verifier.plausibility.date_bound_grace_days == 0
+    # Duration pass knobs ride the same block with the same defaults rule.
+    assert pack.config.verifier.plausibility.enforce_duration_span_bound is False
+    assert pack.config.verifier.plausibility.degenerate_duration_min_basis == 5
+    assert pack.config.verifier.plausibility.challenge_degenerate_durations is True
 
 
 def test_verifier_settings_typo_rejected(make_pack):
