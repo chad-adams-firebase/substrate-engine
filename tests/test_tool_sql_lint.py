@@ -242,3 +242,149 @@ def test_sum_distinct_bandaid_is_challenged_not_exempt():
 def test_sum_distinct_without_a_risky_join_stays_silent():
     single = "SELECT SUM(DISTINCT opportunity) AS s FROM invoices"
     assert lint_fan_out(single, DICTIONARY, MAP) is None
+
+
+# --- Pin-pass extensions: the three post-play-pass breach shapes ------
+
+MT2_EXPRESSION_JOIN = """
+SELECT COUNT(*) AS critical_compliance_findings
+FROM findings f
+JOIN compliance_rules cr ON f.rule_name = CONCAT('compliance_', cr.rule_code)
+WHERE cr.severity = 'CRITICAL'
+"""
+
+CONCAT_OPERATOR_JOIN = """
+SELECT COUNT(*) AS n
+FROM findings f
+JOIN compliance_rules cr ON f.rule_name = 'compliance_' || cr.rule_code
+"""
+
+COMPOSITE_FK_VOUCHED = """
+SELECT COUNT(*) AS n
+FROM invoice_lines l
+JOIN invoices i ON l.invoice_id = i.id
+  AND DATE_TRUNC('month', l.created_at) = DATE_TRUNC('month', i.received_at)
+"""
+
+B5_DEAD_LEFT_JOIN = """
+SELECT COUNT(DISTINCT invoices.id) AS invoices_with_findings
+FROM invoices
+LEFT JOIN findings ON findings.invoice_id = invoices.id
+WHERE invoices.received_at >= '2026-05-23 00:00:00'
+  AND invoices.received_at < '2026-05-30 00:00:00'
+"""
+
+LEFT_JOIN_ENRICHMENT = """
+SELECT COUNT(DISTINCT i.id) AS n
+FROM invoices i
+LEFT JOIN findings f ON f.invoice_id = i.id
+WHERE f.rule_name IS NOT NULL
+"""
+
+INNER_SEMI_JOIN = """
+SELECT COUNT(DISTINCT i.id) AS n
+FROM invoices i
+JOIN findings f ON f.invoice_id = i.id
+"""
+
+DEAD_BUT_ONE_TO_ONE = """
+SELECT COUNT(DISTINCT f.id) AS n
+FROM findings f
+LEFT JOIN finding_feedback ff ON ff.finding_id = f.id
+"""
+
+S2_AVG_OVER_NULL_SIDE = """
+SELECT
+    AVG(flagged_lines.is_flagged) AS item_flag_rate
+FROM
+    invoice_lines l
+LEFT JOIN (
+    SELECT f.invoice_id, f.line_number, 1.0 AS is_flagged
+    FROM findings f
+    WHERE f.rule_name = 'service_hours_excessive'
+) flagged_lines
+ON l.invoice_id = flagged_lines.invoice_id
+   AND l.line_number = flagged_lines.line_number
+WHERE l.item_code = 'SVC-4410'
+"""
+
+S2_REPAIRED_WITH_COALESCE = S2_AVG_OVER_NULL_SIDE.replace(
+    "AVG(flagged_lines.is_flagged)", "AVG(COALESCE(flagged_lines.is_flagged, 0))"
+)
+
+
+def test_expression_join_is_risky_regardless_of_key_knowledge():
+    """The post-play-pass MT2 breach: rule_name = CONCAT('compliance_',
+    rule_code) is invisible to the equality parser, and the derived
+    key is non-unique (10 codes, 4,216 rows) — 107,509 vs 254."""
+    reason = lint_fan_out(MT2_EXPRESSION_JOIN, DICTIONARY, MAP)
+    assert reason is not None
+    assert "derives its key with an expression" in reason
+    assert "compliance_rules" in reason
+    assert "invoices_to_compliance" in reason  # the canonical path hint
+    assert "resend the statement unchanged" in reason
+
+
+def test_concatenation_operator_join_is_risky_too():
+    reason = lint_fan_out(CONCAT_OPERATOR_JOIN, DICTIONARY, MAP)
+    assert reason is not None
+    assert "derives its key with an expression" in reason
+
+
+def test_expression_beside_a_vouched_fk_equality_is_exempt():
+    """AND-ed predicates only filter further: a plain FK-vouched
+    equality in the same condition settles the join's grain, so the
+    date expression draws nothing."""
+    assert lint_fan_out(COMPOSITE_FK_VOUCHED, DICTIONARY, MAP) is None
+
+
+def test_dead_left_join_draws_the_join_shape_challenge():
+    """The post-play-pass B5 breach: LEFT JOIN findings referenced only
+    in its own ON answers 'how many received', not 'how many had
+    findings' — 161 vs 146, and COUNT(DISTINCT) slips the fan gate."""
+    reason = lint_fan_out(B5_DEAD_LEFT_JOIN, DICTIONARY, MAP)
+    assert reason is not None
+    assert "referenced only inside its own ON condition" in reason
+    assert "inner join" in reason
+    assert "Fan-out check" not in reason  # only the join-shape paragraph
+    assert "resend the statement unchanged" in reason
+
+
+def test_left_join_whose_columns_are_used_is_not_dead():
+    assert lint_fan_out(LEFT_JOIN_ENRICHMENT, DICTIONARY, MAP) is None
+
+
+def test_inner_semi_join_filter_stays_silent():
+    assert lint_fan_out(INNER_SEMI_JOIN, DICTIONARY, MAP) is None
+
+
+def test_dead_left_join_declared_one_to_one_is_exempt():
+    assert lint_fan_out(DEAD_BUT_ONE_TO_ONE, DICTIONARY, MAP) is None
+
+
+def test_avg_over_the_null_side_of_a_left_join_is_challenged():
+    """The post-play-pass S2 breach: AVG skips NULLs, so the unmatched
+    lines vanish from the denominator and the rate saturates to 1.0.
+    The subquery join is visible to this check (and only this one)."""
+    reason = lint_fan_out(S2_AVG_OVER_NULL_SIDE, DICTIONARY, MAP)
+    assert reason is not None
+    assert "AVG skips NULLs" in reason
+    assert "AVG(flagged_lines.is_flagged)" in reason
+    assert "AVG(COALESCE(<column>, 0))" in reason
+    assert "resend the statement unchanged" in reason
+
+
+def test_avg_coalesce_is_the_repair_shape_and_stays_silent():
+    assert lint_fan_out(S2_REPAIRED_WITH_COALESCE, DICTIONARY, MAP) is None
+
+
+def test_avg_over_a_plain_left_joined_table_is_challenged():
+    sql = """
+    SELECT AVG(ih.duration) AS avg_duration
+    FROM invoices i
+    LEFT JOIN invoice_history ih ON ih.invoice_id = i.id
+    """
+    reason = lint_fan_out(sql, DICTIONARY, MAP)
+    assert reason is not None
+    assert "AVG(ih.duration)" in reason
+    assert "nullable side" in reason

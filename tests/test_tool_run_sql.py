@@ -126,6 +126,31 @@ def test_fan_out_lint_fires_once_and_licenses_resend_unchanged(tool_pack):
     assert attempts[1].lint.startswith("Fan-out check:")
 
 
+DEAD_LEFT = LLMResponse(
+    content=(
+        "```sql\nSELECT COUNT(DISTINCT i.id) AS n FROM invoices i "
+        "LEFT JOIN findings f ON f.invoice_id = i.id\n```"
+    ),
+    model="scripted",
+)
+
+
+def test_join_shape_lint_rides_the_same_challenge_machinery(tool_pack):
+    """Pin pass: the new join-shape reasons (dead LEFT JOIN, AVG over
+    a LEFT JOIN's null side) block, re-lint, and record overrides
+    exactly like the fan-out reasons — no new plumbing in run_sql."""
+    registry, _ = build_tool_registry(tool_pack, [DEAD_LEFT, DISTINCT])
+    invocation = registry.invoke("run_sql", {"question": "how many flagged?"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert attempts[0].error.startswith("Join-shape check:")
+    assert attempts[0].lint == attempts[0].error
+    assert attempts[0].row_count is None  # blocked before execution
+    assert attempts[1].error is None
+    assert attempts[1].lint is None  # the inner-join repair is clean
+
+
 def test_zero_row_results_skip_the_alias_guard(tool_pack):
     empty = LLMResponse(
         content="```sql\nSELECT id + 1 FROM invoices WHERE 1 = 0\n```",
