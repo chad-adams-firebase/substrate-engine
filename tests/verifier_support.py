@@ -40,6 +40,7 @@ def sql_invocation(
     total: int | None = None,
     truncated=False,
     final_lint: str | None = None,
+    column_formats: dict | None = None,
 ) -> ToolInvocation:
     columns = list(rows[0].keys()) if rows else []
     evidence = None
@@ -66,6 +67,7 @@ def sql_invocation(
                 rows=rows,
                 total_row_count=total if total is not None else len(rows),
                 truncated=truncated,
+                column_formats=column_formats or {},
             ),
         ),
         evidence=evidence,

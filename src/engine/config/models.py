@@ -117,6 +117,11 @@ class RunSqlSettings(BaseModel):
     # A COUNT/SUM over a join that can multiply rows draws one repair
     # round (fix pass 3, MT2's fan-out); the model may resend unchanged.
     fan_out_lint: bool = True
+    # A WHERE col = 'LITERAL' (or IN (...)) on a column whose dictionary
+    # enum never holds the literal draws one repair round naming the
+    # observed values (coverage pass, R-A: to_status = 'REJECTED' is not
+    # a status); the model may resend unchanged and the override warns.
+    enum_literal_lint: bool = True
 
 
 class SearchBusinessDocsSettings(BaseModel):
@@ -225,8 +230,6 @@ class PlausibilitySettings(BaseModel):
     # Dates past the stats max are a warning inside this grace window
     # (a slightly stale snapshot), a failure beyond it.
     date_bound_grace_days: int = 7
-    # Columns with these suffixes must hold values in [0,1] or [0,100].
-    rate_column_suffixes: list[str] = ["_rate", "_pct", "_ratio"]
     # An empty result or a lone 0/NULL/false scalar caps the answer at
     # unverified (fix pass 3: the wrong-question shape the 4b baseline
     # found). Off only for a pack whose zero answers are routine.
@@ -258,12 +261,15 @@ class PlausibilitySettings(BaseModel):
     enforce_joined_count_bound: bool = True
     joined_count_warn_factor: float = 1.0
     joined_count_fail_factor: float = 3.0
-    # A rate-named result cell that is exactly 0.0 or 1.0 loses the
-    # verified badge — warn only, never fail, since saturated rates
-    # can be legitimate (pin pass, S2: AVG over a NULL-padded
-    # indicator saturates to exactly 1.0). A count-like cell in the
-    # same row below the minimum basis suppresses the warn: tiny
-    # populations saturate honestly.
+    # A rate-hinted result cell that is exactly 0.0 or 1.0 (100.0 on a
+    # percent-scale column) loses the verified badge — warn only, never
+    # fail, since saturated rates can be legitimate (pin pass, S2: AVG
+    # over a NULL-padded indicator saturates to exactly 1.0). A
+    # count-like cell in the same row below the minimum basis
+    # suppresses the warn: tiny populations saturate honestly. Which
+    # columns are rates, and at what scale, is the table's own
+    # ColumnFormat hint (display.rate) — the same resolution every
+    # renderer uses, so a bound never disagrees with the digits shown.
     challenge_saturated_rates: bool = True
     saturated_rate_min_basis: int = 20
 
@@ -302,8 +308,8 @@ class MoneySettings(BaseModel):
     column_patterns: list[str] = []
     # An alias that ends in a money column's name is money — SUM(x) AS
     # total_opportunity — unless one of its tokens says otherwise:
-    # opportunity_pct, amount_count. The precedent for a config-owned
-    # token list is the verifier's rate_column_suffixes.
+    # opportunity_pct, amount_count. A config-owned token list, like
+    # the duration and rate alias globs beside it.
     non_money_markers: list[str] = [
         "count", "n", "num", "pct", "percent", "rate", "ratio", "rank",
         "share",
@@ -361,6 +367,33 @@ class DurationSettings(BaseModel):
         ]
 
 
+RateScale = Literal["fraction", "percent"]
+
+
+class RateSettings(BaseModel):
+    """Which result columns are rates, and at what scale (§10.5; the
+    coverage pass's third hint kind — Play Session #2 read
+    0.9221105527638191 where a manager reads 92.2%). Rates are computed
+    aliases, so — like durations — the hint comes from alias globs
+    alone. `fraction` lists aliases whose cells are 0–1 and show as a
+    percentage (flag_rate 0.9221 -> 92.2%); `percent` lists aliases
+    whose cells were already multiplied by 100 (flag_pct 92.21 ->
+    92.2%). The scale is the alias author's word, and the Verifier's
+    rate bounds and saturation checks read the same hint: a percent
+    cell is bounded on 0–100 and saturates at 100.0. A pack that
+    declares no rate block gets no rate formatting and no rate bounds."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fraction: list[str] = []
+    percent: list[str] = []
+
+    def scale_patterns(self) -> list[tuple[RateScale, list[str]]]:
+        """(scale, globs) in match order — the first scale whose glob
+        fits an alias wins."""
+        return [("fraction", self.fraction), ("percent", self.percent)]
+
+
 class DisplaySettings(BaseModel):
     """Presentation knobs shared by every surface that renders an
     answer (CLI text, eval flattening, the browser)."""
@@ -369,6 +402,7 @@ class DisplaySettings(BaseModel):
 
     money: MoneySettings | None = None
     duration: DurationSettings | None = None
+    rate: RateSettings | None = None
 
 
 class PackConfig(BaseModel):

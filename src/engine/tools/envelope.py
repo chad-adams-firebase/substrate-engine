@@ -49,25 +49,31 @@ JsonValue = str | int | float | bool | None
 
 
 DurationUnit = Literal["seconds", "minutes", "hours", "days"]
+RateScale = Literal["fraction", "percent"]
 
 
 class ColumnFormat(BaseModel):
     """A per-column display hint that travels with the table, store to
     screen (§10.5): every renderer — CLI text, eval flattening,
     placeholder injection, the browser — applies the same rule, so a
-    money cell never reaches a human as a float tail and a duration
-    never as 1.0806402437502474 days. The symbol and unit ride along
-    because they are pack config (locale/branding, the SQL author's
-    unit), and a persisted table must render identically without the
-    pack in hand. A duration column's numeric cells are measured in
-    `unit`; its H:MM:SS string cells carry their own unit, so a
-    clock-string column may leave unit unset."""
+    money cell never reaches a human as a float tail, a duration never
+    as 1.0806402437502474 days, and a rate never as 0.9221105527638191.
+    The symbol, unit and scale ride along because they are pack config
+    (locale/branding, the SQL author's unit, the alias's scale), and a
+    persisted table must render identically without the pack in hand.
+    A duration column's numeric cells are measured in `unit`; its
+    H:MM:SS string cells carry their own unit, so a clock-string column
+    may leave unit unset. A rate column's cells are fractions in [0, 1]
+    or already percents in [0, 100] — `scale` says which, and the
+    Verifier's rate bounds read the same hint (the coverage pass: two
+    resolvers cannot disagree on one column)."""
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["money", "duration"]
+    kind: Literal["money", "duration", "rate"]
     symbol: str = ""  # money
     unit: DurationUnit | None = None  # duration: what a number counts
+    scale: RateScale | None = None  # rate: fraction (x100 to show) or percent
 
 
 class Table(BaseModel):

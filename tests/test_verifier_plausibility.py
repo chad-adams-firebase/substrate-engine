@@ -3,6 +3,7 @@ deliberately wrong SQL result trips the check even when the prose is
 perfectly faithful — the wrong-but-verified kill shot."""
 
 from engine.config.models import VerifierSettings
+from engine.tools.envelope import ColumnFormat
 from engine.verifier.models import DraftAnswer
 from tests.verifier_support import make_verifier, sql_invocation, stats_row
 
@@ -122,9 +123,13 @@ def test_min_max_bounds_skip_aggregates():
     )
 
 
+FLAG_RATE = {"flag_rate": ColumnFormat(kind="rate", scale="fraction")}
+FLAG_PCT = {"flag_pct": ColumnFormat(kind="rate", scale="percent")}
+
+
 def test_rate_bounds_catch_nonsense_rates():
     nonsense = sql_invocation(
-        "SELECT flag_rate FROM t", [{"flag_rate": 146.0}]
+        "SELECT flag_rate FROM t", [{"flag_rate": 146.0}], column_formats=FLAG_RATE
     )
     verifier, _ = make_verifier(stats=INVOICE_STATS)
     result = verifier.verify(
@@ -136,7 +141,9 @@ def test_rate_bounds_catch_nonsense_rates():
     assert result.plausibility[0].check == "run_sql.rate_bounds"
     assert result.disposition == "refused"
 
-    sane = sql_invocation("SELECT flag_rate FROM t", [{"flag_rate": 0.91}])
+    sane = sql_invocation(
+        "SELECT flag_rate FROM t", [{"flag_rate": 0.91}], column_formats=FLAG_RATE
+    )
     assert (
         verifier.verify(
             question="q",
@@ -765,6 +772,7 @@ def test_joined_count_bound_can_be_configured_off():
 
 # --- Pin pass: saturated rates (S2's backstop) ------------------------
 
+FRACTION_RATE = {"item_flag_rate": ColumnFormat(kind="rate", scale="fraction")}
 S2_SQL = (
     "SELECT AVG(flagged.is_flagged) AS item_flag_rate FROM invoice_lines l "
     "LEFT JOIN (SELECT invoice_id, line_number, 1.0 AS is_flagged "
@@ -776,7 +784,7 @@ def test_saturated_rate_ships_unverified_never_refused():
     """S2's breach shape: exactly 1.0 with no basis column in sight.
     A legitimate 100% ships the same way — [UNVERIFIED], not refused;
     the warn only takes the badge off the suspicious case."""
-    saturated = sql_invocation(S2_SQL, [{"item_flag_rate": 1.0}])
+    saturated = sql_invocation(S2_SQL, [{"item_flag_rate": 1.0}], column_formats=FRACTION_RATE)
     verifier, _ = make_verifier(stats=[])
     result = verifier.verify(
         question="q",
@@ -793,7 +801,7 @@ def test_saturated_rate_ships_unverified_never_refused():
 def test_saturated_zero_rate_draws_the_zero_challenge_too():
     """Two warns, one verdict: the lone 0.0 scalar is both a zero
     result and a saturated rate — still just [UNVERIFIED]."""
-    zeroed = sql_invocation(S2_SQL, [{"item_flag_rate": 0.0}])
+    zeroed = sql_invocation(S2_SQL, [{"item_flag_rate": 0.0}], column_formats=FRACTION_RATE)
     verifier, _ = make_verifier(stats=[])
     result = verifier.verify(
         question="q",
@@ -813,6 +821,7 @@ def test_small_basis_beside_the_rate_suppresses_the_warn():
     tiny = sql_invocation(
         S2_SQL.replace("AVG", "COUNT(*) AS line_count, AVG"),
         [{"line_count": 5, "item_flag_rate": 1.0}],
+        column_formats=FRACTION_RATE,
     )
     verifier, _ = make_verifier(stats=[])
     result = verifier.verify(
@@ -829,6 +838,7 @@ def test_large_basis_beside_the_rate_still_warns():
     sized = sql_invocation(
         S2_SQL.replace("AVG", "COUNT(*) AS line_count, AVG"),
         [{"line_count": 66, "item_flag_rate": 1.0}],
+        column_formats=FRACTION_RATE,
     )
     verifier, _ = make_verifier(stats=[])
     result = verifier.verify(
@@ -843,7 +853,7 @@ def test_large_basis_beside_the_rate_still_warns():
 
 
 def test_unsaturated_rate_stays_silent():
-    honest = sql_invocation(S2_SQL, [{"item_flag_rate": 0.9545}])
+    honest = sql_invocation(S2_SQL, [{"item_flag_rate": 0.9545}], column_formats=FRACTION_RATE)
     verifier, _ = make_verifier(stats=[])
     result = verifier.verify(
         question="q",
@@ -858,7 +868,7 @@ def test_unsaturated_rate_stays_silent():
 def test_saturated_rate_check_can_be_configured_off():
     from engine.config.models import PlausibilitySettings
 
-    saturated = sql_invocation(S2_SQL, [{"item_flag_rate": 1.0}])
+    saturated = sql_invocation(S2_SQL, [{"item_flag_rate": 1.0}], column_formats=FRACTION_RATE)
     verifier, _ = make_verifier(
         settings=VerifierSettings(
             plausibility=PlausibilitySettings(challenge_saturated_rates=False)
@@ -872,3 +882,134 @@ def test_saturated_rate_check_can_be_configured_off():
         attempt=1,
     )
     assert result.plausibility == []
+
+
+# --- Rate scale (the coverage pass): the bound holds at the scale the
+# renderer shows, and a fraction hiding in a percent alias loses its badge.
+
+
+def test_rate_bounds_hold_at_the_hints_scale():
+    """A fanned 1.0476 on a fraction column is outside [0, 1] and refused
+    — it used to pass as 'under 100'. A percent column carries 92.21
+    without complaint, and 146 on it fails the 0–100 bound."""
+    fanned = sql_invocation(
+        "SELECT flag_rate FROM t", [{"flag_rate": 1.0476190476190477}], column_formats=FLAG_RATE
+    )
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="The rate is 1.0476190476190477."),
+        evidence=[fanned],
+        attempt=1,
+    )
+    assert result.disposition == "refused"
+    assert result.plausibility[0].check == "run_sql.rate_bounds"
+    assert "[0,1]" in result.plausibility[0].detail
+
+    percent = sql_invocation(
+        "SELECT flag_pct FROM t", [{"flag_pct": 92.21}], column_formats=FLAG_PCT
+    )
+    assert verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="92.21 percent."),
+        evidence=[percent],
+        attempt=1,
+    ).plausibility == []
+
+    over = sql_invocation(
+        "SELECT flag_pct FROM t", [{"flag_pct": 146.0}], column_formats=FLAG_PCT
+    )
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="146 percent."),
+        evidence=[over],
+        attempt=1,
+    )
+    assert result.disposition == "refused"
+    assert "[0,100]" in result.plausibility[0].detail
+
+
+def test_a_percent_column_saturates_at_one_hundred():
+    saturated = sql_invocation(
+        "SELECT COUNT(*) AS line_count, flag_pct FROM t",
+        [{"line_count": 66, "flag_pct": 100.0}],
+        column_formats=FLAG_PCT,
+    )
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="All 66 lines: 100.0 percent."),
+        evidence=[saturated],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    assert [f.check for f in result.plausibility] == ["run_sql.rate_saturated"]
+
+
+def test_an_unhinted_rate_named_column_gets_no_rate_check():
+    """No display.rate block, no rate hint, no bound: the hint is the
+    one resolution both the renderer and the verifier read."""
+    unhinted = sql_invocation("SELECT flag_rate FROM t", [{"flag_rate": 146.0}])
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="The flag rate is 146.0."),
+        evidence=[unhinted],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+
+
+def test_a_fraction_written_into_a_percent_alias_loses_the_badge():
+    """ROUND(x, 2) AS flag_pct over a 0–1 x renders 0.9% for a true 92%
+    and sits inside the 0–100 bound — the scale decision's one knowingly
+    wrong case, warn-capped: every value at or below 1.0 across rows."""
+    suspect = sql_invocation(
+        "SELECT s.name AS supplier_name, flag_pct FROM t",
+        [
+            {"supplier_name": "RVX01", "flag_pct": 0.9221},
+            {"supplier_name": "ACME", "flag_pct": 0.5},
+        ],
+        column_formats=FLAG_PCT,
+    )
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="RVX01 0.9221, ACME 0.5."),
+        evidence=[suspect],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.rate_scale_suspect"
+    assert finding.severity == "warn"
+    assert "92.21%" in finding.detail
+
+    # A lone cell at or below 1.0 that is not exactly 0 or 1 is suspect
+    # too; a lone 1.0 or 0.0 is the saturation check's case instead.
+    lone = sql_invocation(
+        "SELECT flag_pct FROM t", [{"flag_pct": 0.75}], column_formats=FLAG_PCT
+    )
+    result = verifier.verify(
+        question="q", draft=DraftAnswer(kind="prose", text="0.75."), evidence=[lone], attempt=1
+    )
+    assert [f.check for f in result.plausibility] == ["run_sql.rate_scale_suspect"]
+    one = sql_invocation(
+        "SELECT COUNT(*) AS n, flag_pct FROM t",
+        [{"n": 66, "flag_pct": 1.0}],
+        column_formats=FLAG_PCT,
+    )
+    result = verifier.verify(
+        question="q", draft=DraftAnswer(kind="prose", text="66 and 1.0."), evidence=[one], attempt=1
+    )
+    assert "run_sql.rate_scale_suspect" not in {f.check for f in result.plausibility}
+
+    # Real percents stay silent.
+    honest = sql_invocation(
+        "SELECT s.name AS supplier_name, flag_pct FROM t",
+        [{"supplier_name": "RVX01", "flag_pct": 92.21}, {"supplier_name": "ACME", "flag_pct": 0.5}],
+        column_formats=FLAG_PCT,
+    )
+    assert verifier.verify(
+        question="q", draft=DraftAnswer(kind="prose", text="92.21 and 0.5."), evidence=[honest], attempt=1
+    ).plausibility == []

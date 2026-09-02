@@ -238,7 +238,7 @@ class RunSql(Tool):
                             params,
                             RunSqlOutput(
                                 sql=sql,
-                                table=self._to_table(rows, dictionary_map),
+                                table=self._to_table(rows, dictionary_map, sql),
                             ),
                             evidence=RunSqlEvidence(
                                 grounding_prompt=prompt, attempts=attempts
@@ -283,7 +283,9 @@ class RunSql(Tool):
             substrates_read=_SUBSTRATES,
         )
 
-    def _to_table(self, rows: list[dict], dictionary_map: DictionaryMap) -> Table:
+    def _to_table(
+        self, rows: list[dict], dictionary_map: DictionaryMap, sql: str
+    ) -> Table:
         kept = rows[: self._settings.max_result_rows]
         columns = list(rows[0].keys()) if rows else []
         return Table(
@@ -294,10 +296,14 @@ class RunSql(Tool):
             ],
             total_row_count=len(rows),
             truncated=len(kept) < len(rows),
+            # Parse first (the statement says what each column was
+            # computed from), alias spelling second — see column_formats.
             column_formats=resolve_column_formats(
                 columns,
                 money_column_names(dictionary_map),
                 self._display.money,
                 self._display.duration,
+                self._display.rate,
+                sql=sql,
             ),
         )

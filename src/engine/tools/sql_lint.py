@@ -225,8 +225,9 @@ def split_scopes(sql: str) -> list[str]:
 
 def table_aliases(scope: str) -> dict[str, str]:
     """alias (or bare table name) -> table name, lowercased, from the
-    scope's FROM/JOIN references. Shared with the verifier's
-    select-list resolution (checks/sql_columns.py)."""
+    scope's FROM/JOIN references. Shared with the select-list
+    resolution both the verifier and the display layer read
+    (tools/sql_select.py)."""
     aliases: dict[str, str] = {}
     for _, table, alias in _TABLE_REF.findall(scope):
         aliases[table.lower()] = table.lower()

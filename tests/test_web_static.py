@@ -55,3 +55,9 @@ def test_browser_cell_formatting_mirrors_the_engine_rules():
     assert "toFixed(1)" in script
     assert '"\\u2014"' in script  # NULL_CELL, never an empty cell
     assert 'hint.kind === "duration"' in script
+    # Rates (the coverage pass): one decimal, fraction x100, percent as is.
+    assert "function formatRate" in script
+    assert 'hint.kind === "rate"' in script
+    assert 'scale === "percent" ? value : value * 100' in script
+    # A zero-row table says so instead of drawing an empty box.
+    assert 'el("p", "empty-rows", NO_ROWS)' in script

@@ -1,8 +1,10 @@
-"""Select-list resolution (checks/sql_columns.py): result columns
-traced back to stats columns from the SQL itself — deterministic,
-unlike the display layer's token-suffix guessing."""
+"""Select-list resolution, the Verifier's view (tools/sql_select.py,
+which replaced verifier/checks/sql_columns.py in the coverage pass so
+the display resolver could share the parse): result columns traced
+back to stats columns from the SQL itself. The contract is unchanged —
+outer scope, real tables, three shapes — and so are these cases."""
 
-from engine.verifier.checks.sql_columns import resolve_select_columns
+from engine.tools.sql_select import resolve_select_columns
 
 
 def test_aggregates_and_passthroughs_resolve_with_table_aliases():

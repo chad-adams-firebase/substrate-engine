@@ -1065,3 +1065,16 @@ def test_assoc_is_a_registered_xfail_ref():
     from engine.eval.models import XfailRef
 
     assert "ASSOC" in get_args(XfailRef)
+
+
+def test_a_rendered_percent_matches_its_gold_fraction_at_one_decimal():
+    """Rates render at one decimal (0.9545 -> 95.5%), so the percent
+    arm of the numeric match tolerates half a displayed decimal — the
+    way 0.005 tolerates half a cent on money."""
+    from engine.eval.grade import _numbers_match
+
+    assert _numbers_match(95.5, 0.9545)
+    assert _numbers_match(0.9545454545, 0.9545)
+    assert _numbers_match(75.3, 0.7534)
+    assert not _numbers_match(75.4, 0.7534)
+    assert not _numbers_match(96.0, 0.9545)

@@ -339,9 +339,13 @@ def test_result_tables_carry_money_hints_from_the_map_and_pack(tool_pack):
     invocation = registry.invoke("run_sql", {"question": "backlog and opportunity"})
     assert invocation.status == "ok", invocation.error
     formats = invocation.output.table.column_formats
+    # Parse-first (the coverage pass): AVG over a money column is
+    # money whatever the alias says — the _rate marker vetoes only
+    # aliases the statement cannot trace (test_column_formats).
     assert {name: hint.kind for name, hint in formats.items()} == {
         "total_opportunity": "money",
         "opportunity": "money",
+        "opportunity_rate": "money",
     }
     assert formats["opportunity"].symbol == "$"
 
@@ -371,3 +375,27 @@ def test_grounding_states_the_order_by_rule():
     text = GOLDEN.read_text(encoding="utf-8")
     assert "A query with GROUP BY always carries an ORDER BY" in text
     assert "follow-ups refer to rows" in text
+
+
+def test_the_statement_reaches_the_display_resolver(tool_pack):
+    """Parse-first: an alias that says nothing (mean_value) is money
+    because the SQL averaged a money column; the same alias without
+    the SQL would carry no hint."""
+    from engine.ports.types import LLMResponse
+
+    registry, _ = build_tool_registry(
+        tool_pack,
+        [
+            LLMResponse(
+                content=(
+                    "```sql\nSELECT AVG(i.opportunity) AS mean_value, "
+                    "COUNT(*) AS total_amount FROM invoices i\n```"
+                ),
+                model="scripted",
+            )
+        ],
+    )
+    invocation = registry.invoke("run_sql", {"question": "average opportunity?"})
+    formats = invocation.output.table.column_formats
+    assert formats["mean_value"].kind == "money"
+    assert "total_amount" not in formats  # a COUNT, whatever the alias says

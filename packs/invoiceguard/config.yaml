@@ -153,7 +153,6 @@ verifier:
     enforce_min_max_bounds: true
     enforce_date_bounds: true
     date_bound_grace_days: 7
-    rate_column_suffixes: ["_rate", "_pct", "_ratio"]
     # A 0 or empty run_sql result ships unverified, never verified —
     # S4's 0-for-114 and S7's empty-for-mona were both verified.
     challenge_zero_results: true
@@ -216,7 +215,10 @@ display:
     symbol: "$"
     # Aliases the map's column list cannot reach: metric-shaped names
     # that carry dollars without ending in a money column's name.
-    column_patterns: ["*_savings", "*_dollars", "recovered_*"]
+    # *_savings_* is Play Session #2's avg_savings_per_invoice — a CTE
+    # ratio the select-list parse cannot classify (SUM(CASE) over a
+    # count), rendered 4698.219326550668 where the truth is $4,698.22.
+    column_patterns: ["*_savings", "*_savings_*", "*_dollars", "recovered_*"]
   # Elapsed-time aliases and the unit their numbers count (Phase 5
   # Block 2: the play session read 1.0806402437502474 days and
   # 1:00:00 where a manager reads "1.1 days" and "1 hour"). The SQL
@@ -232,6 +234,18 @@ display:
     minutes: ["*_minutes", "minutes_*", "*_minutes_*"]
     seconds: ["*_seconds", "seconds_*", "*_seconds_*"]
     clock: ["*duration*", "*time_in_*", "*time_between*", "*elapsed*", "avg_time*", "*_time_to_*"]
+  # Rate aliases and their scale (Phase 5 interlude coverage pass: the
+  # play session read 0.9221105527638191 where a manager reads 92.2%).
+  # fraction cells are 0–1 and show x100; percent cells were already
+  # multiplied by 100 by the SQL author — the alias is the only place
+  # that decision is visible, so the alias decides. *_ratio is in
+  # neither list on purpose: a ratio may exceed 1 and is not a percent.
+  # The Verifier's rate bounds read the same hint (0–1 or 0–100), and a
+  # percent column whose cells all sit at or below 1.0 draws a
+  # scale-suspect warn — a fraction written into a _pct alias.
+  rate:
+    fraction: ["*_rate", "*_share", "share_*", "*_fraction"]
+    percent: ["*_pct", "pct_*", "*_percent", "*_percentage", "percent_*"]
 
 generation:
   source_sqlite: ../../../invoice-guard/simout/invoiceguard.db

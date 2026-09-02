@@ -5,7 +5,7 @@ the zero challenge.
 Known limitations, documented rather than hidden:
 - Table extraction is FROM/JOIN tokenization; result columns map to
   stats columns by name equality, plus whatever the select-list parse
-  (checks/sql_columns.py) can trace — SUM(col), SUM(COALESCE(col, _)),
+  (tools/sql_select.py) can trace — SUM(col), SUM(COALESCE(col, _)),
   AVG(col), and plain col AS alias. Anything more complex (CASE,
   arithmetic, CTE references) escapes the bounds checks. Thresholds
   are pack config precisely because this gets tuned at work against
@@ -50,16 +50,18 @@ from datetime import date, timedelta
 
 from engine.config.models import ToolName
 from engine.substrates.models import StatsRow
-from engine.tools.envelope import RunSqlEvidence, RunSqlOutput, ToolInvocation
+from engine.tools.envelope import (
+    ColumnFormat,
+    RunSqlEvidence,
+    RunSqlOutput,
+    ToolInvocation,
+)
 from engine.verifier.checks.base import (
     PlausibilityContext,
     SubstrateCheck,
     identifier_tokens,
 )
-from engine.verifier.checks.sql_columns import (
-    ResolvedColumn,
-    resolve_select_columns,
-)
+from engine.tools.sql_select import ResolvedColumn, resolve_select_columns
 from engine.verifier.models import (
     CorpusText,
     EvidenceContribution,
@@ -364,13 +366,17 @@ class RunSqlCheck(SubstrateCheck):
                 )
             )
 
-        # 2b3: saturated rates (pin pass, S2). Exactly 0.0 or 1.0 on a
-        # rate-named column is a legal value no bound can reject, but
-        # it is also exactly what AVG over a NULL-padded indicator
-        # produces — warn takes the badge off the suspicious case and
-        # never refuses a legitimate one.
+        # 2b3: saturated rates (pin pass, S2). Exactly 0.0 or 1.0 (100.0
+        # on a percent-scale column) on a rate-hinted column is a legal
+        # value no bound can reject, but it is also exactly what AVG
+        # over a NULL-padded indicator produces: warn, so the answer
+        # ships [UNVERIFIED]. Its sibling, the scale-suspect warn
+        # (coverage pass): a percent-scale column whose values all sit
+        # at or below 1.0 is a fraction written into a percent alias —
+        # rendered 1.0% for a true 100%, and inside the 0–100 bound.
         if settings.challenge_saturated_rates:
             findings.extend(self._saturated_rate_findings(table, settings))
+            findings.extend(self._rate_scale_findings(table))
 
         # 2c: aggregate-vs-stats bounds for result columns the
         # select-list parse resolves (play pass — §9.3 finally
@@ -394,7 +400,13 @@ class RunSqlCheck(SubstrateCheck):
                 stat = named_stats.get(column)
                 findings.extend(
                     self._cell_findings(
-                        column, cell, stat, has_aggregate, settings, row_index
+                        column,
+                        cell,
+                        stat,
+                        has_aggregate,
+                        settings,
+                        row_index,
+                        hint=table.column_formats.get(column),
                     )
                 )
         return findings
@@ -469,22 +481,23 @@ class RunSqlCheck(SubstrateCheck):
     def _saturated_rate_findings(
         table, settings
     ) -> list[PlausibilityFinding]:
-        """Exactly 0.0 or 1.0 on a rate-named column: warn, one finding
-        per column. A count-like cell in the same row below the minimum
-        basis suppresses it — tiny populations saturate honestly; an
-        absent basis warns, since the warn only removes the badge."""
+        """Exactly 0.0 or 1.0 (100.0 at percent scale) on a rate-hinted
+        column: warn, one finding per column. A count-like cell in the
+        same row below the minimum basis suppresses it — tiny
+        populations saturate honestly; an absent basis warns, since the
+        warn only removes the badge."""
         findings: list[PlausibilityFinding] = []
         for column in table.columns:
-            if not any(
-                column.endswith(s) for s in settings.rate_column_suffixes
-            ):
+            hint = table.column_formats.get(column)
+            if hint is None or hint.kind != "rate":
                 continue
+            top = 100.0 if hint.scale == "percent" else 1.0
             for row_index, row in enumerate(table.rows):
                 cell = row.get(column)
                 if not isinstance(cell, (int, float)) or isinstance(cell, bool):
                     continue
                 value = float(cell)
-                if value not in (0.0, 1.0):
+                if value not in (0.0, top):
                     continue
                 bases = [
                     float(other)
@@ -512,6 +525,45 @@ class RunSqlCheck(SubstrateCheck):
                     )
                 )
                 break  # one finding per column says it all
+        return findings
+
+    @staticmethod
+    def _rate_scale_findings(table) -> list[PlausibilityFinding]:
+        """A percent-scale rate column whose numeric cells all sit at or
+        below 1.0 across more than one row — or a lone cell at or below
+        1.0 that is not exactly 0 or 1 — is a fraction written into a
+        percent alias (ROUND(x, 2) AS flag_pct over a 0–1 x): it renders
+        1.0% for a true 100% and passes the 0–100 bound. Warn: the
+        alias's scale is the SQL author's word, and the word may be
+        wrong, but only the badge comes off."""
+        findings: list[PlausibilityFinding] = []
+        for column in table.columns:
+            hint = table.column_formats.get(column)
+            if hint is None or hint.kind != "rate" or hint.scale != "percent":
+                continue
+            cells = [
+                float(row[column])
+                for row in table.rows
+                if isinstance(row.get(column), (int, float))
+                and not isinstance(row.get(column), bool)
+            ]
+            if not cells or max(cells) > 1.0:
+                continue
+            if len(cells) == 1 and cells[0] in (0.0, 1.0):
+                continue  # a lone 0 or 1 is the saturation check's case
+            findings.append(
+                PlausibilityFinding(
+                    check="run_sql.rate_scale_suspect",
+                    severity="warn",
+                    detail=(
+                        f"{column} is a percent-scale rate column (its alias "
+                        "says so) but every value sits at or below 1.0 — a "
+                        "fraction written into a percent alias renders as "
+                        f"{_fmt(max(cells))}% where the truth may be "
+                        f"{_fmt(max(cells) * 100)}%"
+                    ),
+                )
+            )
         return findings
 
     def _aggregate_findings(
@@ -561,6 +613,7 @@ class RunSqlCheck(SubstrateCheck):
                             False,
                             settings,
                             row_index,
+                            hint=table.column_formats.get(alias),
                         )
                     )
         return findings
@@ -668,24 +721,32 @@ class RunSqlCheck(SubstrateCheck):
         has_aggregate: bool,
         settings,
         row_index: int,
+        hint: ColumnFormat | None = None,
     ) -> list[PlausibilityFinding]:
         findings: list[PlausibilityFinding] = []
         where = f"rows[{row_index}].{column}"
 
+        # Rate bounds read the table's own hint — the scale the renderer
+        # shows is the scale the bound holds, so a correctly
+        # pre-multiplied percent is never refused by a fraction bound
+        # and a fanned 1.0476 on a fraction column no longer passes as
+        # "under 100".
         if (
-            isinstance(cell, (int, float))
+            hint is not None
+            and hint.kind == "rate"
+            and isinstance(cell, (int, float))
             and not isinstance(cell, bool)
-            and any(column.endswith(s) for s in settings.rate_column_suffixes)
         ):
             value = float(cell)
-            if not (0.0 <= value <= 1.0 or 0.0 <= value <= 100.0):
+            top = 100.0 if hint.scale == "percent" else 1.0
+            if not (0.0 <= value <= top + 1e-9):
                 findings.append(
                     PlausibilityFinding(
                         check="run_sql.rate_bounds",
                         severity="fail",
                         detail=(
-                            f"{where} = {_fmt(value)} is outside [0,1] and "
-                            "[0,100] for a rate-named column"
+                            f"{where} = {_fmt(value)} is outside [0,{_fmt(top)}] "
+                            f"for a {hint.scale or 'fraction'}-scale rate column"
                         ),
                     )
                 )

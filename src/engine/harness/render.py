@@ -21,9 +21,13 @@ import json
 import re
 from decimal import ROUND_HALF_UP, Decimal
 
-from engine.tools.envelope import ColumnFormat, DurationUnit, Table
+from engine.tools.envelope import ColumnFormat, DurationUnit, RateScale, Table
 
 NULL_CELL = "—"
+# A zero-row table says so, on every surface, instead of rendering as
+# an empty box (Play Session #2, S-D: an empty result rendered as
+# nothing at all).
+NO_ROWS = "No rows matched"
 
 _UNIT_SECONDS: dict[DurationUnit, int] = {
     "seconds": 1,
@@ -90,13 +94,22 @@ def format_duration(value: object, unit: DurationUnit | None) -> str | None:
     return None
 
 
+def format_rate(value: int | float, scale: RateScale | None) -> str:
+    """A rate as a one-decimal percentage: a fraction is shown x100
+    (0.9221105527638191 -> 92.2%), a percent-scale cell as it stands
+    (92.21 -> 92.2%). A value past 100% still renders (104.8%) — the
+    badge is the Verifier's job, not the formatter's."""
+    shown = value if scale == "percent" else value * 100
+    return f"{_fixed(shown, 1)}%"
+
+
 def format_cell(value: object, column_format: ColumnFormat | None = None) -> str:
     """A cell as text. None renders as an em dash; a numeric cell under
-    a money hint renders as currency; a cell under a duration hint
-    renders humanized; everything else renders as the JSON scalar it
-    is (ints plain, floats shortest round-trip, booleans lowercase) —
-    the same rule placeholders have always applied, so prose and
-    tables agree."""
+    a money hint renders as currency, under a rate hint as a
+    percentage; a cell under a duration hint renders humanized;
+    everything else renders as the JSON scalar it is (ints plain,
+    floats shortest round-trip, booleans lowercase) — the same rule
+    placeholders have always applied, so prose and tables agree."""
     if value is None:
         return NULL_CELL
     if column_format is not None and column_format.kind == "duration":
@@ -105,13 +118,12 @@ def format_cell(value: object, column_format: ColumnFormat | None = None) -> str
             return rendered
     if isinstance(value, str):
         return value
-    if (
-        column_format is not None
-        and column_format.kind == "money"
-        and isinstance(value, (int, float))
-        and not isinstance(value, bool)
-    ):
-        return format_money(value, column_format.symbol)
+    is_number = isinstance(value, (int, float)) and not isinstance(value, bool)
+    if column_format is not None and is_number:
+        if column_format.kind == "money":
+            return format_money(value, column_format.symbol)
+        if column_format.kind == "rate":
+            return format_rate(value, column_format.scale)
     if isinstance(value, (bool, int, float)):
         return json.dumps(value)
     return str(value)
@@ -120,7 +132,9 @@ def format_cell(value: object, column_format: ColumnFormat | None = None) -> str
 def render_table_text(table: Table) -> str:
     """The table as aligned monospace text — the CLI's rendering, and
     the server-side twin of the browser's <table>: same cells, same
-    hints, same truncation caption."""
+    hints, same truncation caption, and the same sentence for no rows."""
+    if not table.rows:
+        return NO_ROWS
     columns = table.columns
     rows = [
         [format_cell(row.get(c), table.column_formats.get(c)) for c in columns]

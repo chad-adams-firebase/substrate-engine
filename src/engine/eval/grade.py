@@ -371,13 +371,16 @@ def _gold_value(gold: dict[str, Any] | None, field: str):
 
 
 def _numbers_match(stated: float, want: float) -> bool:
-    def close(a: float, b: float) -> bool:
-        return abs(a - b) <= max(1e-6 * max(abs(a), abs(b)), 0.005)
+    def close(a: float, b: float, slack: float = 0.005) -> bool:
+        return abs(a - b) <= max(1e-6 * max(abs(a), abs(b)), slack)
 
     if close(stated, want):
         return True
-    # A gold ratio may legitimately surface as its percent form.
-    return 0 < abs(want) <= 1 and close(stated, want * 100)
+    # A gold ratio may legitimately surface as its percent form — and
+    # rates render at one decimal (0.9545 -> 95.5%), so the percent arm
+    # tolerates half a displayed decimal, the way 0.005 tolerates half
+    # a cent on money.
+    return 0 < abs(want) <= 1 and close(stated, want * 100, slack=0.05)
 
 
 def _contains(

@@ -13,6 +13,7 @@ from engine.harness.outcomes import (
 )
 from engine.tools.envelope import ColumnFormat, Table
 from engine.web.app import STATIC_DIR
+from engine.harness.render import NO_ROWS
 from engine.web.render import (
     CARD_TITLES,
     UNVERIFIED_BADGE,
@@ -87,3 +88,24 @@ def test_the_page_repeats_the_card_vocabulary_verbatim():
     assert UNVERIFIED_BADGE in script
     # The engineer's diagnosis never reaches a card.
     assert "outcome.detail" not in script.replace("outcome.detail (the engineer's", "")
+
+
+def test_an_empty_table_outcome_reads_no_rows_matched_on_both_surfaces():
+    """The page and the text twin say the same sentence; app.js repeats
+    render.py's NO_ROWS verbatim (pinned below with the rest of the
+    card vocabulary)."""
+    outcome = AnswerOutcome(
+        body=TableAnswer(
+            table=Table(columns=[], rows=[], total_row_count=0),
+            caption="SELECT ... WHERE to_status = 'REJECTED'",
+        ),
+        verification="unverified",
+    )
+    lines = render_outcome_text(outcome).splitlines()
+    assert lines == [
+        UNVERIFIED_BADGE,
+        NO_ROWS,
+        "(SELECT ... WHERE to_status = 'REJECTED')",
+    ]
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert f'const NO_ROWS = "{NO_ROWS}"' in script

@@ -73,6 +73,13 @@
     return null;
   }
 
+  // Same rule as render.py format_rate: one decimal, a fraction shown
+  // x100, a percent-scale cell as it stands; past 100% still renders.
+  function formatRate(value, scale) {
+    const shown = scale === "percent" ? value : value * 100;
+    return shown.toFixed(1) + "%";
+  }
+
   // Same rule as render.py format_cell: NULL is an em dash, never blank.
   const NULL_CELL = "\u2014";
   function formatCell(value, hint) {
@@ -82,6 +89,7 @@
       if (rendered !== null) return rendered;
     }
     if (typeof value === "number" && hint && hint.kind === "money") return formatMoney(value, hint.symbol);
+    if (typeof value === "number" && hint && hint.kind === "rate") return formatRate(value, hint.scale);
     if (typeof value === "boolean") return value ? "true" : "false";
     return String(value);
   }
@@ -95,8 +103,15 @@
     return box;
   }
 
+  // Same sentence as render.py NO_ROWS: a zero-row table says so.
+  const NO_ROWS = "No rows matched";
   function renderTable(table, caption) {
     const wrap = el("div", "table");
+    if (!table.rows.length) {
+      wrap.appendChild(el("p", "empty-rows", NO_ROWS));
+      if (caption) wrap.appendChild(el("div", "caption", caption));
+      return wrap;
+    }
     const t = el("table");
     const head = el("tr");
     table.columns.forEach(c => head.appendChild(el("th", null, c)));
