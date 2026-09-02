@@ -29,8 +29,11 @@
   note: >-
     L1. First-ever exit 0 in session 3; historically the wobbliest
     row (S1 verifier false-pos, S2 N1/N2). The dump guard is
-    per-assertion xfail O1 (text-block injection is cosmetic until
-    the O1 guard lands).
+    per-assertion xfail O1. The O1 guard landed in Phase 5 Block 2
+    (2ccc5eb): a passage-valued placeholder resolves only inside a
+    fenced code block, elsewhere it retries as "values, not
+    passages". Test-verified, not live-witnessed — delete the
+    xfail_ref deliberately on the first live run that passes it.
 
 - id: B3
   provenance: scripted
@@ -253,7 +256,15 @@
       3's zero challenge caps a 0 at unverified. fp3-confirm 3/5:
       the residual is stochastic wrong-question SQL with every miss
       capped at exit 2 by the zero-challenge — the designed trade,
-      kept annotated.
+      kept annotated. XPASS 5/5 on 2026-08-30 and 2026-09-02, checked
+      for attribution in Phase 5 Block 2: all ten reps wrote the
+      gotcha's exact query, but the gotcha is unchanged since the
+      pack's first commit (da53ee0) and no engine or pack change since
+      the play pass touches this mechanism — the only difference from
+      the 4/5 post-Block-1 run (old model, rep 1 wrote adjustment_flag
+      = 0 and NOT EXISTS any finding) is the model pin (98b3232). A
+      habit shift is not a fix; the block stays until a landed change
+      explains the flip.
   expect:
     exit: [0]
     assertions:

@@ -109,3 +109,63 @@ rate-suffixed cell. No committed canonical template trips any of
 these (`rule_savings` is SUM/CASE over a declared one_to_one join;
 `creepback_suppliers` is plain FK joins). Honest line-grain counts
 land at exactly 1.0× and pass — the bound is strictly-greater.
+
+## Block 2 riders (2026-09-02, after the post-pin-pass re-run)
+
+The re-run (`2026-09-02-post-pinpass`, committed 5b6b2e0) restored the
+invariant: MT2 5/5, B5 5/5, S2 3/5 with both misses warn-capped. What
+the report shows about the guards, mechanism by mechanism:
+
+- **Expression-join lint (A1) and dead-LEFT-JOIN lint (A4): not
+  live-witnessed.** Every MT2 and B5 rep executed on its first
+  attempt with `lint=None` and `plausibility: []` — the Dictionary
+  Map's `rule_name_prefixes` "never a join key" wording and the
+  where-to-look entry's "an inner join" clause steered the model
+  before either lint had anything to read. Both lints are verified by
+  hand probes and by `test_tool_sql_lint.py` (MT2's CONCAT shape, the
+  `||` spelling, B5's shape, the enrichment/semi-join/one_to_one
+  negatives) and by the `run_sql` flow test; they have not fired on a
+  live turn. Grounding first, guard behind it — the intended order,
+  and the guard stays unexercised until a model habit walks past the
+  grounding.
+- **AVG-over-LEFT-JOIN lint (A3) and the saturated-rate warn: not
+  live-witnessed either.** S2's first attempt in every rep wrote
+  `AVG(CASE WHEN f.id IS NOT NULL THEN 1.0 ELSE 0.0 END)` over the
+  LEFT JOIN — a NULL-safe indicator the A3 regex (bare
+  `AVG(alias.col)`) does not read. What fired five of five was the
+  fix-pass-3 fan-out check on the both-FK join `invoice_lines
+  .invoice_id = findings.invoice_id`. Three reps repaired with the
+  CASE indicator inside a subquery and verified; two rewrote the
+  indicator as a per-row `COUNT(f.id)` over the same join, re-tripped
+  the fan-out check on the resend, and shipped `[UNVERIFIED]` via the
+  play pass's `fan_out_override` trace — the warn cap doing its job,
+  on the older guard. No rate saturated, so the warn never ran. Net:
+  of the pin pass's three new guards, none has fired on a live turn.
+  The `rate_needs_unflagged_side` gotcha now states the indicator
+  shape outright (CASE, never COUNT), which is the grounding the two
+  override reps lacked.
+- **P-N11 retired.** Reached 0/5, [INCON]: the play pass's
+  definitional vocabulary puts every component name in the router
+  prompt, so the errored-call-then-licensed-retry scenario the row
+  existed to count stopped occurring. The retry is unit-tested; the
+  row measured a firing rate that has no live path left. Deleted, not
+  xfailed — a scenario starved by an unrelated fix is a fourth
+  retirement shape, recorded in the eval models ledger.
+- **W4 keeps its ASSOC xfail.** XPASS 5/5 twice (2026-08-30,
+  2026-09-02). No association code has landed; the correct pairing is
+  the pinned model's habit, not a checked property, so the next habit
+  shift could flip it back and a deleted block would read that as a
+  regression instead of the known gap. The note records the two runs.
+- **S4 keeps its WBV-S4 xfail.** XPASS 5/5 twice. Checked for
+  attribution: all ten reps wrote the gotcha's exact query, but the
+  `adjustment_flag` gotcha is unchanged since the pack's first commit
+  (da53ee0) and no engine or pack change since the play pass touches
+  the mechanism; the only difference from the 4/5 post-Block-1 run —
+  where the old model's rep 1 wrote `adjustment_flag = 0` and `NOT
+  EXISTS` any finding — is the model pin (98b3232). A habit shift is
+  not a fix. The note records the finding; the block stays until a
+  landed change explains the flip.
+- **O1's guard landed (2ccc5eb); B2's `xfail_ref: O1` stays.** A
+  passage-valued placeholder now resolves only inside a fenced code
+  block and retries otherwise. Test-verified, not live-witnessed; the
+  per-assertion xfail comes off on the first live run that passes it.

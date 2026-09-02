@@ -49,3 +49,19 @@ def test_claude_md_carries_the_pin_hygiene_law():
         "Model pin changes are isolated commits and trigger a full bank "
         "re-run before any other change lands." in text
     )
+
+
+def test_block_2_ledger_state():
+    """Phase 5 Block 2 rulings on the bank: P-N11 is retired (its
+    scenario starved by the definitional vocabulary), W4/W2 keep the
+    ASSOC block (no association code has landed), S4 keeps WBV-S4
+    (its XPASS attributes to the model pin, not a fix), and B2's dump
+    guard keeps its per-assertion O1 ref until a live run passes it.
+    Each deletion is a deliberate bank edit that updates this test."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    rows = {r.id: r for r in bank.rows}
+    assert "P-N11" not in rows
+    assert rows["W4"].xfail.ref == "ASSOC" and rows["W2"].xfail.ref == "ASSOC"
+    assert rows["S4"].xfail.ref == "WBV-S4"
+    (dump,) = [a for a in rows["B2"].expect.assertions if a.kind == "no_text_block_dump"]
+    assert dump.xfail_ref == "O1"

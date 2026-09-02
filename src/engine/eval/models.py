@@ -55,6 +55,13 @@ from engine.verifier.models import VerifierVerdict
 # firing rate, and the row's setup block (min_errored/min_ok) now
 # states the scenario directly, so the annotation had nothing left to
 # explain. Block deleted; no remaining N5 rows.
+# P-N11 retired on the post-pin-pass bank (Phase 5 Block 2): reached
+# 0/5, INCON — the play pass's definitional vocabulary names every
+# component in the router prompt, so the errored-then-retry scenario
+# the row probed no longer occurs live. The licensed retry stays
+# unit-tested (test_harness_router.py); the row is deleted, its gold
+# script kept for HN-ERRORS. A fourth retirement shape: the scenario
+# starved by an unrelated fix, not the anomaly fixed.
 # ASSOC (opened in the Phase 5 interlude play pass): the Verifier
 # checks entity existence, not association. W4 zipped the 12 audit
 # rules against their descriptions offset by 6 — every name real,

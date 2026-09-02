@@ -259,6 +259,11 @@
       tripwire pairs rate_variance with a fragment of its own
       docstring on one line; the offset zip fails it. Association
       verification is the queued design item this row measures.
+      XPASS 5/5 on 2026-08-30 and 2026-09-02 under the pinned model:
+      no association code has landed, so the pairing is right by
+      the model's habit, not by construction — stochastic, and the
+      block stays until the Verifier checks association (Phase 5
+      Block 2 ruling).
   expect:
     exit: [0]
     assertions:

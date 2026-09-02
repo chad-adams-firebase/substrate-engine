@@ -164,6 +164,10 @@ firing rate, the addendum's N5. Landed alongside: the protocol
 prompt's retry sentence moves from permission to expectation
 (MUST-form, still exactly one retry). Next-run expectation: reached
 at or above the floor; the setup block and floor are unchanged.
+*Closing the thread (2026-09-02): after N5 retired on the post-N13
+bank, the play pass's definitional vocabulary starved the scenario
+outright — reached 0/5 on the post-pin-pass run — and the row was
+retired in Phase 5 Block 2; see `docs/pin-pass-residuals.md`.*
 
 **NP6 — 4/5, still deliberately unannotated.** Reps 1,2,4,5 gave the
 seven-value lifecycle list verified at exit 0; each had the

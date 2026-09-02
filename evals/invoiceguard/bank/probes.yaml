@@ -1,25 +1,11 @@
 # Session-3 N-probe rows (question texts verbatim from work.db
 # checkpoint history, conversations 4 and 11) — the exact row texts
-# the gate verdict's condition of closure names.
-
-- id: P-N11
-  provenance: n-probe
-  category: execution
-  question: "Did benchmark scoring have any errors on 2026-04-15?"
-  gold: gold/p_benchmark_clean_day.py
-  expected_gold: {errors: 0, ran_that_day: true, date: "2026-04-15"}
-  expect:
-    exit: [0]
-    setup: {min_invocations: 2, min_errored: 1, min_ok: 1}
-    assertions:
-      - {kind: nonempty}
-      - {kind: contains, pattern: '\b(no|none|zero|clean|0)\b', regex: true}
-      - kind: not_contains
-        pattern: '(does not provide|no information|cannot determine)'
-        regex: true
-  note: >-
-    Clean day, informal name. The not_contains keeps sentinel teeth:
-    an exit-0 evidence-shrug is a breach, not a pass.
+# the gate verdict's condition of closure names. P-N11 (the licensed
+# retry's firing rate) retired 2026-09-02: the play pass's
+# definitional vocabulary names every component in the router prompt,
+# so the errored-then-retry scenario it probed stopped occurring
+# (reached 0/5, INCON on the post-pin-pass bank); the retry itself
+# stays unit-tested. Ledger: docs/pin-pass-residuals.md.
 
 - id: P-L3Q
   provenance: n-probe
