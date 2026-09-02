@@ -74,6 +74,13 @@ _COUNT_DISTINCT = re.compile(
     re.IGNORECASE,
 )
 _WHERE = re.compile(r"\bwhere\b", re.IGNORECASE)
+# A non-DISTINCT count aliased in the select list — the grouped shape
+# of the joined-count bound (COUNT(DISTINCT ...) stays with the
+# distinct_vs_stats guard: a distinct count cannot fan).
+_COUNT_ALIAS = re.compile(
+    r"\bcount\s*\(\s*(?!distinct\b)[^()]*\)\s+as\s+([A-Za-z_]\w*)",
+    re.IGNORECASE,
+)
 _AGGREGATE = re.compile(r"\b(?:sum|avg|count|min|max)\s*\(", re.IGNORECASE)
 _ISO_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
@@ -342,6 +349,29 @@ class RunSqlCheck(SubstrateCheck):
                         )
                     )
 
+        # 2b2: the joined-count bound (pin pass, MT2). The single-table
+        # count checks above skip any multi-table query by design; this
+        # is their backstop: a count-shaped result cannot honestly
+        # exceed the largest queried table, because a filter only
+        # lowers a count and only a fanning join raises it. CTE and
+        # subquery names never resolve in stats and drop out of the
+        # bound — a fan-out hidden inside one is a known-open gap
+        # (docs/pin-pass-residuals.md).
+        if settings.enforce_joined_count_bound and len(queried) >= 2:
+            findings.extend(
+                self._joined_count_findings(
+                    sql, table, queried, stats_by_table, settings
+                )
+            )
+
+        # 2b3: saturated rates (pin pass, S2). Exactly 0.0 or 1.0 on a
+        # rate-named column is a legal value no bound can reject, but
+        # it is also exactly what AVG over a NULL-padded indicator
+        # produces — warn takes the badge off the suspicious case and
+        # never refuses a legitimate one.
+        if settings.challenge_saturated_rates:
+            findings.extend(self._saturated_rate_findings(table, settings))
+
         # 2c: aggregate-vs-stats bounds for result columns the
         # select-list parse resolves (play pass — §9.3 finally
         # implemented for tables).
@@ -367,6 +397,121 @@ class RunSqlCheck(SubstrateCheck):
                         column, cell, stat, has_aggregate, settings, row_index
                     )
                 )
+        return findings
+
+    @staticmethod
+    def _joined_count_findings(
+        sql: str,
+        table,
+        queried: list[str],
+        stats_by_table: dict[str, list[StatsRow]],
+        settings,
+    ) -> list[PlausibilityFinding]:
+        """A count over joined tables compared against the largest
+        queried table's row_count. Scalar shape: a lone COUNT cell.
+        Grouped shape: an aliased count column, summed — only when the
+        result is untruncated (a truncated sum understates)."""
+        sized = [
+            (name, float(stats_by_table[name][0].row_count))
+            for name in queried
+            if name in stats_by_table
+        ]
+        if not sized:
+            return []  # CTE/subquery names only: nothing to bound with
+        largest_name, largest = max(sized, key=lambda pair: pair[1])
+        if largest <= 0:
+            return []
+        value: float | None = None
+        described = ""
+        if (
+            len(table.rows) == 1
+            and len(table.columns) == 1
+            and _COUNT_ONLY.search(sql)
+        ):
+            cell = table.rows[0][table.columns[0]]
+            if isinstance(cell, (int, float)) and not isinstance(cell, bool):
+                value = float(cell)
+                described = f"COUNT over {', '.join(queried)} returned"
+        elif not table.truncated:
+            alias_match = _COUNT_ALIAS.search(sql)
+            if alias_match and alias_match.group(1) in table.columns:
+                alias = alias_match.group(1)
+                cells = [
+                    float(cell)
+                    for row in table.rows
+                    if isinstance(cell := row.get(alias), (int, float))
+                    and not isinstance(cell, bool)
+                ]
+                if cells:
+                    value = sum(cells)
+                    described = f"the {alias} count column sums to"
+        if value is None or value <= largest * settings.joined_count_warn_factor:
+            return []
+        severity = (
+            "fail"
+            if value > largest * settings.joined_count_fail_factor
+            else "warn"
+        )
+        return [
+            PlausibilityFinding(
+                check="run_sql.joined_count_vs_stats",
+                severity=severity,
+                detail=(
+                    f"{described} {_fmt(value)}, {value / largest:.1f}× the "
+                    f"largest queried table ({largest_name}: "
+                    f"{_fmt(largest)} rows) — a filter only lowers a "
+                    "count; only a fanning join raises it"
+                ),
+            )
+        ]
+
+    @staticmethod
+    def _saturated_rate_findings(
+        table, settings
+    ) -> list[PlausibilityFinding]:
+        """Exactly 0.0 or 1.0 on a rate-named column: warn, one finding
+        per column. A count-like cell in the same row below the minimum
+        basis suppresses it — tiny populations saturate honestly; an
+        absent basis warns, since the warn only removes the badge."""
+        findings: list[PlausibilityFinding] = []
+        for column in table.columns:
+            if not any(
+                column.endswith(s) for s in settings.rate_column_suffixes
+            ):
+                continue
+            for row_index, row in enumerate(table.rows):
+                cell = row.get(column)
+                if not isinstance(cell, (int, float)) or isinstance(cell, bool):
+                    continue
+                value = float(cell)
+                if value not in (0.0, 1.0):
+                    continue
+                bases = [
+                    float(other)
+                    for name, other in row.items()
+                    if name != column
+                    and isinstance(other, (int, float))
+                    and not isinstance(other, bool)
+                    and float(other) >= 0
+                    and float(other) == int(other)
+                ]
+                if bases and max(bases) < settings.saturated_rate_min_basis:
+                    continue  # a small population saturates honestly
+                findings.append(
+                    PlausibilityFinding(
+                        check="run_sql.rate_saturated",
+                        severity="warn",
+                        detail=(
+                            f"rows[{row_index}].{column} = {_fmt(value)} is "
+                            "a saturated rate — every row on one side. "
+                            "Legitimate at the extremes, but also exactly "
+                            "what AVG over a NULL-padded indicator "
+                            "produces (unmatched rows vanish from the "
+                            "denominator)"
+                        ),
+                    )
+                )
+                break  # one finding per column says it all
         return findings
 
     def _aggregate_findings(

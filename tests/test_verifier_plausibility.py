@@ -623,3 +623,252 @@ def test_aggregate_bounds_are_pack_config():
         attempt=1,
     )
     assert result.plausibility == []
+
+
+# --- Pin pass: the joined-count bound (MT2's backstop) ----------------
+
+JOINED_STATS = [
+    stats_row("findings", "id", row_count=6042),
+    stats_row("compliance_rules", "id", row_count=4216),
+    stats_row("invoices", "id", row_count=1990),
+    stats_row("invoice_lines", "id", row_count=9648),
+]
+
+MT2_EXPRESSION_SQL = (
+    "SELECT COUNT(*) AS critical_compliance_findings FROM findings f "
+    "JOIN compliance_rules cr "
+    "ON f.rule_name = CONCAT('compliance_', cr.rule_code) "
+    "WHERE cr.severity = 'CRITICAL'"
+)
+
+
+def test_joined_count_past_the_fail_factor_is_refused():
+    """MT2's breach shape: 107,509 over a 6,042-row largest queried
+    table is 17.8× — the single-table count checks skip joins by
+    design, and this is their backstop."""
+    fanned = sql_invocation(
+        MT2_EXPRESSION_SQL, [{"critical_compliance_findings": 107509}]
+    )
+    verifier, _ = make_verifier(stats=JOINED_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 107,509 findings."),
+        evidence=[fanned],
+        attempt=1,
+    )
+    assert result.disposition == "refused"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.joined_count_vs_stats"
+    assert finding.severity == "fail"
+    assert "17.8×" in finding.detail
+    assert "findings" in finding.detail
+
+
+def test_joined_count_between_the_factors_warns_to_unverified():
+    modest = sql_invocation(
+        MT2_EXPRESSION_SQL, [{"critical_compliance_findings": 10000}]
+    )
+    verifier, _ = make_verifier(stats=JOINED_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 10,000 findings."),
+        evidence=[modest],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.joined_count_vs_stats"
+    assert finding.severity == "warn"
+
+
+def test_honest_line_grain_join_at_exactly_one_x_passes():
+    """A count at the grain of the largest queried table is the honest
+    ceiling — the bound is strictly-greater, so 1.0× ships verified."""
+    line_grain = sql_invocation(
+        "SELECT COUNT(*) AS n FROM invoice_lines l "
+        "JOIN invoices i ON l.invoice_id = i.id",
+        [{"n": 9648}],
+    )
+    verifier, _ = make_verifier(stats=JOINED_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 9,648 lines."),
+        evidence=[line_grain],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+    assert result.plausibility == []
+
+
+def test_joined_count_over_unresolvable_names_skips_the_bound():
+    """CTE and subquery names have no stats row: nothing to bound with,
+    so the check stands down — the known-open gap the residuals doc
+    records rather than a false alarm."""
+    cte = sql_invocation(
+        "SELECT COUNT(*) AS n FROM cte_a JOIN cte_b ON cte_a.x = cte_b.x",
+        [{"n": 999999}],
+    )
+    verifier, _ = make_verifier(stats=JOINED_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 999,999."),
+        evidence=[cte],
+        attempt=1,
+    )
+    assert result.plausibility == []
+
+
+def test_grouped_count_column_sum_is_bounded_too():
+    grouped = sql_invocation(
+        "SELECT cr.severity, COUNT(*) AS n FROM findings f "
+        "JOIN compliance_rules cr "
+        "ON f.rule_name = CONCAT('compliance_', cr.rule_code) "
+        "GROUP BY cr.severity",
+        [{"severity": "HIGH", "n": 50000}, {"severity": "LOW", "n": 60000}],
+    )
+    verifier, _ = make_verifier(stats=JOINED_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(
+            kind="prose", text="HIGH has 50,000 and LOW has 60,000."
+        ),
+        evidence=[grouped],
+        attempt=1,
+    )
+    assert result.disposition == "refused"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.joined_count_vs_stats"
+    assert finding.severity == "fail"
+    assert "sums to" in finding.detail
+
+
+def test_joined_count_bound_can_be_configured_off():
+    from engine.config.models import PlausibilitySettings
+
+    fanned = sql_invocation(
+        MT2_EXPRESSION_SQL, [{"critical_compliance_findings": 107509}]
+    )
+    verifier, _ = make_verifier(
+        settings=VerifierSettings(
+            plausibility=PlausibilitySettings(enforce_joined_count_bound=False)
+        ),
+        stats=JOINED_STATS,
+    )
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 107,509 findings."),
+        evidence=[fanned],
+        attempt=1,
+    )
+    assert result.plausibility == []
+
+
+# --- Pin pass: saturated rates (S2's backstop) ------------------------
+
+S2_SQL = (
+    "SELECT AVG(flagged.is_flagged) AS item_flag_rate FROM invoice_lines l "
+    "LEFT JOIN (SELECT invoice_id, line_number, 1.0 AS is_flagged "
+    "FROM findings) flagged ON l.invoice_id = flagged.invoice_id"
+)
+
+
+def test_saturated_rate_ships_unverified_never_refused():
+    """S2's breach shape: exactly 1.0 with no basis column in sight.
+    A legitimate 100% ships the same way — [UNVERIFIED], not refused;
+    the warn only takes the badge off the suspicious case."""
+    saturated = sql_invocation(S2_SQL, [{"item_flag_rate": 1.0}])
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="The rate is 1.0."),
+        evidence=[saturated],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.rate_saturated"
+    assert finding.severity == "warn"
+
+
+def test_saturated_zero_rate_draws_the_zero_challenge_too():
+    """Two warns, one verdict: the lone 0.0 scalar is both a zero
+    result and a saturated rate — still just [UNVERIFIED]."""
+    zeroed = sql_invocation(S2_SQL, [{"item_flag_rate": 0.0}])
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="The rate is 0.0."),
+        evidence=[zeroed],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    checks = {finding.check for finding in result.plausibility}
+    assert "run_sql.rate_saturated" in checks
+    assert "run_sql.zero_scalar" in checks
+
+
+def test_small_basis_beside_the_rate_suppresses_the_warn():
+    """Five lines all flagged is an honest 1.0 — a count cell in the
+    same row below the minimum basis stands the check down."""
+    tiny = sql_invocation(
+        S2_SQL.replace("AVG", "COUNT(*) AS line_count, AVG"),
+        [{"line_count": 5, "item_flag_rate": 1.0}],
+    )
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="All 5 lines: rate 1.0."),
+        evidence=[tiny],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+    assert result.plausibility == []
+
+
+def test_large_basis_beside_the_rate_still_warns():
+    sized = sql_invocation(
+        S2_SQL.replace("AVG", "COUNT(*) AS line_count, AVG"),
+        [{"line_count": 66, "item_flag_rate": 1.0}],
+    )
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="All 66 lines: rate 1.0."),
+        evidence=[sized],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.rate_saturated"
+
+
+def test_unsaturated_rate_stays_silent():
+    honest = sql_invocation(S2_SQL, [{"item_flag_rate": 0.9545}])
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="The rate is 0.9545."),
+        evidence=[honest],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+    assert result.plausibility == []
+
+
+def test_saturated_rate_check_can_be_configured_off():
+    from engine.config.models import PlausibilitySettings
+
+    saturated = sql_invocation(S2_SQL, [{"item_flag_rate": 1.0}])
+    verifier, _ = make_verifier(
+        settings=VerifierSettings(
+            plausibility=PlausibilitySettings(challenge_saturated_rates=False)
+        ),
+        stats=[],
+    )
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="The rate is 1.0."),
+        evidence=[saturated],
+        attempt=1,
+    )
+    assert result.plausibility == []

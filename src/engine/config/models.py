@@ -237,6 +237,25 @@ class PlausibilitySettings(BaseModel):
     # Row cap for the alias-resolved per-cell min/max checks in
     # aggregate queries (group keys and passthrough columns).
     aggregate_cell_sample_rows: int = 50
+    # A count-shaped result over a multi-table query has no single
+    # row_count to equal, but it cannot honestly exceed the largest
+    # queried table: a filter only lowers a count, and only a fanning
+    # join raises it (pin pass, MT2: 107,509 over a 6,042-row table,
+    # 17.8×). Factors are relative to the largest queried table's
+    # row_count, so single-table counts and honest line-grain joins
+    # pass. Above the warn factor the answer ships [UNVERIFIED];
+    # above the fail factor it is refused.
+    enforce_joined_count_bound: bool = True
+    joined_count_warn_factor: float = 1.0
+    joined_count_fail_factor: float = 3.0
+    # A rate-named result cell that is exactly 0.0 or 1.0 loses the
+    # verified badge — warn only, never fail, since saturated rates
+    # can be legitimate (pin pass, S2: AVG over a NULL-padded
+    # indicator saturates to exactly 1.0). A count-like cell in the
+    # same row below the minimum basis suppresses the warn: tiny
+    # populations saturate honestly.
+    challenge_saturated_rates: bool = True
+    saturated_rate_min_basis: int = 20
 
 
 class VerifierSettings(BaseModel):

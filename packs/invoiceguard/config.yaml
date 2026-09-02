@@ -160,6 +160,24 @@ verifier:
     enforce_aggregate_bounds: true
     aggregate_bound_tolerance_pct: 10.0
     aggregate_cell_sample_rows: 50
+    # Joined-count bound (pin pass, MT2's backstop): a count over
+    # joined tables cannot honestly exceed the largest queried table —
+    # a filter only lowers a count, only a fanning join raises it.
+    # 1.0× warns (ships [UNVERIFIED]); 3.0× refuses, leaving room for
+    # a modest deliberate many-to-many. MT2's expression-join fan was
+    # 17.8× (107,509 over findings' 6,042). Honest line-grain joins
+    # land at exactly 1.0× of invoice_lines and pass.
+    enforce_joined_count_bound: true
+    joined_count_warn_factor: 1.0
+    joined_count_fail_factor: 3.0
+    # Saturated rates (pin pass, S2's backstop): exactly 0.0 or 1.0 on
+    # a rate-named column is legal but is also exactly what AVG over a
+    # NULL-padded indicator produces — warn only, so a legitimate
+    # extreme ships [UNVERIFIED] rather than refused. A count cell
+    # under 20 in the same row suppresses it: tiny populations
+    # saturate honestly (SVC-4410's 66 lines do not).
+    challenge_saturated_rates: true
+    saturated_rate_min_basis: 20
 
 ui:
   app_name: InvoiceGuard Knowledge
