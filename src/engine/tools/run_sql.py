@@ -43,6 +43,7 @@ from engine.tools.envelope import (
     Table,
     ToolInvocation,
 )
+from engine.tools.enum_lint import lint_enum_literals
 from engine.tools.grounding import render_grounding
 from engine.tools.sql_lint import lint_fan_out
 
@@ -125,7 +126,10 @@ class RunSql(Tool):
         "Answer a data question by generating and executing a read-only "
         "SQL query against the application database, grounded in the "
         "data dictionary, canonical metrics, and known gotchas. Returns "
-        "the result rows as a table."
+        "the result rows as a table. question: the user's question in "
+        "the user's own words (only references to earlier turns "
+        "resolved) — never a paraphrase: the SQL author is grounded in "
+        "the domain's vocabulary and must see the original phrasing."
     )
     input_model = RunSqlInput
 
@@ -175,21 +179,24 @@ class RunSql(Tool):
         user = self._identity.current_user()
         manifest_ids = manifest_ids_of(dictionary + stats)
         attempts: list[SqlAttempt] = []
-        # The fan-out lint BLOCKS at most once per call: its word is a
-        # repair round with an explicit license to resend unchanged,
-        # so the second submission is the model's considered answer.
-        # After the challenge, later attempts are re-linted in
-        # detection-only mode — they execute regardless, but a
-        # still-tripping reason is recorded on the attempt so
-        # overriding leaves a trace (and, via the Verifier, costs the
-        # verified badge).
+        # Each lint BLOCKS at most once per call: its word is a repair
+        # round with an explicit license to resend unchanged, so the
+        # second submission is the model's considered answer. Reasons
+        # not yet challenged block together in one round; after a
+        # kind's challenge, later attempts are re-linted in detection-
+        # only mode — they execute regardless, but a still-tripping
+        # reason is recorded on the attempt so overriding leaves a
+        # trace (and, via the Verifier, costs the verified badge).
         fan_out_challenged = False
+        enum_challenged = False
 
         for _ in range(self._settings.max_repair_attempts + 1):
             response = self._llm.complete(messages, temperature=0.0)
             sql = extract_sql(response.content)
             row_count: int | None = None
             lint_reason: str | None = None
+            enum_reason: str | None = None
+            blocking: list[str] = []
             if sql is None:
                 error = (
                     "No SQL statement found in the reply. Reply with exactly "
@@ -197,18 +204,20 @@ class RunSql(Tool):
                 )
             elif (guard_error := guard_select_only(sql)) is not None:
                 error = guard_error
-            elif (
-                self._settings.fan_out_lint
-                and not fan_out_challenged
-                and (lint := lint_fan_out(sql, dictionary, dictionary_map))
-                is not None
-            ):
-                fan_out_challenged = True
-                error = lint
-                lint_reason = lint
             else:
-                if self._settings.fan_out_lint and fan_out_challenged:
+                if self._settings.fan_out_lint:
                     lint_reason = lint_fan_out(sql, dictionary, dictionary_map)
+                if self._settings.enum_literal_lint:
+                    enum_reason = lint_enum_literals(sql, dictionary)
+                if lint_reason is not None and not fan_out_challenged:
+                    fan_out_challenged = True
+                    blocking.append(lint_reason)
+                if enum_reason is not None and not enum_challenged:
+                    enum_challenged = True
+                    blocking.append(enum_reason)
+            if sql is not None and guard_select_only(sql) is None and blocking:
+                error = " ".join(blocking)
+            elif sql is not None and guard_select_only(sql) is None:
                 try:
                     rows = self._sql.run_sql(sql, user)
                 except Exception as exc:
@@ -232,6 +241,7 @@ class RunSql(Tool):
                                 sql=sql,
                                 row_count=len(rows),
                                 lint=lint_reason,
+                                enum_lint=enum_reason,
                             )
                         )
                         return self.ok(
@@ -262,6 +272,7 @@ class RunSql(Tool):
                     error=error,
                     row_count=row_count,
                     lint=lint_reason,
+                    enum_lint=enum_reason,
                 )
             )
             messages.append(Message(role="assistant", content=response.content))

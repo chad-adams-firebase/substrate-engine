@@ -81,7 +81,11 @@ the component map, then traverse_code_knowledge_graph.{definitional_line}
 - "Show me the code" -> traverse_code_knowledge_graph to locate the \
 node, then read_source.
 - Data questions (counts, rates, listings, specific records) -> \
-run_sql.{terms_line} Column meanings and business terms -> \
+run_sql.{terms_line} Hand run_sql the question as the user asked it — \
+their words, not your reading of them; resolve only references to \
+earlier turns ("that supplier", "the same window"). run_sql is grounded \
+in the domain's own vocabulary and gotchas, and a paraphrase into other \
+terms loses them. Column meanings and business terms -> \
 lookup_data_dictionary. A column's shape (nulls, ranges, top values) \
 -> query_univariate_stats.
 - "Did X run", "were there errors" -> check_execution.{coverage_line} \
@@ -162,7 +166,11 @@ The engine substitutes the actual value; you never transcribe it.
 short string. A passage — a description, a document snippet, source \
 text — is never pasted into a sentence: when it is code, put its \
 placeholder on its own line inside a fenced code block; otherwise say \
-what it says in your own words.
+what it says in your own words. A placeholder path addresses a \
+structured evidence field — a table cell, a node's name, a count — \
+and never reaches inside a text field: a value that lives inside \
+source text or a document is read from the fenced block that quotes \
+it, never pathed into ({{{{e3.text.SOME_NAME}}}} is not a path).
 - Name functions, tables, and columns exactly as the evidence spells \
 them, in backticks.
 - Quote code verbatim or not at all, and only inside a fenced code \

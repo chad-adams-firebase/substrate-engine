@@ -399,3 +399,75 @@ def test_the_statement_reaches_the_display_resolver(tool_pack):
     formats = invocation.output.table.column_formats
     assert formats["mean_value"].kind == "money"
     assert "total_amount" not in formats  # a COUNT, whatever the alias says
+
+
+ENUM_BAD = LLMResponse(
+    content=(
+        "```sql\nSELECT ih.actor AS reviewer, COUNT(*) AS rejection_count "
+        "FROM invoice_history ih WHERE ih.to_status = 'REJECTED' "
+        "GROUP BY ih.actor ORDER BY rejection_count DESC\n```"
+    ),
+    model="scripted",
+)
+ENUM_GOOD = LLMResponse(
+    content=(
+        "```sql\nSELECT ih.actor AS reviewer, COUNT(*) AS closed_count "
+        "FROM invoice_history ih WHERE ih.to_status = 'CLOSED' "
+        "GROUP BY ih.actor ORDER BY closed_count DESC\n```"
+    ),
+    model="scripted",
+)
+BOTH_BAD = LLMResponse(
+    content=(
+        "```sql\nSELECT COUNT(*) AS n FROM invoices i "
+        "JOIN findings f ON f.invoice_id = i.id "
+        "WHERE i.status = 'IN_REVIEW'\n```"
+    ),
+    model="scripted",
+)
+
+
+def test_enum_literal_lint_draws_one_repair_round_naming_the_values(tool_pack):
+    """Play Session #2's R-A: to_status = 'REJECTED' is not a status.
+    The challenge names the observed values before anything executes;
+    the corrected statement runs clean."""
+    registry, ports = build_tool_registry(tool_pack, [ENUM_BAD, ENUM_GOOD])
+    invocation = registry.invoke("run_sql", {"question": "rejections by reviewer"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert attempts[0].error.startswith("Enum check: `invoice_history.to_status` never takes 'REJECTED'")
+    assert "observed values:" in attempts[0].error
+    assert attempts[0].enum_lint == attempts[0].error
+    assert attempts[0].lint is None and attempts[0].row_count is None
+    assert attempts[1].error is None and attempts[1].enum_lint is None
+    stub = ports.get(PortName.LLM)
+    assert attempts[0].error in stub.calls[1]["messages"][-1].content
+
+
+def test_enum_literal_override_is_recorded_on_the_executed_attempt(tool_pack):
+    registry, _ = build_tool_registry(tool_pack, [ENUM_BAD, ENUM_BAD])
+    invocation = registry.invoke("run_sql", {"question": "rejections by reviewer"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert attempts[1].error is None
+    assert attempts[1].row_count == 0  # the value never occurs: no rows
+    assert attempts[1].enum_lint.startswith("Enum check:")
+    assert invocation.output.table.rows == []
+
+
+def test_both_lints_challenge_together_in_one_round(tool_pack):
+    """A statement that fans AND filters on a phantom value gets one
+    repair round carrying both reasons — the budget is not spent twice."""
+    registry, _ = build_tool_registry(tool_pack, [BOTH_BAD, BOTH_BAD])
+    invocation = registry.invoke("run_sql", {"question": "in-review flagged?"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert "Fan-out check:" in attempts[0].error and "Enum check:" in attempts[0].error
+    assert "'IN_REVIEW' is an observed value of" in attempts[0].error
+    assert "`invoice_history.to_status`" in attempts[0].error
+    assert attempts[0].lint and attempts[0].enum_lint
+    # The resend executes with both override traces.
+    assert attempts[1].error is None
+    assert attempts[1].lint and attempts[1].enum_lint

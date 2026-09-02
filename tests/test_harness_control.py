@@ -92,3 +92,30 @@ def test_malformed_control_arguments_are_a_protocol_violation():
         parse_route(_response(ToolCall(name="give_answer", arguments={"shape": "table"})))
     with pytest.raises(RouteProtocolViolation, match="refuse"):
         parse_route(_response(ToolCall(name="refuse", arguments={})))
+
+
+def test_refuse_verb_does_not_invite_surrender_while_tools_remain():
+    """Post-Block-2 W4: four of five reps refused after the primer and
+    the documents returned no rule list, never reaching the code
+    knowledge graph — the only router-facing Block 2 change was this
+    description. The manager-language mandate for the card text stays."""
+    from engine.harness.control import _CONTROL_DESCRIPTIONS
+
+    refuse = _CONTROL_DESCRIPTIONS["refuse"]
+    assert "code knowledge graph and source" in refuse
+    assert "Refuse only when the tool surface is exhausted" in refuse
+    assert "never because the first tool returned nothing" in refuse
+    assert "plain language for a business reader" in refuse
+
+
+def test_protocol_violations_carry_what_the_router_wrote():
+    """The raw text goes to provenance so the next B2 diagnosis is one
+    read; the message stays the short nudge."""
+    with pytest.raises(RouteProtocolViolation) as prose:
+        parse_route(LLMResponse(content="The answer is probably 42.", model="s"))
+    assert prose.value.raw_response == "The answer is probably 42."
+    assert "calling one of" in str(prose.value)
+
+    with pytest.raises(RouteProtocolViolation) as malformed:
+        parse_route(_response(ToolCall(name="refuse", arguments={})))
+    assert malformed.value.raw_response == "refuse({})"

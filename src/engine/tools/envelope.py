@@ -256,6 +256,11 @@ class SqlAttempt(BaseModel):
     # reads the final attempt's value; a set lint there caps the
     # answer at unverified.
     lint: str | None = None
+    # The enum-literal challenge (coverage pass, R-A), recorded the same
+    # way: beside error on the blocking round, and on an EXECUTED
+    # attempt when the licensed resend still filters on a value the
+    # column never holds — the Verifier's run_sql.enum_literal_override.
+    enum_lint: str | None = None
 
 
 class RunSqlEvidence(BaseModel):

@@ -297,6 +297,11 @@ def test_protocol_violation_nudges_then_recovers(tool_pack):
     llm = ports.get(PortName.LLM)
     nudge = llm.calls[1]["messages"][-1]
     assert "calling one of" in nudge.content
+    # The trail line stays short; what the router wrote rides beside
+    # it for the turn log and the inspector (coverage pass, B2).
+    (violation,) = [e for e in result.events if e.detail == "protocol violation — nudging"]
+    assert violation.raw_response == "The answer is probably 42."
+    assert all(e.raw_response is None for e in result.events if e is not violation)
 
 
 BAD_DRAFT = LLMResponse(
@@ -457,3 +462,25 @@ def test_passages_still_inline_at_exhaustion_ship_as_written(tool_pack):
     assert call["draft"].injected_spans
     draft_events = [e.detail for e in result.events if e.node == "draft"]
     assert any("shipping as written" in d and "{{e0.text}}" in d for d in draft_events)
+
+
+TEXT_PATH = LLMResponse(
+    content="The factor is {{e0.text.QUANTITY_SPIKE_FACTOR}}.", model="s"
+)
+
+
+def test_a_path_into_source_text_is_retried_with_the_shape_named(tool_pack):
+    """Post-Block-2 W4 rep 4 exhausted its retries on five
+    {{e3.text.CONSTANT}} placeholders with feedback that only said "did
+    not resolve". The feedback now names the shape."""
+    responses = [READ_SOURCE, GIVE_PROSE, TEXT_PATH, FENCED_QUOTE]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("show me the source of rule_rate_variance")
+    assert result.outcome.kind == "answer"
+    from engine.config.models import PortName
+
+    llm = ports.get(PortName.LLM)
+    feedback = llm.calls[-1]["messages"][-1].content
+    assert "{{e0.text.QUANTITY_SPIKE_FACTOR}}" in feedback
+    assert "paths into a text passage" in feedback
+    assert "placeholders never reach inside text" in feedback

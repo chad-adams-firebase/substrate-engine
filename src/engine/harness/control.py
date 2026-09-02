@@ -7,6 +7,7 @@ Making them tools (rather than parsed prose) means every terminal
 direction, including fail-closed, arrives schema-validated.
 """
 
+import json
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
@@ -63,10 +64,15 @@ _CONTROL_DESCRIPTIONS = {
         "untouched; shape='prose' drafts a grounded explanation."
     ),
     "refuse": (
-        "The question is out of scope, unanswerable from the available "
-        "substrates, or asks for action rather than information. State "
-        "why, and what would work instead — in plain language for a "
-        "business reader, never tool names, step counts, or SQL."
+        "The question is out of scope, asks for action rather than "
+        "information, or cannot be answered after the relevant evidence "
+        "tools have been tried — for a code or workflow question that "
+        "means the code knowledge graph and source, not only the primer "
+        "or the documents. Refuse only when the tool surface is exhausted "
+        "or the question is out of scope, never because the first tool "
+        "returned nothing. State why, and what would work instead — in "
+        "plain language for a business reader, never tool names, step "
+        "counts, or SQL."
     ),
     "clarify": (
         "The question is ambiguous; ask one clarifying question, phrased "
@@ -91,7 +97,14 @@ def control_specs() -> list[ToolSpec]:
 
 class RouteProtocolViolation(Exception):
     """The router response did not follow the tool-call contract; the
-    message is the nudge fed back before the next iteration."""
+    message is the nudge fed back before the next iteration, and
+    raw_response is what the router actually wrote — recorded in
+    provenance (never on the live trail line) so the next diagnosis of
+    a prose-instead-of-a-call habit is one read (the post-Block-2 B2)."""
+
+    def __init__(self, message: str, raw_response: str = "") -> None:
+        super().__init__(message)
+        self.raw_response = raw_response
 
 
 def parse_route(response: LLMResponse) -> RouteDecision:
@@ -116,7 +129,8 @@ def parse_route(response: LLMResponse) -> RouteDecision:
     if not control:
         raise RouteProtocolViolation(
             "Respond by calling one of the provided tools — either an "
-            "evidence tool, or give_answer / refuse / clarify / escalate."
+            "evidence tool, or give_answer / refuse / clarify / escalate.",
+            raw_response=response.content,
         )
 
     call = control[0]
@@ -128,7 +142,8 @@ def parse_route(response: LLMResponse) -> RouteDecision:
             + "; ".join(
                 f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
                 for e in exc.errors()
-            )
+            ),
+            raw_response=f"{call.name}({json.dumps(call.arguments, sort_keys=True)})",
         ) from exc
 
     if isinstance(args, GiveAnswerArgs):

@@ -110,9 +110,11 @@ def test_answer_streams_status_frames_then_one_result():
     assert response.headers["Cache-Control"] == "no-cache"
     frames = parse_frames(response.get_data(as_text=True))
     assert [event for event, _ in frames] == ["status", "status", "result"]
+    # raw_response rides on violation events only and the page never
+    # renders it; every other event carries None.
     assert frames[0][1] == {
         "node": "route", "phase": "start", "detail": "step 0",
-        "at": "2026-05-30T00:00:00Z",
+        "at": "2026-05-30T00:00:00Z", "raw_response": None,
     }
     payload = frames[-1][1]
     assert payload["exit_code"] == 0

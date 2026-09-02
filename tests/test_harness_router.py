@@ -179,6 +179,11 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     # without a firing settled that "if ambiguous" alone never does.
     assert "two materially different readings" in prompt
     assert "rather than choosing a reading silently" in prompt
+    # Coverage pass: the router paraphrased "what rate do they ask for"
+    # into "what percentage of findings..." before run_sql saw it, so
+    # the map's vocabulary never met the manager's words.
+    assert "Hand run_sql the question as the user asked it" in prompt
+    assert "resolve only references to earlier turns" in prompt
 
 
 def test_dictionary_terms_resolve_from_the_real_pack(tool_pack):

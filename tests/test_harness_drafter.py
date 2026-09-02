@@ -213,6 +213,10 @@ def test_drafter_prompt_carries_the_block_2_rendering_rules():
     assert "Placeholders inject values" in prompt
     assert "never pasted into a sentence" in prompt
     assert "say what it says in your own words" in prompt
+    # Coverage pass (post-Block-2 W4 rep 4): {{e3.text.QUANTITY_SPIKE_FACTOR}}
+    # pathed into read_source's text for a constant.
+    assert "never reaches inside a text field" in prompt
+    assert "{{e3.text.SOME_NAME}} is not a path" in prompt
 
 
 def test_drafter_resolves_with_the_configured_inline_limit(tool_pack):

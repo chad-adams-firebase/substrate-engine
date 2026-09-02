@@ -1013,3 +1013,27 @@ def test_a_fraction_written_into_a_percent_alias_loses_the_badge():
     assert verifier.verify(
         question="q", draft=DraftAnswer(kind="prose", text="92.21 and 0.5."), evidence=[honest], attempt=1
     ).plausibility == []
+
+
+def test_overridden_enum_challenge_warns_with_its_reason():
+    """R-A's shape: an empty result from a value the column never holds
+    ships [UNVERIFIED] for a STATED reason, beside the generic empty-
+    result warn — never verified."""
+    empty = sql_invocation(
+        "SELECT actor, COUNT(*) AS n FROM invoice_history WHERE to_status = 'REJECTED' GROUP BY actor",
+        [],
+        final_enum_lint="Enum check: `invoice_history.to_status` never takes 'REJECTED' in this data",
+    )
+    verifier, _ = make_verifier(stats=[])
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="No rejections were recorded."),
+        evidence=[empty],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    checks = {finding.check: finding for finding in result.plausibility}
+    assert "run_sql.enum_literal_override" in checks
+    assert "run_sql.empty_result" in checks
+    assert "never takes 'REJECTED'" in checks["run_sql.enum_literal_override"].detail
+    assert checks["run_sql.enum_literal_override"].severity == "warn"

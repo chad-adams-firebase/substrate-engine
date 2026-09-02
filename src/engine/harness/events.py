@@ -26,6 +26,10 @@ class StatusEvent(BaseModel):
     phase: Literal["start", "finish"]
     detail: str
     at: datetime
+    # What the model actually wrote when it broke the protocol — for
+    # the turn log and the inspector, never for the live trail line a
+    # manager watches (detail stays short). None on every other event.
+    raw_response: str | None = None
 
 
 class StatusListener(Protocol):
@@ -38,10 +42,19 @@ class EventLog:
         self._listener = listener
 
     def emit(
-        self, node: str, phase: Literal["start", "finish"], detail: str
+        self,
+        node: str,
+        phase: Literal["start", "finish"],
+        detail: str,
+        *,
+        raw_response: str | None = None,
     ) -> None:
         event = StatusEvent(
-            node=node, phase=phase, detail=detail, at=datetime.now(UTC)
+            node=node,
+            phase=phase,
+            detail=detail,
+            at=datetime.now(UTC),
+            raw_response=raw_response,
         )
         self.events.append(event)
         if self._listener is not None:

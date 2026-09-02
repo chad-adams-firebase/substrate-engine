@@ -254,6 +254,23 @@ class RunSqlCheck(SubstrateCheck):
                         ),
                     )
                 )
+            # 0c: an enum-literal challenge the model overrode (coverage
+            # pass, R-A): the statement filters on a value its column
+            # never holds, so an empty result here is the expected
+            # wrong answer — it ships [UNVERIFIED] for this stated
+            # reason, not merely because it is empty.
+            if final.enum_lint is not None and final.error is None:
+                findings.append(
+                    PlausibilityFinding(
+                        check="run_sql.enum_literal_override",
+                        severity="warn",
+                        detail=(
+                            "the executed statement still filters on a value "
+                            "its column never holds: "
+                            f"{final.enum_lint}"
+                        ),
+                    )
+                )
 
         is_single_cell = (
             len(queried) == 1

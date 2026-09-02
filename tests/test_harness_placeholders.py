@@ -332,3 +332,18 @@ def test_exhaustion_path_ships_the_passage_as_written():
     assert resolution.misplaced == []
     assert resolution.text == f"Code: {SOURCE} end."
     assert len(resolution.injected_spans) == 1
+
+
+def test_a_path_into_a_text_field_is_a_failure_that_names_its_shape():
+    """Post-Block-2 W4 rep 4: {{e1.text.QUANTITY_SPIKE_FACTOR}} tried to
+    read a constant out of the source text. It fails like any bad path
+    and is also flagged so the retry feedback can say why."""
+    resolution = resolve_placeholders(
+        "The factor is {{e1.text.QUANTITY_SPIKE_FACTOR}} and the name is "
+        "{{e1.qualified_name}}; {{e1.nowhere}} is plain nonsense.",
+        _passage_evidence(),
+        inline_value_max_chars=120,
+    )
+    assert resolution.failures == ["{{e1.text.QUANTITY_SPIKE_FACTOR}}", "{{e1.nowhere}}"]
+    assert resolution.pathed_into_text == ["{{e1.text.QUANTITY_SPIKE_FACTOR}}"]
+    assert "pkg.rule_rate_variance" in resolution.text

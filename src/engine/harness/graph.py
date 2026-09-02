@@ -172,7 +172,12 @@ def build_graph(deps: GraphDeps, checkpointer=None):
         try:
             decision = parse_route(response)
         except RouteProtocolViolation as violation:
-            deps.events.emit("route", "finish", "protocol violation — nudging")
+            deps.events.emit(
+                "route",
+                "finish",
+                "protocol violation — nudging",
+                raw_response=violation.raw_response or None,
+            )
             return {
                 "iterations": state.iterations + 1,
                 "scratch": state.scratch
@@ -301,8 +306,17 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 "draft_raw": result.raw,
                 "draft_attempts": attempts,
                 "draft_feedback": [
-                    f"The placeholder {failure} did not resolve against "
-                    "the evidence — use an index and path that exist."
+                    (
+                        f"The placeholder {failure} paths into a text "
+                        "passage — the field it reaches into is text, not "
+                        "a structure. Quote the passage in a fenced code "
+                        "block and read the value from it; placeholders "
+                        "never reach inside text."
+                        if failure in resolution.pathed_into_text
+                        else f"The placeholder {failure} did not resolve "
+                        "against the evidence — use an index and path "
+                        "that exist."
+                    )
                     for failure in resolution.failures
                 ]
                 + [

@@ -43,6 +43,12 @@ class Resolution(BaseModel):
     injected_spans: list[InjectedSpan] = []
     # Placeholders that did not resolve, verbatim, for retry feedback.
     failures: list[str] = []
+    # The failures whose path continued past a text field —
+    # {{e3.text.QUANTITY_SPIKE_FACTOR}} reaching into read_source's
+    # text for a constant (post-Block-2 W4): the values-not-passages
+    # rule misread as "reach inside the text". A subset of failures;
+    # the retry feedback names the shape.
+    pathed_into_text: list[str] = []
     # Placeholders that resolved to a passage — multi-line, or longer
     # than the inline limit — outside a fenced code block. Left
     # verbatim like a failure; the drafter retries with the
@@ -73,15 +79,23 @@ def _candidates(path: str) -> tuple[str, ...]:
     return (path,)
 
 
+class PathIntoText(TypeError):
+    """The path continued past a text field: text is a value, not a
+    structure to navigate."""
+
+
 def _navigate(value: object, path: str) -> object:
     """Walk a dot/bracket path into a model_dump(mode="json") tree.
     Raises KeyError/IndexError/TypeError on a bad step — the caller
-    turns any of those into a resolution failure."""
+    turns any of those into a resolution failure, and PathIntoText
+    into the text-path feedback."""
     for segment in path.split("."):
         match = _SEGMENT.match(segment)
         if match is None:
             raise KeyError(segment)
         name, brackets = match.group(1), match.group(2)
+        if isinstance(value, str):
+            raise PathIntoText(segment)
         if not isinstance(value, dict):
             raise TypeError(segment)
         value = value[name]
@@ -144,6 +158,7 @@ def resolve_placeholders(
     parts: list[str] = []
     spans: list[InjectedSpan] = []
     failures: list[str] = []
+    pathed_into_text: list[str] = []
     misplaced: list[str] = []
     fences = _fenced_ranges(text)
     length = 0
@@ -159,6 +174,7 @@ def resolve_placeholders(
         path = match.group(2)
         rendered: str | None = None
         effective = path
+        into_text = False
         if 0 <= index < len(evidence) and evidence[index].output is not None:
             tree = evidence[index].output.model_dump(mode="json")
             for candidate in _candidates(path):
@@ -167,6 +183,9 @@ def resolve_placeholders(
                         _navigate(tree, candidate),
                         _column_format(tree, candidate),
                     )
+                except PathIntoText:
+                    rendered = None
+                    into_text = True
                 except (KeyError, IndexError, TypeError, ValueError):
                     rendered = None
                 if rendered is not None:
@@ -175,6 +194,8 @@ def resolve_placeholders(
 
         if rendered is None:
             failures.append(surface)
+            if into_text:
+                pathed_into_text.append(surface)
             parts.append(surface)  # leave it visible; the draft retries
             length += len(surface)
         elif (
@@ -202,5 +223,6 @@ def resolve_placeholders(
         text="".join(parts),
         injected_spans=spans,
         failures=failures,
+        pathed_into_text=pathed_into_text,
         misplaced=misplaced,
     )
