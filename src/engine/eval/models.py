@@ -243,6 +243,30 @@ class NotContainsAssertion(_AssertionBase):
         return self
 
 
+class PatternCountAssertion(_AssertionBase):
+    """The pattern occurs exactly N times in the answer — N from a gold
+    field or a literal. The flagship table's twelve `—` cells (six
+    suppliers with no invoices, two columns) are a count, and a count
+    is gold's business like any other number (Polish Pass, W-E)."""
+
+    content: ClassVar[bool] = True
+
+    kind: Literal["pattern_count"] = "pattern_count"
+    pattern: str
+    regex: bool = False
+    case_sensitive: bool = False
+    from_gold_field: str | None = None
+    equals: int | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_count(self) -> "PatternCountAssertion":
+        if (self.equals is None) == (self.from_gold_field is None):
+            raise ValueError(
+                "pattern_count needs exactly one of equals / from_gold_field"
+            )
+        return self
+
+
 class CurrencyFormatAssertion(_AssertionBase):
     """Money renders as currency: every $-amount is comma-grouped with
     two decimals, and no float tail (8308.92139…) appears anywhere."""
@@ -340,6 +364,7 @@ Assertion = Annotated[
     | NameFromGoldAssertion
     | ContainsAssertion
     | NotContainsAssertion
+    | PatternCountAssertion
     | CurrencyFormatAssertion
     | WindowDataAnchoredAssertion
     | RouteAssertion

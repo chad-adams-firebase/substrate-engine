@@ -34,7 +34,9 @@
         assertions:
           - {kind: nonempty}
           - {kind: name_from_gold, field: [supplier_name]}
-    - question: "Add invoice-line totals to the table above."
+    - question: >-
+        Add each supplier's total invoice-line amount (the summed line
+        prices) to the table above.
       expect:
         exit: [0]
         assertions:
@@ -420,3 +422,79 @@
     LEFT JOIN from suppliers draws the fan-out challenge and the
     licensed resend ships [UNVERIFIED]; the row measures the render:
     a dash, never $0.00, and the no-data suppliers present.
+
+# --- Polish Pass (2026-09-03): a correct question refused, the
+# flagship table denied its badge, an interpretation left unnamed.
+
+- id: W-D
+  provenance: user-sourced
+  category: data
+  question: "How many invoices do we receive per day on average?"
+  gold: gold/w_d_per_day.py
+  expected_gold: {per_day: 30.615384615384617, days: 65, invoices: 1990}
+  threshold: 0.8
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: numeric_from_gold, field: per_day}
+  note: >-
+    Browser, 2026-09-03: COUNT(*) * 1.0 / COUNT(DISTINCT DATE(received_at))
+    = 30.615, gold-exact, refused — "COUNT over invoices returned
+    30.61538462; stats row_count is 1,990": the count gate was an
+    unanchored regex that a ratio of counts satisfied. The gate now
+    reads the select-list parse; a ratio is not a count. The refusal
+    was the finding, so exit 0 is the assertion.
+
+- id: W-E
+  provenance: user-sourced
+  category: data
+  question: "Total invoice amount and line-item total per supplier"
+  gold: gold/w_e_supplier_totals.py
+  expected_gold: {supplier: "Ravenswood Extrusion", supplier_rows: 40, null_rows: 6, null_cells: 12}
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: name_from_gold, field: supplier}
+      - {kind: numeric_from_gold, field: total_invoice_amount}
+      - {kind: numeric_from_gold, field: total_line_amount}
+      - {kind: pattern_count, pattern: "—", from_gold_field: null_cells}
+  note: >-
+    The demo's flagship table (browser, 2026-09-03). Attempt 1, a
+    triple LEFT JOIN with two SUMs, is rightly challenged; attempt 2 —
+    each aggregate in its own correlated scope — is the correct shape
+    and drew the same challenge on the lines join inside the scope
+    that aggregates the lines, so the resend shipped [UNVERIFIED].
+    Direction-aware now: the correlated shape is silent. Ravenswood
+    $1,005,028.40 / $1,005,819.34; six suppliers with no invoices
+    render — in both columns, twelve cells.
+
+- id: W-F
+  provenance: user-sourced
+  category: data
+  question: "For each auditor, how much savings have they realized?"
+  gold: gold/w_f_savings_realized.py
+  expected_gold: {auditor: nova, feedback_authored: 32584.918, closed_opportunity: 309818.17403209565, closed_findings: 478785.32331315643}
+  threshold: 0.6
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: nonempty}
+      - {kind: route, mode: must_include, tools: [run_sql]}
+      - {kind: name_from_gold, field: auditor}
+      - {kind: numeric_from_gold, field: [feedback_authored, closed_opportunity, closed_findings]}
+      # With synonyms on recovered_opportunity, the drafter rule makes
+      # the answer name its reading (the W6 pattern).
+      - {kind: contains, regex: true, pattern: "closed.invoice|feedback.authored"}
+  note: >-
+    Browser, 2026-09-03: feedback-authored non-excepted finding amounts
+    (nova $32,584.92), gold-exact for that reading — one of the three
+    recovered_opportunity declares — and the answer never said which.
+    The question reached only rule_savings through "savings"; the
+    metric now carries the phrase, and the drafter sees a term's
+    synonyms beside its readings. Any declared reading's number
+    passes; the reading must be named.

@@ -466,3 +466,164 @@ false-downgrade pair (direction-blind fan-out reasoning; the
 cause); the fan-out challenge's remaining "aggregate from the table
 that carries the filtered column" phrase; placeholder negative indices
 and the `output.` prefix (S5).
+
+## Polish Pass riders (2026-09-03, after Block 3)
+
+Nothing here was a breach. Every item was a correct answer denied its
+badge, a correct question refused, a right call in the wrong channel,
+a placeholder the resolver could not read, or a known interpretation
+left unnamed — the failures a demo audience notices without a wrong
+number ever appearing. Two were confirmed live from the browser on
+2026-09-03 (`packs/invoiceguard/work.db`, conversation 3); the pass
+lands under one bank run, and every verifier/lint change was measured
+first with `engine eval exposure` against the committed post-guard
+report (`850f869`, 206 statements) and against the browser's own
+conversation (`--work-store --conversation 3`, 4 statements — the
+verb's new source, so a manager's turns are measured like a report).
+
+Exposure, before → after, by commit:
+
+| check | report before | report after | work store before | after |
+|---|---|---|---|---|
+| `lint.fan_out` | 10 | 3 | 1 | 0 |
+| `run_sql.fan_out_override` (recorded) | 10 | 10 | 1 | 1 |
+| `run_sql.sum_vs_stats` | 20 | 0 | 0 | 0 |
+| `run_sql.count_vs_stats` / `filtered_count_bound` / `distinct_vs_stats` | 0 | 0 | 0 | 0 |
+| every other check | unchanged | unchanged | unchanged | unchanged |
+
+The override row reads the challenge recorded on the executed attempt,
+so a replay cannot move it; it follows the lint on the re-run. The
+three surviving challenges are W1 turn 1 reps 1/2/5 — a join to a
+grouped CTE by a key nothing vouches for, deliberately left. No clean
+statement was newly flagged; a first draft of the direction rule
+flagged W-B's five reps and the `correction_application_rate` template
+through a CASE over a correlated subquery, and the grain-attribution
+rule below resolved it before anything landed. The prototype replay
+also counted count-bounded statements under both gates: 68 → 68.
+
+- **The count gate was a regex (W-D, live).** "How many invoices do we
+  receive per day on average?" drafted as `COUNT(*) * 1.0 /
+  COUNT(DISTINCT DATE(received_at))`, gold-exact at 30.615, refused:
+  `select count(` matched inside a ratio of counts, R4's sibling. The
+  lone-cell count checks now read the select-list parse —
+  `Aggregate("count")` at the root pins to row_count, `COUNT(DISTINCT
+  col)` to distinct_count (the parse records the flag), anything else is
+  not a count and gets no row_count bound; the joined-count scalar shape
+  reads the same classification, and `_COUNT_ONLY` / `_COUNT_DISTINCT`
+  are gone. Accepted cost: `COUNT(*) + 0` is arithmetic, unbounded.
+  Expected: W-D 5/5 at exit 0 — the refusal was the finding.
+- **Direction-blind fan-out reasoning (W1, the flagship table).** A join
+  along a foreign key, `one.id = many.fk`, repeats each one-side row
+  once per many-side row and never the many side. The lint read only
+  which table stood after JOIN, so `SUM(invoices.invoice_total)` per
+  supplier (the many side, grouped by the one side) was challenged on
+  every W1 rep of four runs, and the flagship's correct resend — each
+  aggregate in its own correlated scope — drew the challenge on the
+  lines join inside the scope that aggregates the lines. The rule now:
+  in a scope whose steps are all vouched one-to-many joins, the
+  repeated tables are each step's one side plus many sides that share a
+  one side (siblings repeat each other); a scope with a step nothing
+  vouches for repeats every table, as before. An aggregate is
+  attributed to the tables its argument reads; one reading no outer
+  column (`COUNT(*)`, a CASE over a correlated subquery) counts the row
+  grain and is attributed to the FROM table, which keeps lookup chains
+  and the `correction_application_rate` template silent. It fires only
+  when it reads a repeated table. Attempt 1 (triple LEFT JOIN, two
+  SUMs) is challenged naming `SUM(i.invoice_total) reads invoices` and
+  the lines step; attempt 2 is silent; W1's first turn is silent. New
+  true positive: an aggregate over a lookup's one side
+  (`SUM(suppliers.credit_limit)` from invoices), which the from-side
+  exemption let through by table position — none in 210 statements.
+  Fixtures changed deliberately: `AVG_FANOUT` read the many side and now
+  reads the one side (the old shape pinned silent); `W1_OVERRIDE`'s
+  reason names the lines step. Expected: W-E 5/5; W1 ≥ 3/5 — see below.
+- **The cap under a rounded `null_rate` (W1's second blocker).** Every
+  correct SUM summed to the true 16,683,608.50 and drew `sum_vs_stats`
+  against a cap $6.90 short (mean × 1,982.99918 for 7 nulls in 1,990
+  rows stored as 0.003518). Decided: no `null_count` — it would rotate
+  the stats manifest, and both exposure and grade refuse a report whose
+  world differs from the pack's, so the committed baseline this pass
+  measures against could no longer be measured; it would also leave the
+  mean's rounding ($0.0006 short). The cap reads the row at its stored
+  precision instead: the non-null count is the largest integer
+  consistent with the stored rate (exactly 1,983; unique under ~500k
+  rows; never above row_count) and the mean is read at its upper
+  half-unit. `STATS_DECIMALS = 6` lives once in the substrate models and
+  the generator rounds with it. World manifest `ac4b8abd4eb9c07e` and
+  stats manifest `13a9fe6305a057be` untouched. A 5× fan still fails.
+- **W1's third blocker, found in planning: the wording.** All five reps
+  read "Add invoice-line totals" as a line *count*
+  (`total_invoice_line_count`), so the `total_line_amount` numeric would
+  keep failing under both guards. Turn 2 now asks for "each supplier's
+  total invoice-line amount (the summed line prices)". Expected: W1
+  ≥ 3/5 — turn 0 executes attempt 1 unchallenged at exit 0; turn 1 reps
+  that write a correlated or derived-table line total pass; a rep
+  joining a grouped CTE by an unvouched key still overrides to exit 2
+  (3 of 5 under the old wording; the sharpened wording changes the
+  shape, so the split is a guess, not a mechanism).
+- **The fan-out challenge's last destination phrase.** "aggregate from
+  the table that carries the filtered column" is gone. The paragraph
+  names the aggregate, the table it reads, and the step that repeats it,
+  then "Aggregate each side in its own scope, then join the results;
+  count an entity with COUNT(DISTINCT <table>.id)". The shared-target
+  reason no longer names the unqueried target table, and the principle
+  test reads parentheses too: every table a challenge names, anywhere,
+  is one the statement queries — on eleven fan-out fixtures, the enum
+  fixture and the interval fixture.
+- **B2's chronic 1/5: the right call in the wrong channel.** The router
+  writes `give_answer({"shape":"prose","evidence_index":3})` as text —
+  14 of 86 recorded raw responses across the four post-* reports, all
+  JSON-valid — and was nudged into the eight-step budget four times per
+  rep. `parse_route` reads a control verb spelled as the whole response
+  (optionally behind the transcript's "Requested: " echo) as that call,
+  validated by the same models; a real tool written as text (one
+  `traverse_code_knowledge_graph`, B2 rep 4) stays a violation — the
+  closed surface is entered by tool calls. The trail says "text-form
+  give_answer parsed as the call" with the raw response beside it, and
+  the habit has a number: `TurnRecord.lenient_parses` beside `nudges`,
+  summed per row and across the run in the grade ("router: 4 nudges, 2
+  text-form calls parsed"), so a pin that changes the habit shows in
+  the grade. Expected: B2 5/5 — reps 1/2/4/5's third response parses.
+- **S5's placeholder.** `{{e1.output.errors[-1].invoice_id}}` — the last
+  error, named the way anyone names it; the index grammar accepted only
+  non-negative digits. Indices may be negative; the `output.` tolerance
+  is a rule of the walk (an `output` segment that is not a key where it
+  stands is the wrapper, at any depth; a genuine field wins). Expected:
+  S5 5/5.
+- **"Savings realized" named no reading (W-F, live).** The answer used
+  feedback-authored non-excepted finding amounts (nova $32,584.92) —
+  gold-exact for that reading, already the third `recovered_opportunity`
+  declares — and the question reached only `rule_savings` through
+  "savings". The metric gains whole-phrase synonyms (no bare "saved":
+  it would pull the metric into "saved to the queue"; "realized" carries
+  the bank question), the drafter's interpretation line shows a term's
+  synonyms, and the grounding renders metric synonyms like concept
+  synonyms (golden fixtures: one line each). Expected: W-F ≥ 4/5, any
+  declared reading's number, the reading named.
+- **Web riders.** Legacy turns draw their chip from the trail's finalize
+  event and the recorded verdict; `engine store backfill-questions`
+  recovered the dev store's 18 questions from the checkpoint threads
+  (tied to the pre-Block-4 Message-pair layout, said so in
+  `harness.graph.question_of_turn`; Block 4's reconciliation list
+  carries the update or retirement); `/api/evidence/<ref>` is visible
+  only through the caller's conversations; the text rendering carries
+  one charset.
+- **The bank.** W-D, W-E, W-F with executed gold; `pattern_count` joins
+  the closed assertion union (the flagship's dash cells are twelve — six
+  suppliers with no invoices, two columns — a number gold asserts like
+  any other); W1's turn 2 reworded. `--check-gold` PASS.
+- **What this pass leaves.** Inferring that a grouped CTE or derived
+  table joined by its group key is one-per-key (W1's CTE shape stays an
+  unvouched join); text-form real tool calls; the per-day refusal's own
+  turn, absent from the dev store (likely a deleted conversation — the
+  statement is reproduced from the brief); `_COUNT_ALIAS` for the
+  grouped joined-count shape, unchanged. Association verification stays
+  queued; W2/W4 keep.
+
+Watch-for on the re-run: a statement the direction-aware lint now
+leaves alone that fans (the replay shows none of 210); a count answer
+previously bounded and now not (68 → 68 in the replay); a green row
+whose SUM reads a lookup's one side and is newly challenged (none in
+210); any `fan_out_override` at all outside W1's CTE reps. The
+verified-but-not-live-witnessed list is unchanged: A1, A4, the interval
+lint, the entity bound.

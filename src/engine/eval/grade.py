@@ -321,6 +321,20 @@ def evaluate(
             f"pattern {assertion.pattern!r} absent"
         )
 
+    if kind == "pattern_count":
+        if assertion.from_gold_field is not None:
+            want = _gold_value(gold, assertion.from_gold_field)
+            if not isinstance(want, int) or isinstance(want, bool):
+                return False, f"gold field {assertion.from_gold_field} is not an integer"
+        else:
+            want = assertion.equals
+        flags = 0 if assertion.case_sensitive else re.IGNORECASE
+        pattern = assertion.pattern if assertion.regex else re.escape(assertion.pattern)
+        found = len(re.findall(pattern, view.text, flags))
+        return found == want, (
+            f"pattern {assertion.pattern!r} occurs {found} time(s), gold says {want}"
+        )
+
     if kind == "not_contains":
         if assertion.from_gold_field is not None:
             names = _gold_value(gold, assertion.from_gold_field)

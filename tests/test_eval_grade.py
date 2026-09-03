@@ -757,6 +757,46 @@ def test_not_contains_uses_the_executed_roster(tmp_path):
     assert "not_contains" in result.rows[0].failure_classes
 
 
+ROW_DASHES = """\
+- id: W-E
+  provenance: user-sourced
+  category: data
+  question: "Totals per supplier"
+  gold: gold/g.py
+  expect:
+    exit: [0]
+    assertions:
+      - {kind: pattern_count, pattern: "—", from_gold_field: dashes}
+      - {kind: pattern_count, pattern: "supplier", equals: 1}
+"""
+GOLD_DASHES = """\
+def gold(world):
+    return {"dashes": 2, "not_a_count": "two"}
+"""
+
+
+def test_pattern_count_is_a_number_gold_asserts(tmp_path):
+    """Polish Pass, W-E: the flagship table's twelve dash cells are a
+    count, from a gold field or a literal; more or fewer fails."""
+    bank, header, world, pack = make_env(tmp_path, ROW_DASHES, GOLD_DASHES)
+    exact = [make_record("W-E", 1, make_turn("Per supplier: Kestrel — / —."))]
+    assert grade(bank, header, exact, world, pack_root=pack).exit_code() == 0
+    for text in ("Per supplier: Kestrel — only.", "Per supplier: — — —."):
+        result = grade(bank, header, [make_record("W-E", 1, make_turn(text))], world, pack_root=pack)
+        assert result.rows[0].status == "fail"
+        assert "pattern_count" in result.rows[0].failure_classes
+    twice = [make_record("W-E", 1, make_turn("Per supplier, per supplier: — —."))]
+    assert grade(bank, header, twice, world, pack_root=pack).rows[0].status == "fail"
+
+    rows = ROW_DASHES.replace("from_gold_field: dashes", "from_gold_field: not_a_count")
+    bank, header, world, pack = make_env(tmp_path / "b", rows, GOLD_DASHES)
+    result = grade(bank, header, exact, world, pack_root=pack)
+    assert result.rows[0].status == "fail"
+
+    with pytest.raises(Exception, match="exactly one of equals / from_gold_field"):
+        make_env(tmp_path / "c", ROW_DASHES.replace(", equals: 1", ""), GOLD_DASHES)
+
+
 ROW_MONEY = """\
 - id: NP3
   provenance: scripted
