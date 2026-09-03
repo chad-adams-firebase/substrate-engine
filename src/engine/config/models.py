@@ -266,6 +266,20 @@ class PlausibilitySettings(BaseModel):
     enforce_joined_count_bound: bool = True
     joined_count_warn_factor: float = 1.0
     joined_count_fail_factor: float = 3.0
+    # The entity-count bound (guard pass, AMB2): a COUNT column whose
+    # alias names an entity the stats substrate knows as a table —
+    # invoice_count, total_invoices, supplier_count — cannot exceed
+    # that table's row_count, whatever the statement reads. AMB2's
+    # `COUNT(*) AS invoice_count FROM invoice_history` returned 6,432
+    # against 1,990 invoices in existence and passed every bound,
+    # because nothing tied the alias's noun to a table. Warn only: an
+    # alias is a naming convention, not a type, so the badge comes off
+    # and the answer ships [UNVERIFIED]. The noun resolves by a stem
+    # rule against the stats tables (singular/plural), never a list in
+    # engine code; an alias with no count affix, or whose noun matches
+    # no table (or several), is silent. Tolerance shares
+    # row_count_tolerance_pct.
+    enforce_entity_count_bound: bool = True
     # A rate-hinted result cell that is exactly 0.0 or 1.0 (100.0 on a
     # percent-scale column) loses the verified badge — warn only, never
     # fail, since saturated rates can be legitimate (pin pass, S2: AVG

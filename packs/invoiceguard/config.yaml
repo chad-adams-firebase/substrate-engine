@@ -175,6 +175,16 @@ verifier:
     enforce_joined_count_bound: true
     joined_count_warn_factor: 1.0
     joined_count_fail_factor: 3.0
+    # Entity-count bound (guard pass, AMB2's backstop): a count aliased
+    # with an entity noun — invoice_count, total_invoices — cannot
+    # exceed that entity's table. The post-duration AMB2 shipped
+    # `COUNT(*) AS invoice_count FROM invoice_history` = 6,432 verified
+    # against 1,990 invoices; a filtered single-table count under
+    # invoice_history's 8,345 passes every other bound. Warn only (an
+    # alias is a convention, not a type), so the answer ships
+    # [UNVERIFIED]. Replayed over the post-duration report before it
+    # landed: 53 count aliases resolved, 3 hits, all three AMB2.
+    enforce_entity_count_bound: true
     # Saturated rates (pin pass, S2's backstop): exactly 0.0 or 1.0 on
     # a rate-named column is legal but is also exactly what AVG over a
     # NULL-padded indicator produces — warn only, so a legitimate

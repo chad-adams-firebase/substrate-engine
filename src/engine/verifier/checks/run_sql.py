@@ -55,9 +55,21 @@ Known limitations, documented rather than hidden:
   The interval-arithmetic lint's overridden challenge is read from the
   evidence attempts like the other two and caps the answer at
   unverified.
+- THE GUARD PASS (the entity-count bound): the post-duration AMB2
+  shipped `COUNT(*) AS invoice_count FROM invoice_history WHERE
+  to_status IN (...)` = 6,432, verified, against 1,990 invoices in
+  existence — a filtered single-table count under invoice_history's
+  own row_count passes every check above, and nothing tied the alias's
+  noun to a table. Now a COUNT column whose alias names an entity the
+  stats substrate knows as a table (a stem rule over the alias: strip
+  a count affix, match singular/plural against the table names) warns
+  when it exceeds that table's row_count. Warn, not fail: an alias is a
+  naming convention, not a type. Silent when the alias makes no entity
+  claim or the noun matches no table.
 """
 
 import re
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 
 from engine.config.models import ToolName
@@ -107,6 +119,55 @@ _COUNT_ALIAS = re.compile(
 )
 _AGGREGATE = re.compile(r"\b(?:sum|avg|count|min|max)\s*\(", re.IGNORECASE)
 _ISO_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2}")
+# The count affixes an alias may carry around its entity noun
+# (invoice_count, total_invoices, n_suppliers). No affix, no claim.
+_COUNT_SUFFIXES = ("_count", "_total")
+_COUNT_PREFIXES = ("number_of_", "count_of_", "num_", "n_", "total_")
+
+
+def _noun_forms(noun: str) -> set[str]:
+    """The spellings a table name may take for one noun: as written,
+    pluralised, singularised. Enough for the English plurals a schema
+    uses (invoices, findings, suppliers, categories); an irregular
+    noun simply fails to resolve and stays silent."""
+    forms = {noun, noun + "s", noun + "es"}
+    if noun.endswith("s"):
+        forms.add(noun[:-1])
+    if noun.endswith("y"):
+        forms.add(noun[:-1] + "ies")
+    if noun.endswith("ies"):
+        forms.add(noun[:-3] + "y")
+    return forms
+
+
+def entity_table_for_alias(alias: str, tables: Iterable[str]) -> str | None:
+    """The stats table a count alias names, or None. `invoice_count`,
+    `total_invoices`, `n_suppliers` name invoices/invoices/suppliers;
+    `critical_finding_count` falls back to its last segment and names
+    findings; `ready_backlog_count` (no such table), `rules_seen` (no
+    count affix) and a noun two tables could spell name nothing. The
+    rule reads the stats substrate's table names at run time — no
+    table name lives in engine code."""
+    known = {table.lower() for table in tables}
+    name = alias.lower()
+    noun = name
+    for suffix in _COUNT_SUFFIXES:
+        if noun.endswith(suffix) and len(noun) > len(suffix):
+            noun = noun[: -len(suffix)]
+            break
+    for prefix in _COUNT_PREFIXES:
+        if noun.startswith(prefix) and len(noun) > len(prefix):
+            noun = noun[len(prefix):]
+            break
+    if noun == name:
+        return None
+    for candidate in dict.fromkeys((noun, noun.rsplit("_", 1)[-1])):
+        hits = {form for form in _noun_forms(candidate) if form in known}
+        if len(hits) == 1:
+            return hits.pop()
+        if hits:
+            return None  # two tables could be meant: no claim to check
+    return None
 
 
 def _fmt(value: float) -> str:
@@ -476,6 +537,18 @@ class RunSqlCheck(SubstrateCheck):
                 )
             )
 
+        # 2b2b: the entity-count bound (guard pass, AMB2). A COUNT
+        # column whose alias names a stats table cannot exceed that
+        # table, whatever the statement reads — the single-table checks
+        # above compare against the queried table, and AMB2's queried
+        # table was the wrong one. Warn: the alias is a convention.
+        if settings.enforce_entity_count_bound and table.rows:
+            findings.extend(
+                self._entity_count_findings(
+                    sql, table, queried, stats_by_table, settings
+                )
+            )
+
         # 2b3: saturated rates (pin pass, S2). Exactly 0.0 or 1.0 (100.0
         # on a percent-scale column) on a rate-hinted column is a legal
         # value no bound can reject, but it is also exactly what AVG
@@ -600,6 +673,64 @@ class RunSqlCheck(SubstrateCheck):
                 ),
             )
         ]
+
+    @staticmethod
+    def _entity_count_findings(
+        sql: str,
+        table,
+        queried: list[str],
+        stats_by_table: dict[str, list[StatsRow]],
+        settings,
+    ) -> list[PlausibilityFinding]:
+        """A COUNT column (per the select-list parse, DISTINCT or not,
+        resolved through CTEs) whose alias names a stats table,
+        compared against that table's row_count. Scalar shape: the lone
+        cell. Grouped shape: the column's sum, untruncated results only
+        (the joined-count bound's precedent). One finding per column."""
+        items = resolve_select_items(sql)
+        tolerance = settings.row_count_tolerance_pct / 100.0
+        findings: list[PlausibilityFinding] = []
+        for column in table.columns:
+            tree = items.get(column)
+            if not (isinstance(tree, Aggregate) and tree.func == "count"):
+                continue
+            entity = entity_table_for_alias(column, stats_by_table)
+            if entity is None:
+                continue
+            known = float(stats_by_table[entity][0].row_count)
+            if known <= 0:
+                continue
+            cells = [
+                float(cell)
+                for row in table.rows
+                if isinstance(cell := row.get(column), (int, float))
+                and not isinstance(cell, bool)
+            ]
+            if not cells:
+                continue
+            if len(table.rows) == 1:
+                value = cells[0]
+                described = f"{column} = {_fmt(value)}"
+            elif table.truncated:
+                continue
+            else:
+                value = sum(cells)
+                described = f"the {column} column sums to {_fmt(value)}"
+            if value <= known * (1 + tolerance):
+                continue
+            findings.append(
+                PlausibilityFinding(
+                    check="run_sql.entity_count_exceeds_table",
+                    severity="warn",
+                    detail=(
+                        f"{described}, but the alias counts {entity} and "
+                        f"stats know {_fmt(known)} {entity} rows — a count "
+                        f"of {entity} cannot exceed the {entity} table; "
+                        f"the statement reads {', '.join(queried)}"
+                    ),
+                )
+            )
+        return findings
 
     @staticmethod
     def _saturated_rate_findings(

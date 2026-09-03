@@ -1213,3 +1213,167 @@ def test_overridden_interval_challenge_warns_with_its_reason():
         column_formats=HOURS,
     )
     assert _verify(repaired, HISTORY_STATS).disposition == "verified"
+
+
+# --- The entity-count bound (guard pass, AMB2) ---------------------------
+
+# The post-duration AMB2 rep 1, attempt 2: the enum challenge's pointer
+# at invoice_history read as an instruction; 6,432 transitions shipped
+# verified as an invoice count. Rep 2/3's three-status list gave 5,199.
+AMB2_HISTORY_SQL = (
+    "SELECT \n    COUNT(*) AS invoice_count\nFROM \n    invoice_history\nWHERE \n"
+    "    to_status IN ('RECEIVED', 'READY', 'CLAIMED', 'IN_REVIEW')"
+)
+ENTITY_STATS = [
+    stats_row("invoices", "id", row_count=1990),
+    stats_row("invoice_history", "id", row_count=8345),
+    stats_row("suppliers", "id", row_count=40),
+    stats_row("findings", "id", row_count=6042),
+    stats_row("invoice_lines", "id", row_count=9648),
+]
+
+
+def test_amb2s_history_count_aliased_as_invoices_ships_unverified():
+    """The mechanism the guard pass closes: a filtered single-table count
+    under invoice_history's own row_count passes every other bound;
+    the alias's noun is the only thing that says 6,432 invoices cannot
+    be. Warn, so [UNVERIFIED] rather than refused."""
+    for counted in (6432, 5199):
+        walked = sql_invocation(AMB2_HISTORY_SQL, [{"invoice_count": counted}])
+        result = _verify(walked, ENTITY_STATS)
+        assert result.disposition == "unverified", counted
+        (finding,) = result.plausibility
+        assert (finding.check, finding.severity) == (
+            "run_sql.entity_count_exceeds_table", "warn"
+        )
+        assert "1,990 invoices rows" in finding.detail
+        assert "the statement reads invoice_history" in finding.detail
+
+
+def test_a_legitimate_invoice_count_stays_silent():
+    """AMB2's attempt 1 (78 of 1,990) and REC-SQL's total (exactly 1,990,
+    aliased total_invoices) are within the table; the row_count
+    tolerance covers a trailing snapshot."""
+    fine = sql_invocation(
+        "SELECT COUNT(*) AS invoice_count FROM invoices WHERE status = 'READY'",
+        [{"invoice_count": 78}],
+    )
+    assert _verify(fine, ENTITY_STATS).disposition == "verified"
+    total = sql_invocation(
+        "SELECT COUNT(*) AS total_invoices FROM invoices", [{"total_invoices": 1990}]
+    )
+    assert _verify(total, ENTITY_STATS).disposition == "verified"
+    trailing = sql_invocation(
+        "SELECT COUNT(DISTINCT h.invoice_id) AS invoice_count FROM invoice_history h",
+        [{"invoice_count": 2100}],  # within the 10% tolerance
+    )
+    assert _verify(trailing, ENTITY_STATS).disposition == "verified"
+
+
+def test_a_grouped_count_column_sums_against_the_entity_table():
+    grouped = sql_invocation(
+        "SELECT to_status, COUNT(*) AS invoice_count FROM invoice_history "
+        "GROUP BY to_status ORDER BY to_status",
+        [{"to_status": "CLOSED", "invoice_count": 3000},
+         {"to_status": "READY", "invoice_count": 3000}],
+    )
+    result = _verify(grouped, ENTITY_STATS)
+    assert result.disposition == "unverified"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.entity_count_exceeds_table"
+    assert "sums to 6,000" in finding.detail
+    # A partition of the entity sums to at most the table: silent.
+    partition = sql_invocation(
+        "SELECT status, COUNT(*) AS invoice_count FROM invoices GROUP BY status ORDER BY status",
+        [{"status": "CLOSED", "invoice_count": 1200},
+         {"status": "READY", "invoice_count": 78}],
+    )
+    assert _verify(partition, ENTITY_STATS).disposition == "verified"
+
+
+def test_a_count_through_a_cte_resolves_to_its_alias():
+    """The parse follows the CTE, so hoisting the count does not hide
+    it — and a fanning join aliased as an entity count warns beside
+    the joined-count bound rather than instead of it."""
+    hoisted = sql_invocation(
+        "WITH c AS (SELECT COUNT(*) AS invoice_count FROM invoice_history) "
+        "SELECT invoice_count FROM c",
+        [{"invoice_count": 8345}],
+    )
+    result = _verify(hoisted, ENTITY_STATS)
+    assert result.disposition == "unverified"
+    assert {f.check for f in result.plausibility} == {"run_sql.entity_count_exceeds_table"}
+    fanned = sql_invocation(
+        "SELECT COUNT(*) AS invoice_count FROM invoices i "
+        "JOIN invoice_lines l ON l.invoice_id = i.id",
+        [{"invoice_count": 9648}],
+    )
+    result = _verify(fanned, ENTITY_STATS)
+    assert result.disposition == "unverified"
+    # 9,648 is exactly 1.0× the largest queried table, under the
+    # joined-count warn factor — only the entity bound sees it.
+    assert {f.check for f in result.plausibility} == {"run_sql.entity_count_exceeds_table"}
+
+
+def test_aliases_that_make_no_entity_claim_are_silent():
+    """No count affix, or a noun no stats table spells: nothing to
+    bound against, however large the number."""
+    # Values sit inside every other bound (under invoice_history's
+    # 8,345) and past invoices' 1,990, so only an entity claim could
+    # object — and none of these aliases makes one.
+    for sql, rows in (
+        ("SELECT COUNT(*) AS credit_memo_count FROM invoice_history WHERE actor = 'x'", [{"credit_memo_count": 5000}]),
+        ("SELECT COUNT(*) AS rules_seen FROM invoice_history WHERE actor = 'x'", [{"rules_seen": 5000}]),
+        ("SELECT COUNT(*) AS n FROM invoice_history", [{"n": 8000}]),
+        # A SUM aliased like a count is not a count to the parse.
+        ("SELECT SUM(amount) AS invoice_count FROM invoice_history", [{"invoice_count": 99999}]),
+    ):
+        assert _verify(sql_invocation(sql, rows), ENTITY_STATS).disposition == "verified", sql
+
+
+def test_entity_count_bound_is_a_pack_knob():
+    from engine.config.models import PlausibilitySettings
+
+    off = VerifierSettings(
+        plausibility=PlausibilitySettings(enforce_entity_count_bound=False)
+    )
+    walked = sql_invocation(AMB2_HISTORY_SQL, [{"invoice_count": 6432}])
+    assert _verify(walked, ENTITY_STATS, off).disposition == "verified"
+
+
+def test_the_alias_noun_rule_on_the_last_runs_aliases():
+    """Every count alias the post-duration report produced, and what
+    the stem rule makes of it against the InvoiceGuard stats tables."""
+    from engine.verifier.checks.run_sql import entity_table_for_alias
+
+    tables = [
+        "compliance_reports", "compliance_rules", "config", "contracts",
+        "finding_feedback", "findings", "invoice_history", "invoice_lines",
+        "invoices", "review_report_lines", "review_reports",
+        "scheduled_tasks", "suppliers", "users",
+    ]
+    resolves = {
+        "invoice_count": "invoices",
+        "total_invoices": "invoices",
+        "findings_count": "findings",
+        "critical_finding_count": "findings",
+        "invoice_line_count": "invoice_lines",
+        "total_invoice_line_count": "invoice_lines",
+        "n_suppliers": "suppliers",
+        "number_of_users": "users",
+        "count_of_contracts": "contracts",
+        "invoice_history_count": "invoice_history",
+        "Invoice_Count": "invoices",
+    }
+    for alias, table in resolves.items():
+        assert entity_table_for_alias(alias, tables) == table, alias
+    silent = [
+        "credit_memo_count", "revision_count", "fire_count",
+        "rate_variance_count", "ready_backlog_count", "rules_seen",
+        "unreviewed_invoices", "invoices_with_findings", "report_count",
+        "rule_count", "count", "total", "n_", "_count",
+    ]
+    for alias in silent:
+        assert entity_table_for_alias(alias, tables) is None, alias
+    # Two tables one noun could spell: no claim to check.
+    assert entity_table_for_alias("invoice_count", ["invoice", "invoices"]) is None
