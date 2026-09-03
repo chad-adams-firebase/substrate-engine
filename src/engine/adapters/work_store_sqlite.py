@@ -443,7 +443,12 @@ class SqliteWorkStore:
             RefuseOutcome,
             TableAnswer,
         )
-        from engine.harness.state import RouteDecision, ToolSelection, TurnState
+        from engine.harness.state import (
+            HistoryTurn,
+            RouteDecision,
+            ToolSelection,
+            TurnState,
+        )
         from engine.ports.types import Message
         from engine.tools.envelope import ToolInvocation
         from engine.verifier.models import (
@@ -456,6 +461,7 @@ class SqliteWorkStore:
         return JsonPlusSerializer(
             allowed_msgpack_modules=[
                 Message,
+                HistoryTurn,
                 ToolName,
                 SubstrateName,
                 ToolInvocation,

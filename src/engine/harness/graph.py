@@ -2,8 +2,8 @@
 
     begin -> route --(tools)--> act -> route          (bounded cycle)
                 |--(answer)--> draft -> verify --(retry)--> draft
-                |                          '--> finalize -> END
-                '--(refuse|clarify|escalate|cap)-----> finalize -> END
+                |                          '--> finalize -> summarize -> END
+                '--(refuse|clarify|escalate|cap)-----> finalize -'
 
 Every bound the loop enforces comes from pack config (HarnessSettings,
 VerifierSettings); the cap converts to a first-class refuse outcome.
@@ -44,7 +44,14 @@ from engine.harness.router import (
     summarize_invocation,
 )
 from engine.harness.placeholders import referenced_indices
-from engine.harness.state import RouteDecision, TurnState
+from engine.harness.state import (
+    HistoryTurn,
+    RouteDecision,
+    TurnState,
+    kind_of_outcome,
+    transcript_text,
+    upgrade_history,
+)
 from engine.harness.tables import caption_for, project_table
 from engine.harness.verifier_protocol import VerifierProtocol
 from engine.ports.llm import LLMPort
@@ -487,8 +494,12 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             "outcome": outcome,
             "history": state.history
             + [
-                Message(role="user", content=state.question),
-                Message(role="assistant", content=_transcript_text(outcome)),
+                HistoryTurn(
+                    turn=state.turn,
+                    question=state.question,
+                    answer=transcript_text(outcome),
+                    kind=kind_of_outcome(outcome),
+                )
             ],
         }
 
@@ -571,29 +582,13 @@ def _verifier_refusal(verdict) -> RefuseOutcome:
     )
 
 
-def question_of_turn(history: list[Message], turn: int) -> str | None:
-    """The question turn N asked, read from the checkpoint history.
-
-    Tied to the pre-Block-4 history layout: finalize appends one
-    (user, assistant) Message pair per turn, so turn N's question is
-    history[2 * (N - 1)]. Block 4 replaces the pairs with TurnRecords
-    carrying their own turn number; when it lands, this reads
-    history[N - 1].question — or retires, if every legacy row has been
-    backfilled by then (engine store backfill-questions)."""
-    index = 2 * (turn - 1)
-    if turn < 1 or index >= len(history):
-        return None
-    message = history[index]
-    return message.content if message.role == "user" else None
-
-
-def _transcript_text(outcome) -> str:
-    if isinstance(outcome, AnswerOutcome):
-        if isinstance(outcome.body, TableAnswer):
-            return f"[table: {outcome.body.caption or 'result set'}]"
-        return outcome.body.text
-    if isinstance(outcome, RefuseOutcome):
-        return f"[refused: {outcome.reason}]"
-    if isinstance(outcome, ClarifyOutcome):
-        return f"[clarify: {outcome.question}]"
-    return f"[escalated: {outcome.reason}]"
+def question_of_turn(history: list, turn: int) -> str | None:
+    """The question turn N asked, read from a checkpoint's history —
+    today's HistoryTurn records, or the (user, assistant) Message pairs
+    a pre-Block-4 checkpoint holds, which upgrade_history reads the
+    same way. The backfill verb's reader (engine store
+    backfill-questions)."""
+    for record in upgrade_history(history):
+        if getattr(record, "turn", None) == turn:
+            return record.question
+    return None

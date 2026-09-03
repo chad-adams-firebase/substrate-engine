@@ -86,7 +86,12 @@ def test_every_checkpointed_engine_type_survives_the_msgpack_allowlist():
     # populated state, so the allowlist is forced to keep up.
     from engine.adapters.work_store_sqlite import SqliteWorkStore
     from engine.harness.outcomes import AnswerOutcome, MarkdownAnswer
-    from engine.harness.state import RouteDecision, ToolSelection, TurnState
+    from engine.harness.state import (
+        HistoryTurn,
+        RouteDecision,
+        ToolSelection,
+        TurnState,
+    )
     from engine.ports.types import Message
     from engine.verifier.models import (
         AttemptRecord,
@@ -115,8 +120,10 @@ def test_every_checkpointed_engine_type_survives_the_msgpack_allowlist():
         detail="d",
     )
     state = TurnState(
-        history=[Message(role="user", content="q")],
+        history=[HistoryTurn(turn=1, question="q", answer="146 rows.", kind="prose")],
         turn=1,
+        summary="In turn 1 the user asked for the row count (see turn 1).",
+        summary_through_turn=1,
         question="q",
         scratch=[Message(role="assistant", content="a")],
         evidence=[sql_invocation("SELECT 1 AS n", [{"n": 146}])],

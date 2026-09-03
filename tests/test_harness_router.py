@@ -324,15 +324,22 @@ def test_router_prompt_renders_data_coverage_only_when_given():
 
 
 def test_router_messages_order_system_history_question_scratch():
+    """A history record expands to the (user, assistant) pair the
+    router has always seen — byte for byte the pre-Block-4 shape."""
+    from engine.harness.state import HistoryTurn
+
     messages = build_router_messages(
         "SYSTEM",
-        history=[Message(role="user", content="earlier q")],
+        history=[HistoryTurn(turn=1, question="earlier q", answer="earlier a", kind="prose")],
         question="current q",
         scratch=[Message(role="assistant", content="Requested: app_primer({})")],
     )
-    assert [m.role for m in messages] == ["system", "user", "user", "assistant"]
+    assert [m.role for m in messages] == [
+        "system", "user", "assistant", "user", "assistant"
+    ]
     assert messages[0].content == "SYSTEM"
-    assert messages[2].content == "current q"
+    assert [m.content for m in messages[1:3]] == ["earlier q", "earlier a"]
+    assert messages[3].content == "current q"
 
 
 def test_router_prompt_carries_the_verbatim_rule_and_its_one_exception():

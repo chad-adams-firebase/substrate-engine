@@ -18,3 +18,5 @@ dist/
 
 # OS noise
 .DS_Store
+# Committed test fixture: a pre-Block-3 work store (tests/fixtures/legacy_work_db)
+!tests/fixtures/legacy_work_db/*.db

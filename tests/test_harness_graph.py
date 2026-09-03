@@ -507,21 +507,29 @@ def test_a_path_into_source_text_is_retried_with_the_shape_named(tool_pack):
     assert "placeholders never reach inside text" in feedback
 
 
-def test_question_of_turn_reads_the_message_pair_layout():
-    """The backfill verb's reading of the checkpoint history, pinned
-    to the pre-Block-4 layout it names: one (user, assistant) pair per
-    turn. Block 4 updates or retires it (its reconciliation list)."""
+def test_question_of_turn_reads_both_history_layouts():
+    """The backfill verb's reading of the checkpoint history: today's
+    records by their own turn number, and the pre-Block-4 (user,
+    assistant) pairs by pair index, through one upgrade."""
     from engine.harness.graph import question_of_turn
+    from engine.harness.state import HistoryTurn
     from engine.ports.types import Message
 
-    history = [
+    legacy = [
         Message(role="user", content="How many invoices?"),
         Message(role="assistant", content="[table: result set]"),
         Message(role="user", content="And per supplier?"),
         Message(role="assistant", content="[refused: no]"),
     ]
-    assert question_of_turn(history, 1) == "How many invoices?"
-    assert question_of_turn(history, 2) == "And per supplier?"
-    assert question_of_turn(history, 3) is None
-    assert question_of_turn(history, 0) is None
+    records = [
+        HistoryTurn(turn=1, question="How many invoices?", answer="[table: result set]", kind="table"),
+        HistoryTurn(turn=3, question="And per supplier?", answer="[refused: no]", kind="refuse"),
+    ]
+    for history in (legacy, records):
+        assert question_of_turn(history, 1) == "How many invoices?"
+        assert question_of_turn(history, 0) is None
+        assert question_of_turn(history, 9) is None
+    assert question_of_turn(legacy, 2) == "And per supplier?"
+    assert question_of_turn(records, 2) is None  # turn 2 raised; no record
+    assert question_of_turn(records, 3) == "And per supplier?"
     assert question_of_turn([], 1) is None

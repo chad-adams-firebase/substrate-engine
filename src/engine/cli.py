@@ -180,9 +180,9 @@ def main(argv: list[str] | None = None) -> int:
         help="Recover the question of every turn_log row written before "
         "the log kept it (Phase 5 Block 3), from the conversation's "
         "checkpoint history, so past conversations read back whole.",
-        epilog="Reads the pre-Block-4 history layout (one user/assistant "
-        "message pair per turn); Block 4's reconciliation list carries "
-        "the update or retirement.",
+        epilog="Reads the conversation's checkpoint history — today's "
+        "turn records, or the user/assistant message pairs a store "
+        "written before Phase 5 Block 4 holds, which upgrade on read.",
     )
     backfill.add_argument("--pack", required=True)
     backfill.add_argument(

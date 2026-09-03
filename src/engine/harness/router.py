@@ -12,21 +12,31 @@ import json
 from typing import Any
 
 from engine.harness.events import EventLog
-from engine.harness.state import ToolSelection
+from engine.harness.state import HistoryTurn, ToolSelection
 from engine.ports.types import LLMResponse, Message
 from engine.tools.envelope import ToolInvocation
 from engine.tools.registry import ToolRegistry, UnknownToolError
 
 
+def expand_history(history: list[HistoryTurn]) -> list[Message]:
+    """The records back into the (user, assistant) pairs the router has
+    always seen — the same messages the pre-Block-4 history held."""
+    messages: list[Message] = []
+    for record in history:
+        messages.append(Message(role="user", content=record.question))
+        messages.append(Message(role="assistant", content=record.answer))
+    return messages
+
+
 def build_router_messages(
     system_prompt: str,
-    history: list[Message],
+    history: list[HistoryTurn],
     question: str,
     scratch: list[Message],
 ) -> list[Message]:
     return [
         Message(role="system", content=system_prompt),
-        *history,
+        *expand_history(history),
         Message(role="user", content=question),
         *scratch,
     ]
