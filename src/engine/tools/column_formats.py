@@ -48,6 +48,7 @@ from engine.tools.sql_select import (
     Column,
     Expr,
     Number,
+    Numeric,
     resolve_select_items,
     source_column,
 )
@@ -147,8 +148,8 @@ def money_class(expr: Expr, money_columns: set[str]) -> bool | None:
     with no meaning such as money plus a count)."""
     if isinstance(expr, Column):
         return expr.column in money_columns
-    if isinstance(expr, Number):
-        return False
+    if isinstance(expr, (Number, Numeric)):
+        return False  # a literal, or a count of seconds/days/units
     if isinstance(expr, Aggregate):
         if expr.func == "count" or expr.arg is None:
             return False

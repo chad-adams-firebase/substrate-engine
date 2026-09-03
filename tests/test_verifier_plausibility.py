@@ -1120,11 +1120,12 @@ def test_a_listing_of_zero_durations_is_not_degenerate():
     assert _verify(listing, []).disposition == "verified"
 
 
-def test_an_epoch_form_reads_its_aggregate_lexically():
-    """The recommended EPOCH-first shape is Opaque to the parse; the
-    original play-session W3 (self-subtraction, exactly 0) would come
-    through it silent. The floor reads the aggregate name from the
-    item's text instead — a warn, so the cost of a false read is a
+def test_the_epoch_form_reads_its_aggregate_structurally_and_a_case_wrapper_lexically():
+    """The recommended EPOCH-first shape is numeric to the parse (guard
+    pass), so the floor sees the AVG in the tree; the original
+    play-session W3 (self-subtraction, exactly 0) comes through it
+    warned. What the parse still declines — a CASE wrapper — is read
+    lexically, a warn either way, so the cost of a false read is a
     badge."""
     epoch = sql_invocation(
         PAIRED.format(select="AVG(EPOCH(h.at - i.received_at)) / 3600.0 AS avg_hours, COUNT(*) AS n"),
@@ -1132,6 +1133,18 @@ def test_an_epoch_form_reads_its_aggregate_lexically():
         column_formats=HOURS,
     )
     result = _verify(epoch, [])
+    assert result.disposition == "unverified"
+    assert {f.check for f in result.plausibility} == {"run_sql.duration_degenerate"}
+
+    wrapped = sql_invocation(
+        PAIRED.format(
+            select="AVG(CASE WHEN h.at > i.received_at THEN EPOCH(h.at - i.received_at) END) "
+            "/ 3600.0 AS avg_hours, COUNT(*) AS n"
+        ),
+        [{"avg_hours": 0.0, "n": 1983}],
+        column_formats=HOURS,
+    )
+    result = _verify(wrapped, [])
     assert result.disposition == "unverified"
     assert {f.check for f in result.plausibility} == {"run_sql.duration_degenerate"}
 
@@ -1151,26 +1164,54 @@ def test_an_average_past_the_data_span_is_refused():
     assert "200 days" in finding.detail and "88.4" in finding.detail
 
 
-def test_a_sum_may_exceed_the_span_and_an_opaque_item_only_warns():
+def test_a_sum_may_exceed_the_span_in_either_shape():
     total = sql_invocation(
         PAIRED.format(select="SUM(h.at - i.received_at) AS total_wait"),
         [{"total_wait": "4800:00:00"}],
         column_formats={"total_wait": ColumnFormat(kind="duration")},
     )
     assert _verify(total, HISTORY_STATS).disposition == "verified"
+    # The gotcha's unit-counting shape, summed: the parse sees the SUM
+    # through DATE_DIFF (guard pass), so the ceiling stands down.
+    units = sql_invocation(
+        PAIRED.format(select="SUM(DATE_DIFF('hour', i.received_at, h.at)) AS total_hours"),
+        [{"total_hours": 4800.0}],
+        column_formats={"total_hours": ColumnFormat(kind="duration", unit="hours")},
+    )
+    assert _verify(units, HISTORY_STATS).disposition == "verified"
 
+
+def test_the_epoch_average_past_the_span_refuses_and_a_case_wrapper_only_warns():
+    """Guard pass: the recommended shape must never be the shape the
+    guards cannot read. AVG(EPOCH(...)) / 3600 past the data's span is
+    an AVG to the parse now and fails; a CASE-wrapped item the parse
+    still declines warns, since it cannot rule out a SUM there."""
     epoch = sql_invocation(
         PAIRED.format(select="AVG(EPOCH(h.at - i.received_at)) / 3600.0 AS avg_hours"),
         [{"avg_hours": 4800.0}],
         column_formats=HOURS,
     )
     result = _verify(epoch, HISTORY_STATS)
+    assert result.disposition == "refused"
+    (finding,) = result.plausibility
+    assert (finding.check, finding.severity) == ("run_sql.duration_span_bound", "fail")
+    assert "cannot classify" not in finding.detail
+    # Without timestamp stats there is no span to bound against.
+    assert _verify(epoch, []).disposition == "verified"
+
+    wrapped = sql_invocation(
+        PAIRED.format(
+            select="AVG(CASE WHEN h.at > i.received_at THEN EPOCH(h.at - i.received_at) END) "
+            "/ 3600.0 AS avg_hours"
+        ),
+        [{"avg_hours": 4800.0}],
+        column_formats=HOURS,
+    )
+    result = _verify(wrapped, HISTORY_STATS)
     assert result.disposition == "unverified"
     (finding,) = result.plausibility
     assert (finding.check, finding.severity) == ("run_sql.duration_span_bound", "warn")
     assert "cannot classify" in finding.detail
-    # Without timestamp stats there is no span to bound against.
-    assert _verify(epoch, []).disposition == "verified"
 
 
 def test_duration_bounds_are_pack_knobs():
@@ -1377,3 +1418,17 @@ def test_the_alias_noun_rule_on_the_last_runs_aliases():
         assert entity_table_for_alias(alias, tables) is None, alias
     # Two tables one noun could spell: no claim to check.
     assert entity_table_for_alias("invoice_count", ["invoice", "invoices"]) is None
+
+
+def test_quoted_identifiers_face_the_same_bounds():
+    """Guard pass: a quoted statement used to slip every regex-read
+    bound — the filtered count here, and by the same route the joined,
+    entity and aggregate bounds."""
+    quoted = sql_invocation(
+        'SELECT COUNT(*) AS "n" FROM "invoices" WHERE "invoices"."status" = \'READY\'',
+        [{"n": 5000}],
+    )
+    result = _verify(quoted, INVOICE_STATS)
+    assert result.disposition == "refused"
+    (finding,) = result.plausibility
+    assert finding.check == "run_sql.filtered_count_bound"

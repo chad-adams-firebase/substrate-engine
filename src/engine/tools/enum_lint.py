@@ -57,7 +57,7 @@ Regex-level on purpose (the house precedent, sql_lint.py). Pure code.
 import re
 
 from engine.substrates.models import DictionaryRow
-from engine.tools.sql_lint import split_scopes, table_aliases
+from engine.tools.sql_lint import split_scopes, table_aliases, unquote_identifiers
 
 _LITERAL = r"'(?:[^']|'')*'"
 _COMPARISON = re.compile(
@@ -104,7 +104,8 @@ def lint_enum_literals(sql: str, dictionary: list[DictionaryRow]) -> str | None:
     # wide and in order of appearance: the unit of judgement is the
     # column, so `x = 'A' OR x = 'B'` reads like `x IN ('A', 'B')`.
     compared: dict[tuple[str, str], list[str]] = {}
-    for match in _COMPARISON.finditer(_LINE_COMMENT.sub("", sql)):
+    scannable = _LINE_COMMENT.sub("", unquote_identifiers(sql))
+    for match in _COMPARISON.finditer(scannable):
         qualifier, column, single, several = match.groups()
         column = column.lower()
         if qualifier:

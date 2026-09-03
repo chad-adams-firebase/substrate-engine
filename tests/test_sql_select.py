@@ -9,6 +9,7 @@ from engine.tools.sql_select import (
     Arith,
     Column,
     Number,
+    Numeric,
     Opaque,
     resolve_select_columns,
     resolve_select_items,
@@ -176,11 +177,66 @@ def test_two_argument_age_is_the_subtraction_it_is():
 
 
 def test_an_opaque_item_keeps_its_source_text_outside_equality():
-    """The Verifier's degenerate-duration warn reads an EPOCH(...) item
-    lexically; the text rides on the Opaque and never affects
-    equality, so `== Opaque()` still means 'the parse declined'."""
+    """The Verifier's degenerate-duration warn reads what the parse
+    still declines — a CASE-wrapped duration — lexically; the text
+    rides on the Opaque and never affects equality, so `== Opaque()`
+    still means 'the parse declined'."""
     items = resolve_select_items(
-        "SELECT AVG(EPOCH(i.scored_at - i.received_at)) / 3600.0 AS avg_hours FROM invoices i"
+        "SELECT AVG(CASE WHEN i.scored_at > i.received_at THEN EPOCH(i.scored_at - i.received_at) END) / 3600.0 AS avg_hours FROM invoices i"
     )
     assert items["avg_hours"] == Opaque()
-    assert items["avg_hours"].text == "AVG(EPOCH(i.scored_at - i.received_at)) / 3600.0"
+    assert items["avg_hours"].text.startswith("AVG(CASE WHEN")
+
+
+def test_numeric_functions_keep_the_aggregate_above_them_visible():
+    """Guard pass: EPOCH/DATE_DIFF/JULIAN are numbers to the parse, so
+    the recommended EPOCH-first shape is no longer the one shape the
+    guards cannot read — AVG(EPOCH(a - b)) / 3600 is an AVG over a
+    number, SUM(DATE_DIFF(...)) a SUM, JULIAN(a) - JULIAN(b) a
+    difference of numbers, and an aggregate inside the call is seen."""
+    items = resolve_select_items(
+        "SELECT AVG(EPOCH(lv.at - en.at)) / 3600.0 AS avg_hours, "
+        "SUM(DATE_DIFF('hour', en.at, lv.at)) AS total_hours, "
+        "JULIAN(lv.at) - JULIAN(en.at) AS days, "
+        "EPOCH(MAX(lv.at) - MIN(en.at)) AS span, "
+        "DATE_PART('epoch', lv.at) AS stamp "
+        "FROM invoice_history en JOIN invoice_history lv ON lv.invoice_id = en.invoice_id"
+    )
+    at = Column("invoice_history", "at")
+    assert items["avg_hours"] == Arith(
+        "/", Aggregate("avg", Numeric("epoch", (Arith("-", at, at),))), Number()
+    )
+    assert items["total_hours"] == Aggregate("sum", Numeric("date_diff", (Opaque(), at, at)))
+    assert items["days"] == Arith("-", Numeric("julian", (at,)), Numeric("julian", (at,)))
+    assert items["span"] == Numeric(
+        "epoch", (Arith("-", Aggregate("max", at), Aggregate("min", at)),)
+    )
+    assert items["stamp"] == Numeric("date_part", (Opaque(), at))
+    # A number of units inherits no column's format: the alias decides.
+    assert source_column(items["avg_hours"]) is None
+
+
+def test_extract_stays_outside_the_parse():
+    """EXTRACT(EPOCH FROM ...) carries a FROM the select-list scan reads
+    as the statement's own; the item never resolves. Recorded in the
+    guard pass as a residual, not built — this pins the known shape."""
+    items = resolve_select_items(
+        "SELECT AVG(EXTRACT(EPOCH FROM (i.scored_at - i.received_at))) / 60 AS minutes "
+        "FROM invoices i"
+    )
+    assert "minutes" not in items
+
+
+def test_quoted_identifiers_resolve_like_bare_ones():
+    """Guard pass: a quoted statement used to bypass the whole parse
+    (and every lint and bound built on it)."""
+    bare = resolve_select_items(
+        "SELECT SUM(i.invoice_total) AS total, i.status, COUNT(*) AS n "
+        "FROM invoices i WHERE i.status = 'READY'"
+    )
+    quoted = resolve_select_items(
+        'SELECT SUM("i"."invoice_total") AS "total", "i"."status", COUNT(*) AS "n" '
+        'FROM "invoices" AS "i" WHERE "i"."status" = \'READY\''
+    )
+    assert quoted == bare
+    assert bare["total"] == Aggregate("sum", Column("invoices", "invoice_total"))

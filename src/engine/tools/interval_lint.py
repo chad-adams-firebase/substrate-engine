@@ -15,13 +15,17 @@ means the difference of two timestamp columns (resolved through CTEs
 and derived tables by the select-list parse — W3's subtraction sat in
 an inner scope with the scaling outside), or an aggregate of one;
 AGE(a, b) parses as a - b. Silent for the correct shapes: EPOCH(a - b)
-scaled (an unknown function makes the item Opaque, and Opaque carries
-no type), DATE_DIFF('hour', ...), JULIAN(a) - JULIAN(b), arithmetic
-over numeric columns, and AVG(a - b) unscaled (an interval renders as
-a clock string and humanizes correctly). Outside the parse, and
-deliberately so: NOW() - col and one-argument AGE (wall-clock SQL the
-coverage line already steers away from), and a literal added to an
-interval (a DuckDB type error the repair loop sees anyway).
+scaled (EPOCH is numeric-valued to the parse since the guard pass, so
+the scaling is over a number), DATE_DIFF('hour', ...), JULIAN(a) -
+JULIAN(b), arithmetic over numeric columns, and AVG(a - b) unscaled
+(an interval renders as a clock string and humanizes correctly). The
+scaling INSIDE a numeric function — EPOCH((a - b) / 3600) — is the
+same defect and is challenged, since the arguments stay visible.
+Outside the parse, and deliberately so: NOW() - col and one-argument
+AGE (wall-clock SQL the coverage line already steers away from),
+EXTRACT(EPOCH FROM ...) (its inner FROM ends the select-list scan),
+and a literal added to an interval (a DuckDB type error the repair
+loop sees anyway).
 
 Like the fan-out and enum lints, its word is a repair round with a
 license to resend unchanged; run_sql records an overridden challenge
@@ -41,6 +45,7 @@ from engine.tools.sql_select import (
     Column,
     Expr,
     Number,
+    Numeric,
     resolve_select_items,
 )
 
@@ -130,6 +135,8 @@ def _scales_an_interval(expr: Expr, typed: _TimestampColumns) -> bool:
         )
     if isinstance(expr, Aggregate) and expr.arg is not None:
         return _scales_an_interval(expr.arg, typed)
+    if isinstance(expr, Numeric):
+        return any(_scales_an_interval(arg, typed) for arg in expr.args)
     return False
 
 

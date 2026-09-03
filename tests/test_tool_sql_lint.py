@@ -10,7 +10,7 @@ from engine.substrates.models import (
     JoinPath,
     JoinStep,
 )
-from engine.tools.sql_lint import lint_fan_out, split_scopes
+from engine.tools.sql_lint import lint_fan_out, split_scopes, table_aliases
 from tests.verifier_support import MACHINE
 
 
@@ -441,3 +441,41 @@ def test_the_exists_indicator_never_meets_the_lint_and_the_left_join_one_does():
     assert lint_fan_out(S2_EXISTS_SUM, DICTIONARY, MAP) is None
     reason = lint_fan_out(S2_LEFT_JOIN_INDICATOR, DICTIONARY, MAP)
     assert reason is not None and reason.startswith("Fan-out check:")
+
+
+MT2_FANOUT_QUOTED = """
+SELECT COUNT(*) AS "critical_compliance_findings"
+FROM "findings"
+JOIN "compliance_reports" ON "findings"."invoice_id" = "compliance_reports"."invoice_id"
+JOIN "compliance_rules" ON "compliance_reports"."id" = "compliance_rules"."compliance_report_id"
+WHERE "compliance_rules"."severity" = 'CRITICAL'
+"""
+
+
+def test_quoted_identifiers_trip_the_lint_like_bare_ones():
+    """Guard pass: every lint reads identifiers with a bare-name regex,
+    so a quoted statement bypassed all of them; now it reads the same."""
+    assert lint_fan_out(MT2_FANOUT_QUOTED, DICTIONARY, MAP) == lint_fan_out(
+        MT2_FANOUT, DICTIONARY, MAP
+    )
+
+
+def test_an_unaliased_table_before_join_still_registers():
+    """FROM findings JOIN compliance_reports ON …: the alias scan read
+    JOIN as findings' alias and never saw compliance_reports (a latent
+    hole the guard pass's principle test surfaced; no live statement
+    hit it, the pinned model aliases every table)."""
+    (scope,) = split_scopes(MT2_FANOUT)
+    assert table_aliases(scope) == {
+        "findings": "findings",
+        "compliance_reports": "compliance_reports",
+        "compliance_rules": "compliance_rules",
+    }
+    assert table_aliases("FROM invoices JOIN findings ON findings.invoice_id = invoices.id") == {
+        "invoices": "invoices",
+        "findings": "findings",
+    }
+    # An honest alias, with or without AS, still registers.
+    assert table_aliases("FROM invoices AS i JOIN findings f ON f.invoice_id = i.id") == {
+        "invoices": "invoices", "i": "invoices", "findings": "findings", "f": "findings",
+    }

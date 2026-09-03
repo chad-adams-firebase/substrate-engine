@@ -180,3 +180,12 @@ def test_literals_in_comments_and_escaped_quotes_are_handled():
 def test_a_dictionary_without_enums_means_no_lint():
     plain = [_row("invoices", "status")]
     assert lint_enum_literals("SELECT 1 AS x FROM invoices WHERE status = 'Z'", plain) is None
+
+
+def test_quoted_identifiers_are_read_like_bare_ones():
+    """Guard pass: the quoted form of R-A used to pass the lint entirely."""
+    quoted = R_A.replace("FROM invoice_history ih", 'FROM "invoice_history" AS "ih"').replace(
+        "ih.to_status", '"ih"."to_status"'
+    )
+    assert '"ih"."to_status"' in quoted
+    assert lint_enum_literals(quoted, DICTIONARY) == lint_enum_literals(R_A, DICTIONARY)

@@ -82,6 +82,7 @@ from engine.tools.envelope import (
     ToolInvocation,
 )
 from engine.tools.interval_lint import AGGREGATE_WORD
+from engine.tools.sql_lint import unquote_identifiers
 from engine.verifier.checks.base import (
     PlausibilityContext,
     SubstrateCheck,
@@ -91,6 +92,7 @@ from engine.tools.sql_select import (
     Aggregate,
     Arith,
     Expr,
+    Numeric,
     Opaque,
     ResolvedColumn,
     resolve_select_columns,
@@ -233,10 +235,12 @@ def _timestamp_span_seconds(
 
 
 def _aggregate_names(expr: Expr | None) -> set[str]:
-    """The aggregate functions an item's tree applies. An Opaque item
-    (an EPOCH(...) form the parse declines) is read lexically from its
-    source text — for the degenerate-duration warn only, where a false
-    positive costs a badge and a false negative is a verified zero."""
+    """The aggregate functions an item's tree applies. A Numeric call
+    (EPOCH, DATE_DIFF, JULIAN — the guard pass) is read through to its
+    arguments. An Opaque item (a form the parse declines, such as a
+    CASE wrapper) is read lexically from its source text — for the
+    degenerate-duration warn only, where a false positive costs a badge
+    and a false negative is a verified zero."""
     if expr is None:
         return set()
     if isinstance(expr, Opaque):
@@ -248,6 +252,11 @@ def _aggregate_names(expr: Expr | None) -> set[str]:
         return names
     if isinstance(expr, Arith):
         return _aggregate_names(expr.left) | _aggregate_names(expr.right)
+    if isinstance(expr, Numeric):
+        names: set[str] = set()
+        for arg in expr.args:
+            names |= _aggregate_names(arg)
+        return names
     return set()
 
 
@@ -359,7 +368,10 @@ class RunSqlCheck(SubstrateCheck):
         assert isinstance(output, RunSqlOutput)
         settings = ctx.settings
         table = output.table
-        sql = output.sql
+        # Read with identifier quotes stripped (guard pass): every bound
+        # below is a bare-name regex or parse, and a quoted statement
+        # used to pass all of them. The executed SQL itself is untouched.
+        sql = unquote_identifiers(output.sql)
         queried = list(dict.fromkeys(t.lower() for t in _FROM_JOIN.findall(sql)))
         stats_by_table: dict[str, list[StatsRow]] = {}
         for row in ctx.stats:

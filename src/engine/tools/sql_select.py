@@ -21,7 +21,13 @@ One parse, two views (the coverage pass's resolver unification):
   column behind it (the session's `original_cost` was
   `l.extended_price` inside a CTE). Arithmetic over money is money;
   CASE, window functions and unknown functions are Opaque and leave
-  the alias to be judged by its spelling.
+  the alias to be judged by its spelling. Known numeric-valued
+  functions — EPOCH, DATE_DIFF, JULIAN and their spellings — parse as
+  Numeric with their arguments visible (the guard pass), so the
+  aggregate above the gotcha's own recommended shape,
+  AVG(EPOCH(a - b)) / 3600, is read structurally rather than lexically.
+  EXTRACT(x FROM y) stays outside the parse: its inner FROM ends the
+  select-list scan early (recorded, not built).
 
 Both views come from the same tokenizer and the same tree, so on any
 alias both act on they name the same source column. Regex- and
@@ -36,7 +42,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal, Union
 
-from engine.tools.sql_lint import select_list_of, split_scopes, table_aliases
+from engine.tools.sql_lint import (
+    select_list_of,
+    split_scopes,
+    table_aliases,
+    unquote_identifiers,
+)
 
 # --- The Verifier's view ------------------------------------------------
 
@@ -159,22 +170,45 @@ class Arith:
 
 
 @dataclass(frozen=True)
+class Numeric:
+    """A known numeric-valued function over its arguments: EPOCH of an
+    interval is seconds, DATE_DIFF('unit', a, b) is units, JULIAN(ts)
+    is days. The value is a number — no interval for the interval lint
+    to see scaled, no money for the display resolver — and the
+    arguments stay visible, so an aggregate above the call (the
+    duration ceiling's SUM exemption and AVG refusal) or below it
+    (EPOCH(MAX(a) - MIN(b)) is an aggregate's worth of seconds) is read
+    from the tree. An argument the grammar cannot read, such as the
+    blanked 'hour' literal, is Opaque in place."""
+
+    func: str
+    args: tuple["Expr", ...]
+
+
+@dataclass(frozen=True)
 class Opaque:
     """CASE, a window function, a subquery, a string, an unknown
     function: the parse declines to guess. `text` keeps the item's
     source for a consumer that falls back to a lexical read (the
     Verifier's degenerate-duration warn looks for an aggregate name in
-    an EPOCH(...) item, the duration pass); it never takes part in
-    equality — an Opaque is an Opaque."""
+    a CASE-wrapped duration, the duration pass); it never takes part
+    in equality — an Opaque is an Opaque."""
 
     text: str = field(default="", compare=False)
 
 
-Expr = Union[Column, Aggregate, Number, Arith, Opaque]
+Expr = Union[Column, Aggregate, Number, Arith, Numeric, Opaque]
 
 # Functions whose value has the shape of their first argument.
 _TRANSPARENT = {"coalesce", "round", "abs", "cast", "ifnull", "nullif"}
 _AGGREGATES = {"sum", "avg", "min", "max", "count"}
+# Functions whose value is a number whatever their arguments are — the
+# unit shapes the time_in_status gotcha recommends, in DuckDB's and
+# SQLite's spellings.
+_NUMERIC_FUNCTIONS = {
+    "epoch", "epoch_ms", "date_diff", "datediff", "date_part", "datepart",
+    "julian", "julianday",
+}
 # AGE(a, b) is a - b: an INTERVAL over two timestamps, so the interval
 # lint sees it as the subtraction it is. One-argument AGE (against the
 # wall clock) stays Opaque.
@@ -421,6 +455,16 @@ class _Parser:
             right = self.expr()
             self.expect(")")
             return Arith("-", left, right)
+        if name in _NUMERIC_FUNCTIONS:
+            args: list[Expr] = []
+            while self.peek() != ("op", ")"):
+                args.append(self.argument())
+                if self.peek() == ("op", ","):
+                    self.take()
+                    continue
+                break
+            self.expect(")")
+            return Numeric(name, tuple(args))
         if name in _TRANSPARENT:
             first = self.expr()
             depth = 0
@@ -435,6 +479,33 @@ class _Parser:
             self.expect(")")
             return first
         raise _Bail
+
+    def argument(self) -> Expr:
+        """One argument of a numeric function: an expression, or Opaque
+        when the grammar cannot read it (a blanked string literal, a
+        keyword) — skipped to the next top-level comma or closing paren
+        so the call's other arguments still parse."""
+        start = self.pos
+        try:
+            expr = self.expr()
+        except _Bail:
+            self.pos = start
+        else:
+            if self.peek() in (("op", ","), ("op", ")")):
+                return expr
+            self.pos = start
+        depth = 0
+        while (token := self.peek()) is not None:
+            if token == ("op", "("):
+                depth += 1
+            elif token == ("op", ")"):
+                if depth == 0:
+                    break
+                depth -= 1
+            elif token == ("op", ",") and depth == 0:
+                break
+            self.take()
+        return Opaque()
 
     def column(self, name: str) -> Expr:
         qualifier, _, column = name.rpartition(".")
@@ -494,7 +565,7 @@ def resolve_select_items(sql: str) -> dict[str, Expr]:
     """Result-column alias -> expression tree for the statement's outer
     select list, with CTE and derived-table columns resolved through
     their own select items. Aliases keep their spelling."""
-    cleaned = _LINE_COMMENT.sub("", sql)
+    cleaned = _LINE_COMMENT.sub("", unquote_identifiers(sql))
     cleaned = re.sub(r"'(?:[^']|'')*'", "''", cleaned)
     return _parse_query(cleaned, {}).items
 

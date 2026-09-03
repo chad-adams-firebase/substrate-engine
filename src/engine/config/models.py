@@ -300,8 +300,9 @@ class PlausibilitySettings(BaseModel):
     # saturated rates: a tiny population can be instant. Which columns
     # are durations, and in what unit, is the table's own ColumnFormat
     # hint (display.duration) — the same resolution every renderer
-    # uses. When the select-list parse cannot classify the item (an
-    # EPOCH(...) form), the aggregate is read lexically: a false
+    # uses. When the select-list parse cannot classify the item (a
+    # CASE wrapper; EPOCH/DATE_DIFF/JULIAN forms are classified since
+    # the guard pass), the aggregate is read lexically: a false
     # positive costs a badge, a false negative is the verified zero
     # the play session already met once.
     challenge_degenerate_durations: bool = True

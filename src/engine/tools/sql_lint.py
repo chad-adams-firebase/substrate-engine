@@ -63,10 +63,18 @@ _KEYWORDS = {
     "cross", "group", "order", "limit", "having", "union", "qualify",
     "using", "as", "select", "with", "natural", "lateral",
 }
+# A keyword after a table name is not its alias: without the lookahead,
+# `FROM findings JOIN compliance_reports` read JOIN as findings' alias
+# and the scan never saw compliance_reports (guard pass; latent — the
+# pinned model aliases every table, so no live statement hit it).
 _TABLE_REF = re.compile(
-    r"\b(from|join)\s+([A-Za-z_]\w*)(?:\s+(?:as\s+)?([A-Za-z_]\w*))?",
+    r"\b(from|join)\s+([A-Za-z_]\w*)"
+    rf"(?:\s+(?:as\s+)?(?!(?:{'|'.join(sorted(_KEYWORDS))})\b)([A-Za-z_]\w*))?",
     re.IGNORECASE,
 )
+# A double-quoted identifier, or a single-quoted literal to step over
+# so a string containing "quotes" is never edited.
+_QUOTED_OR_LITERAL = re.compile(r"'(?:[^']|'')*'|\"([A-Za-z_]\w*)\"")
 _JOIN_ON = re.compile(
     r"\bjoin\s+([A-Za-z_]\w*)(?:\s+(?:as\s+)?([A-Za-z_]\w*))?\s+on\s+(.*?)"
     r"(?=\b(?:left|right|inner|outer|full|cross|join|where|group|order"
@@ -122,8 +130,23 @@ def _derives_a_key(condition: str) -> bool:
     )
 
 
+def unquote_identifiers(sql: str) -> str:
+    """`"invoices"."status"` read as `invoices.status` — for analysis
+    only. Every lint and parse in this package reads identifiers with a
+    bare-name regex, so a quoted statement bypassed all of them (guard
+    pass; 0 of 202 live statements quoted under the current pin). The
+    executed statement is never rewritten: a quoted reserved word must
+    stay quoted for the database."""
+    return _QUOTED_OR_LITERAL.sub(
+        lambda match: match.group(0) if match.group(1) is None else match.group(1),
+        sql,
+    )
+
+
 def _clean(sql: str) -> str:
-    return _STRING_LITERAL.sub("''", _LINE_COMMENT.sub("", sql))
+    return _STRING_LITERAL.sub(
+        "''", _LINE_COMMENT.sub("", unquote_identifiers(sql))
+    )
 
 
 def original_fragment(sql: str, cleaned: str) -> str:

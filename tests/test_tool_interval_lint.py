@@ -57,6 +57,10 @@ def test_every_scaled_interval_shape_is_challenged():
         "SELECT 24 * (lv.at - en.at) AS hours" + PAIR,
         "SELECT AVG((lv.at - en.at) / 3600) AS avg_hours" + PAIR,
         "SELECT AGE(lv.at, en.at) / 3600 AS hours" + PAIR,
+        # The scaling inside EPOCH is the same defect (guard pass: the
+        # numeric functions keep their arguments visible).
+        "SELECT EPOCH((lv.at - en.at) / 3600) AS bogus" + PAIR,
+        "SELECT AVG(EPOCH((lv.at - en.at) / 86400)) AS bogus" + PAIR,
         "SELECT MAX(lv.at - en.at) / 86400 / 7 AS weeks" + PAIR,
         # The scaling inside the CTE, the aggregate outside.
         "WITH g AS (SELECT (lv.at - en.at) / 3600 AS hours" + PAIR + ") "

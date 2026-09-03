@@ -206,8 +206,10 @@ verifier:
     # duration longer than the queried tables' timestamp span
     # (invoice_history.at runs 88 days in this world) cannot be an
     # average, a minimum, a maximum or one row's elapsed time — refuses.
-    # A SUM over a population is exempt; an EPOCH-shaped item the parse
-    # cannot classify warns instead.
+    # A SUM over a population is exempt; an item the parse cannot
+    # classify (a CASE wrapper, EXTRACT(... FROM ...)) warns instead.
+    # The gotcha's own EPOCH/DATE_DIFF shapes are classified since the
+    # guard pass, so AVG(EPOCH(...)) past the span refuses like any AVG.
     enforce_duration_span_bound: true
 
 ui:
