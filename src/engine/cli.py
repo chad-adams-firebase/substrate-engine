@@ -247,6 +247,45 @@ def main(argv: list[str] | None = None) -> int:
         "expectations (bank-rot detector); needs no report.",
     )
 
+    eval_exposure = eval_sub.add_parser(
+        "exposure",
+        help="Replay today's guards (the Verifier's run_sql plausibility "
+        "suite and the three lints) over every executed statement in a "
+        "committed report, fully offline; list every hit with its "
+        "attribution.",
+        epilog="The guard pass's rule: a new bound or lint is run here "
+        "against the latest committed report before it lands, and the "
+        "change states its hit count and every hit's attribution.",
+    )
+    eval_exposure.add_argument(
+        "--bank", required=True, help="Bank root (e.g. evals/invoiceguard)."
+    )
+    eval_exposure.add_argument(
+        "--report", required=True, type=_cwd_path, help="Run report JSONL."
+    )
+    eval_exposure.add_argument(
+        "--pack",
+        help="Pack directory; defaults to the pack path in the bank's "
+        "eval.yaml.",
+    )
+    eval_exposure.add_argument(
+        "--check",
+        action="append",
+        dest="checks",
+        metavar="NAME",
+        help="Only this check (repeatable): run_sql.<finding> or "
+        "lint.fan_out / lint.enum_literal / lint.interval_arithmetic. "
+        "A requested check with no hits is listed at zero.",
+    )
+    eval_exposure.add_argument(
+        "--out", help="Also write the rendered text to this file."
+    )
+    eval_exposure.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the ExposureReport as JSON instead of rendered text.",
+    )
+
     args = parser.parse_args(argv)
     try:
         if args.command == "info":
@@ -276,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
             return _eval_run(args)
         if args.command == "eval" and args.eval_command == "grade":
             return _eval_grade(args)
+        if args.command == "eval" and args.eval_command == "exposure":
+            return _eval_exposure(args)
     except (PackLoadError, UnknownAdapterError, AdapterBuildError, CliError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -609,6 +650,60 @@ def _eval_grade(args) -> int:
         return result.exit_code()
     except (BankLoadError, RunnerError, GradeError, WorldError) as exc:
         raise CliError(str(exc))
+
+
+def _eval_exposure(args) -> int:
+    import json
+
+    from engine.eval.bank import BankLoadError, load_bank
+    from engine.eval.exposure import (
+        ExposureError,
+        check_world,
+        expose,
+        render_exposure,
+    )
+    from engine.eval.grade import pack_world_manifests
+    from engine.eval.runner import RunnerError, load_report
+    from engine.ports.substrate_store import SubstrateStoreError
+    from engine.runtime.container import AdapterBuildError, build_port
+
+    try:
+        bank = load_bank(args.bank)
+        pack_dir = (
+            Path(args.pack)
+            if args.pack
+            else (bank.root / bank.config.pack).resolve()
+        )
+        pack = load_pack(pack_dir)
+        store = build_port(pack, PortName.SUBSTRATE_STORE)
+        header, records = load_report(Path(args.report))
+        check_world(header, pack_world_manifests(pack_dir))
+        result = expose(
+            records,
+            stats=store.stats(),
+            dictionary=store.dictionary(),
+            dictionary_map=store.dictionary_map(),
+            settings=pack.config.verifier.plausibility,
+            checks=args.checks,
+            report_path=Path(args.report).name,
+        )
+    except (
+        BankLoadError,
+        RunnerError,
+        ExposureError,
+        AdapterBuildError,
+        SubstrateStoreError,
+        PackLoadError,
+    ) as exc:
+        raise CliError(str(exc))
+    if args.json:
+        print(json.dumps(result.model_dump(mode="json"), indent=2))
+    else:
+        text = render_exposure(result)
+        print(text, end="")
+        if args.out is not None:
+            Path(args.out).write_text(text, encoding="utf-8", newline="\n")
+    return 0
 
 
 def _build_session(pack_dir: str, listener):
