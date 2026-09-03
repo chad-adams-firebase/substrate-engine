@@ -30,8 +30,8 @@ class _StubSession:
         self._events = events
         self.asked = []
 
-    def ask(self, question, conversation_id=None, *, listener=None):
-        self.asked.append((question, conversation_id))
+    def ask(self, question, conversation_id=None, *, workspace_id=None, listener=None):
+        self.asked.append((question, conversation_id, workspace_id))
         for index in range(self._events):
             listener(
                 StatusEvent(
@@ -47,14 +47,25 @@ class _StubSession:
 
 
 class _StubStore:
-    def __init__(self, known=(7,)):
+    def __init__(self, known=(7,), workspaces=None):
         self._known = set(known)
+        self._workspaces = workspaces or {}
 
     def ensure_schema(self):
         pass
 
     def get_conversation(self, conversation_id):
         return object() if conversation_id in self._known else None
+
+    def get_workspace(self, workspace_id):
+        from datetime import UTC, datetime
+
+        from engine.ports.types import Workspace
+
+        owner = self._workspaces.get(workspace_id)
+        if owner is None:
+            return None
+        return Workspace(id=workspace_id, owner=owner, name="w", created_at=datetime.now(UTC))
 
 
 class _StubIdentity:
@@ -120,7 +131,7 @@ def test_answer_streams_status_frames_then_one_result():
     assert payload["exit_code"] == 0
     assert payload["result"]["outcome"]["body"]["text"] == "146 of 161."
     assert payload["result"]["conversation_id"] == 7
-    assert session.asked == [("how many?", 7)]
+    assert session.asked == [("how many?", 7, None)]
 
 
 def test_table_result_carries_money_hints_for_the_browser():
@@ -179,6 +190,34 @@ def test_unknown_conversation_is_404_before_any_stream():
     assert response.status_code == 404
     assert response.get_json() == {"message": "No conversation 999."}
     assert session.asked == []
+
+
+def test_a_new_conversation_goes_to_the_named_workspace_or_404():
+    """workspace_id places a new conversation; an unknown one, or one
+    another user owns, is 404 before any stream; with a conversation_id
+    it is ignored (the conversation already has a workspace)."""
+    outcome = RefuseOutcome(reason="r")
+    store = _StubStore(workspaces={3: "dev", 4: "someone-else"})
+    session = _StubSession(_result(outcome))
+    client = _app(session, store=store).test_client()
+
+    ok = client.post("/api/ask", json={"question": "q", "workspace_id": 3})
+    assert ok.status_code == 200 and session.asked == [("q", None, 3)]
+
+    for missing in (99, 4):
+        response = client.post("/api/ask", json={"question": "q", "workspace_id": missing})
+        assert response.status_code == 404
+        assert response.get_json() == {"message": f"No workspace {missing}."}
+    assert len(session.asked) == 1
+
+    continued = client.post(
+        "/api/ask", json={"question": "q", "conversation_id": 7, "workspace_id": 99}
+    )
+    assert continued.status_code == 200
+    assert session.asked[-1] == ("q", 7, None)
+
+    bad = client.post("/api/ask", json={"question": "q", "workspace_id": "3"})
+    assert bad.status_code == 400
 
 
 def test_busy_session_is_409():

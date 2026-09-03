@@ -32,9 +32,14 @@ def config():
 def ask():
     """One turn as an SSE stream. Everything decidable before the
     stream starts is decided on the request thread with a plain JSON
-    status: a bad body (400), an unknown conversation (404), a turn
-    already running (409). Then the worker runs session.ask() —
-    the Verifier's path, nothing else — and the generator relays."""
+    status: a bad body (400), an unknown conversation or workspace
+    (404), a turn already running (409). Then the worker runs
+    session.ask() — the Verifier's path, nothing else — and the
+    generator relays. `workspace_id` places a NEW conversation
+    (Block 3: the sidebar's current workspace); with a conversation_id
+    it is ignored. Neither creates a row before the turn runs, and a
+    turn that raises takes its new conversation back out (AskSession),
+    so no failure leaves an orphan."""
     body = request.get_json(silent=True) or {}
     question = body.get("question")
     if not isinstance(question, str) or not question.strip():
@@ -42,18 +47,30 @@ def ask():
     conversation_id = body.get("conversation_id")
     if conversation_id is not None and not isinstance(conversation_id, int):
         return jsonify({"message": "conversation_id must be an integer"}), 400
+    workspace_id = body.get("workspace_id")
+    if workspace_id is not None and not isinstance(workspace_id, int):
+        return jsonify({"message": "workspace_id must be an integer"}), 400
 
     work_store = current_app.config["ENGINE_WORK_STORE"]
+    identity = current_app.config["ENGINE_IDENTITY"]
     session = current_app.config["ENGINE_SESSION"]
+    work_store.ensure_schema()
     if conversation_id is not None:
-        work_store.ensure_schema()
         if work_store.get_conversation(conversation_id) is None:
             return jsonify({"message": f"No conversation {conversation_id}."}), 404
+    elif workspace_id is not None:
+        workspace = work_store.get_workspace(workspace_id)
+        if workspace is None or workspace.owner != identity.current_user().username:
+            return jsonify({"message": f"No workspace {workspace_id}."}), 404
     if session.busy:
         return jsonify({"message": "a turn is already running"}), 409
 
     keepalive = current_app.config["ENGINE_SSE_KEEPALIVE_SECONDS"]
     stream = run_turn_stream(
-        session, question.strip(), conversation_id, keepalive_seconds=keepalive
+        session,
+        question.strip(),
+        conversation_id,
+        workspace_id=None if conversation_id is not None else workspace_id,
+        keepalive_seconds=keepalive,
     )
     return Response(stream, mimetype="text/event-stream", headers=SSE_HEADERS)

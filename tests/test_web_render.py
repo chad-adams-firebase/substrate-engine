@@ -3,6 +3,9 @@ rendered server-side so tests can read what the browser draws. The
 browser JS is not unit-tested; this pins the card vocabulary the two
 share and the rule that engineer detail never reaches a card."""
 
+from datetime import UTC, datetime
+
+from engine.harness.events import StatusEvent
 from engine.harness.outcomes import (
     AnswerOutcome,
     ClarifyOutcome,
@@ -10,15 +13,23 @@ from engine.harness.outcomes import (
     MarkdownAnswer,
     RefuseOutcome,
     TableAnswer,
+    dumps_outcome,
 )
+from engine.harness.render import NO_ROWS
+from engine.ports.types import Conversation, TurnLogEntry
 from engine.tools.envelope import ColumnFormat, Table
 from engine.web.app import STATIC_DIR
-from engine.harness.render import NO_ROWS
 from engine.web.render import (
     CARD_TITLES,
+    CHIP_LABELS,
+    OUTCOME_NOT_RECORDED,
+    QUESTION_NOT_RECORDED,
     UNVERIFIED_BADGE,
     card_for,
+    chip_label,
     render_outcome_text,
+    render_turns_text,
+    tool_tally,
 )
 
 
@@ -109,3 +120,117 @@ def test_an_empty_table_outcome_reads_no_rows_matched_on_both_surfaces():
     ]
     script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert f'const NO_ROWS = "{NO_ROWS}"' in script
+
+
+# --- the chip and the turns text form (Block 3) ---------------------------
+
+
+def _events(*steps, start="2026-09-02T10:00:00+00:00", seconds_apart=1):
+    """(node, phase, detail) triples, one second apart by default."""
+    base = datetime.fromisoformat(start)
+    return [
+        StatusEvent(
+            node=node,
+            phase=phase,
+            detail=detail,
+            at=base.replace(second=(base.second + index * seconds_apart) % 60),
+        )
+        for index, (node, phase, detail) in enumerate(steps)
+    ]
+
+
+VERIFIED = AnswerOutcome(body=MarkdownAnswer(text="146."), verification="verified")
+
+
+def test_a_bounced_and_retried_call_is_one_tool_and_one_retry():
+    """The play-session finding: run_sql bounced the SQL-shaped question
+    and the router resent it in English — two invocations, one tool."""
+    events = _events(
+        ("route", "start", "Consulting router (step 1)…"),
+        ("route", "finish", "decision: tools"),
+        ("tool:run_sql", "start", "Running run_sql…"),
+        ("tool:run_sql", "finish", "error: run_sql writes its own SQL — send the English question"),
+        ("route", "finish", "decision: tools"),
+        ("tool:run_sql", "start", "Running run_sql…"),
+        ("tool:run_sql", "finish", "evidence[1] ok"),
+        ("finalize", "finish", "answer"),
+    )
+    tally = tool_tally(events)
+    assert (tally.ok, tally.retries, tally.failed) == (1, 1, 0)
+    assert chip_label(VERIFIED, events) == "✓ Verified · 1 tool · 1 retry · 7s"
+
+
+def test_two_clean_calls_are_two_tools_and_an_unretried_error_is_failed():
+    events = _events(
+        ("tool:app_primer", "finish", "evidence[0] ok"),
+        ("tool:run_sql", "finish", "evidence[1] ok"),
+        ("tool:check_execution", "finish", "error: unknown component"),
+        ("tool:nonesuch", "finish", "unknown tool — skipped"),
+        ("finalize", "finish", "refuse"),
+    )
+    assert tool_tally(events).model_dump() == {"ok": 2, "retries": 0, "failed": 1}
+    refused = RefuseOutcome(reason="r")
+    assert chip_label(refused, events) == "⊘ Refused · 2 tools · 1 failed · 4s"
+    assert chip_label(refused, []) == "⊘ Refused · 0 tools"
+    unverified = AnswerOutcome(body=MarkdownAnswer(text="x"), verification="unverified")
+    assert chip_label(unverified, events[:1]) == "⚠ Unverified · 1 tool"
+
+
+def test_turns_text_form_renders_every_turn_and_says_when_a_row_predates_the_columns():
+    conversation = Conversation(
+        id=3, workspace_id=1, title="flag rates", created_at=datetime.now(UTC)
+    )
+    events = _events(
+        ("route", "start", "…"), ("tool:run_sql", "finish", "evidence[0] ok"),
+        ("finalize", "finish", "answer"),
+    )
+    table = AnswerOutcome(
+        body=TableAnswer(
+            table=Table(
+                columns=["n", "total"],
+                rows=[{"n": 78, "total": 8308.92139}],
+                total_row_count=1,
+                column_formats={"total": ColumnFormat(kind="money", symbol="$")},
+            ),
+            caption="SELECT ...",
+        ),
+        verification="verified",
+    )
+    entries = [
+        TurnLogEntry(
+            conversation_id=3, turn=1, actor="dev", action="ask",
+            question="How many are open?", outcome=dumps_outcome(table),
+            status_events="[" + ",".join(e.model_dump_json() for e in events) + "]",
+            created_at=datetime.now(UTC),
+        ),
+        TurnLogEntry(
+            conversation_id=3, turn=2, actor="dev", action="ask",
+            question="Deploy it.", outcome=dumps_outcome(RefuseOutcome(reason="no", detail="diag")),
+            status_events="[]", created_at=datetime.now(UTC),
+        ),
+        TurnLogEntry(  # written before Block 3: no question, no outcome
+            conversation_id=3, turn=3, actor="dev", action="ask",
+            created_at=datetime.now(UTC),
+        ),
+    ]
+    text = render_turns_text(conversation, entries)
+    assert text == (
+        "conversation 3 · flag rates\n"
+        "\n"
+        "turn 1 · ✓ Verified · 1 tool · 2s\n"
+        "> How many are open?\n"
+        "n   total    \n"
+        "--  ---------\n"
+        "78  $8,308.92\n"
+        "(SELECT ...)\n"
+        "\n"
+        "turn 2 · ⊘ Refused · 0 tools\n"
+        "> Deploy it.\n"
+        "This can't be answered\n"
+        "Why: no\n"
+        "\n"
+        "turn 3\n"
+        f"> {QUESTION_NOT_RECORDED}\n"
+        f"{OUTCOME_NOT_RECORDED}\n"
+    )
+    assert "diag" not in text  # the diagnosis never reaches a text card either

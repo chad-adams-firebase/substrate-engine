@@ -7,6 +7,7 @@ from flask import Flask, send_from_directory
 
 from engine.config.models import UiSettings
 from engine.web.routes_ask import bp as ask_bp
+from engine.web.routes_work import bp as work_bp
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -34,6 +35,7 @@ def create_app(
         ENGINE_SSE_KEEPALIVE_SECONDS=sse_keepalive_seconds,
     )
     app.register_blueprint(ask_bp)
+    app.register_blueprint(work_bp)
 
     @app.get("/")
     def index():

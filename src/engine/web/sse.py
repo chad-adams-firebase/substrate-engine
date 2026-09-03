@@ -50,6 +50,7 @@ def run_turn_stream(
     question: str,
     conversation_id: int | None,
     *,
+    workspace_id: int | None = None,
     keepalive_seconds: float = 15.0,
 ) -> Iterator[str]:
     """Run one turn on a worker thread and yield its SSE frames.
@@ -67,7 +68,12 @@ def run_turn_stream(
 
     def work() -> None:
         try:
-            result = session.ask(question, conversation_id, listener=listener)
+            result = session.ask(
+                question,
+                conversation_id,
+                workspace_id=workspace_id,
+                listener=listener,
+            )
         except Exception as exc:  # the terminal frame reports it
             frames.put((ERROR, exc))
         else:

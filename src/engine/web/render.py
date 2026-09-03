@@ -1,19 +1,26 @@
 """Outcome → what a person sees: the server-side twin of app.js's
-renderers (§10.5). The browser draws the cards and tables; this module
-draws the same content as text — for tests, which cannot run the JS,
-and for the turns endpoint (Block 3) and any text surface that shows a
-past turn.
+renderers (§10.5). The browser draws the cards, tables and chips; this
+module draws the same content as text — for tests, which cannot run
+the JS, and for the text form of GET /api/conversations/<id>/turns
+(Block 3), the surface that shows a past conversation without a
+browser.
 
-The card vocabulary lives here once and app.js repeats it verbatim
-(test_web_render pins the two together). A refusal card carries the
-reason and the remedy, both plain language; RefuseOutcome.detail is
-the engineer's diagnosis and no card renders it — the inspector does.
+The card vocabulary and the chip vocabulary live here once and app.js
+repeats them verbatim (test_web_render pins the two together). A
+refusal card carries the reason and the remedy, both plain language;
+RefuseOutcome.detail is the engineer's diagnosis and no card renders
+it — the inspector does.
 """
+
+import json
+import math
 
 from pydantic import BaseModel, ConfigDict
 
-from engine.harness.outcomes import TurnOutcome
+from engine.harness.events import StatusEvent
+from engine.harness.outcomes import TurnOutcome, loads_outcome
 from engine.harness.render import render_table_text
+from engine.ports.types import Conversation, TurnLogEntry
 
 UNVERIFIED_BADGE = (
     "UNVERIFIED — this answer could not be fully checked against its evidence"
@@ -23,6 +30,15 @@ CARD_TITLES = {
     "clarify": "One thing to clarify first",
     "escalate": "This needs a person",
 }
+CHIP_LABELS = {
+    "verified": "✓ Verified",
+    "unverified": "⚠ Unverified",
+    "refuse": "⊘ Refused",
+    "clarify": "? Clarify",
+    "escalate": "↑ Escalated",
+}
+QUESTION_NOT_RECORDED = "(question not recorded)"
+OUTCOME_NOT_RECORDED = "(outcome not recorded)"
 
 
 class Card(BaseModel):
@@ -78,3 +94,89 @@ def render_outcome_text(outcome: TurnOutcome) -> str:
     else:
         parts.append(outcome.body.text)
     return "\n".join(parts)
+
+
+class ToolTally(BaseModel):
+    """What the chip counts: invocations that returned evidence, errored
+    invocations a later call of the same tool followed (retries), and
+    errored invocations nothing followed (failed)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ok: int
+    retries: int
+    failed: int
+
+
+def tool_tally(events: list[StatusEvent]) -> ToolTally:
+    """Read from the trail, not from tools_used: a bounced run_sql and
+    its retry are two invocations of one tool, and the chip says
+    "1 tool · 1 retry", not "2 tools" (Block 3, play session finding).
+    A `tool:<name>` finish event reads `evidence[i] ok` or `error: …`;
+    an unknown-tool skip is neither and is not an invocation."""
+    finishes = [
+        (event.node, event.detail)
+        for event in events
+        if event.phase == "finish" and event.node.startswith("tool:")
+    ]
+    ok = retries = failed = 0
+    for index, (node, detail) in enumerate(finishes):
+        if detail.startswith("evidence["):
+            ok += 1
+        elif detail.startswith("error:"):
+            if any(later == node for later, _ in finishes[index + 1 :]):
+                retries += 1
+            else:
+                failed += 1
+    return ToolTally(ok=ok, retries=retries, failed=failed)
+
+
+def elapsed_seconds(events: list[StatusEvent]) -> int:
+    """First event to last, whole seconds, at least 1 when the trail has
+    two events; floor of x + 0.5 so a tie rounds the way app.js does."""
+    if len(events) < 2:
+        return 0
+    delta = (events[-1].at - events[0].at).total_seconds()
+    return max(1, math.floor(delta + 0.5))
+
+
+def chip_label(outcome: TurnOutcome, events: list[StatusEvent]) -> str:
+    """The collapsed trail: `✓ Verified · 1 tool · 1 retry · 14s`."""
+    key = outcome.verification if outcome.kind == "answer" else outcome.kind
+    tally = tool_tally(events)
+    parts = [CHIP_LABELS[key], f"{tally.ok} tool{'' if tally.ok == 1 else 's'}"]
+    if tally.retries:
+        parts.append(f"{tally.retries} {'retry' if tally.retries == 1 else 'retries'}")
+    if tally.failed:
+        parts.append(f"{tally.failed} failed")
+    seconds = elapsed_seconds(events)
+    if seconds:
+        parts.append(f"{seconds}s")
+    return " · ".join(parts)
+
+
+def events_of(entry: TurnLogEntry) -> list[StatusEvent]:
+    return [
+        StatusEvent.model_validate(event)
+        for event in json.loads(entry.status_events or "[]")
+    ]
+
+
+def render_turns_text(conversation: Conversation, entries: list[TurnLogEntry]) -> str:
+    """A past conversation as text, one block per turn: the chip line,
+    the question, the outcome as the page shows it. Rows written before
+    the turn log carried question and outcome say so."""
+    lines = [f"conversation {conversation.id} · {conversation.title}", ""]
+    for entry in entries:
+        events = events_of(entry)
+        outcome = loads_outcome(entry.outcome) if entry.outcome else None
+        head = f"turn {entry.turn}"
+        if outcome is not None:
+            head += " · " + chip_label(outcome, events)
+        lines.append(head)
+        lines.append(f"> {entry.question}" if entry.question else f"> {QUESTION_NOT_RECORDED}")
+        lines.append(
+            render_outcome_text(outcome) if outcome is not None else OUTCOME_NOT_RECORDED
+        )
+        lines.append("")
+    return "\n".join(lines).rstrip("\n") + "\n"
