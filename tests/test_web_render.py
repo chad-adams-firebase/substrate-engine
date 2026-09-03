@@ -97,8 +97,12 @@ def test_the_page_repeats_the_card_vocabulary_verbatim():
     for title in CARD_TITLES.values():
         assert title in script, title
     assert UNVERIFIED_BADGE in script
-    # The engineer's diagnosis never reaches a card.
-    assert "outcome.detail" not in script.replace("outcome.detail (the engineer's", "")
+    # The engineer's diagnosis never reaches a card: the transcript
+    # renderers (everything before the inspector section) never read
+    # outcome.detail; the inspector does, labelled as the diagnosis.
+    transcript_half, inspector_half = script.split("// ---- inspector: the receipts")
+    assert "outcome.detail" not in transcript_half
+    assert "outcome.detail" in inspector_half and '"Diagnosis"' in inspector_half
 
 
 def test_an_empty_table_outcome_reads_no_rows_matched_on_both_surfaces():
@@ -174,6 +178,17 @@ def test_two_clean_calls_are_two_tools_and_an_unretried_error_is_failed():
     assert chip_label(refused, []) == "⊘ Refused · 0 tools"
     unverified = AnswerOutcome(body=MarkdownAnswer(text="x"), verification="unverified")
     assert chip_label(unverified, events[:1]) == "⚠ Unverified · 1 tool"
+
+
+def test_the_page_repeats_the_chip_vocabulary_and_the_tally_rule():
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    for label in CHIP_LABELS.values():
+        assert label in script, label
+    assert "function toolTally" in script
+    assert 'startsWith("evidence[")' in script and 'startsWith("error:")' in script
+    assert '"retry" : "retries"' in script and '"failed"' in script
+    # Elapsed seconds round the same way: floor of x + 0.5.
+    assert "Math.floor(" in script and "+ 0.5)" in script
 
 
 def test_turns_text_form_renders_every_turn_and_says_when_a_row_predates_the_columns():

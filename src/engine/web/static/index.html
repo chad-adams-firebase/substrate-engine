@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Knowledge Engine</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/vendor/highlight-github.min.css">
   <link rel="stylesheet" href="/static/app.css">
 </head>
@@ -13,17 +14,48 @@
     <span class="user" id="user-name"></span>
   </header>
 
-  <main class="transcript" id="transcript">
-    <section class="empty" id="empty-state">
-      <p class="hint">Ask a plain-English question about the application. Every answer is checked against its evidence before it reaches you.</p>
-      <div class="starters" id="starters"></div>
-    </section>
-  </main>
+  <div class="panes">
+    <aside class="sidebar" aria-label="Workspaces and conversations">
+      <div class="side-head">
+        <span>Workspaces</span>
+        <button class="side-action" id="new-workspace" type="button" title="New workspace">+</button>
+      </div>
+      <ul class="side-list" id="workspaces"></ul>
+      <div class="side-head"><span>Conversations</span></div>
+      <button class="new-conversation" id="new-conversation" type="button">+ New conversation</button>
+      <ul class="side-list" id="conversations"></ul>
+      <p class="side-note" id="side-note" hidden></p>
+      <div class="side-foot">
+        <span class="library" title="The shared library arrives in Phase 6">Library</span>
+      </div>
+    </aside>
 
-  <form class="composer" id="composer">
-    <input id="question" type="text" autocomplete="off" placeholder="Ask a question…" aria-label="Question">
-    <button id="send" type="submit">Ask</button>
-  </form>
+    <section class="center">
+      <main class="transcript" id="transcript">
+        <div class="transcript-inner" id="transcript-inner">
+          <section class="empty" id="empty-state">
+            <p class="hint">Ask a plain-English question about the application. Every answer is checked against its evidence before it reaches you.</p>
+            <div class="starters" id="starters"></div>
+          </section>
+        </div>
+      </main>
+      <form class="composer" id="composer">
+        <input id="question" type="text" autocomplete="off" placeholder="Ask a question…" aria-label="Question">
+        <button id="send" type="submit">Ask</button>
+      </form>
+    </section>
+
+    <aside class="inspector" id="inspector" aria-label="Inspector">
+      <div class="tabs">
+        <button class="tab active" type="button" data-mode="inspect">Inspect</button>
+        <button class="tab" type="button" data-mode="package" disabled title="Package this conversation into a Unit of Work — Phase 6">Package</button>
+      </div>
+      <div class="inspector-head" id="inspector-title">Receipts</div>
+      <div class="inspector-body" id="inspector-body">
+        <p class="hint">Click a turn's chip to see its receipts: the SQL attempts and their challenges, the evidence, the verdict claim by claim, the progress trail.</p>
+      </div>
+    </aside>
+  </div>
 
   <script src="/static/vendor/marked.min.js"></script>
   <script src="/static/vendor/highlight.min.js"></script>

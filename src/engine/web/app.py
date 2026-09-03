@@ -41,4 +41,13 @@ def create_app(
     def index():
         return send_from_directory(STATIC_DIR, "index.html")
 
+    @app.get("/favicon.ico")
+    def favicon():
+        # Browsers ask for this path unprompted; the page also links
+        # the SVG, so both answer (the play sessions logged a 404 on
+        # every load).
+        return send_from_directory(
+            STATIC_DIR, "favicon.svg", mimetype="image/svg+xml"
+        )
+
     return app

@@ -1,6 +1,8 @@
 """The page and its vendored libraries: served from the package, no
 CDN, licenses alongside (Brief §10.5 ruling 3; CLAUDE.md frontend
-law)."""
+law); and the Block 3 shape — three panes, the inspector's receipts,
+and the play-session findings — pinned by source text, since the JS
+is not executed here."""
 
 import re
 
@@ -65,3 +67,70 @@ def test_browser_cell_formatting_mirrors_the_engine_rules():
     assert 'scale === "percent" ? value : value * 100' in script
     # A zero-row table says so instead of drawing an empty box.
     assert 'el("p", "empty-rows", NO_ROWS)' in script
+
+
+# --- Block 3: three panes, the inspector, the play-session findings ------
+
+
+def test_the_page_has_three_panes_and_the_phase_6_seams():
+    html = _client().get("/").get_data(as_text=True)
+    for anchor in ('id="workspaces"', 'id="conversations"', 'id="new-conversation"',
+                   'id="new-workspace"', 'id="transcript"', 'id="transcript-inner"',
+                   'id="inspector"', 'id="inspector-body"', 'id="starters"'):
+        assert anchor in html, anchor
+    # Package mode is a disabled tab until Phase 6; the Library is a
+    # placeholder link, not a route.
+    assert 'data-mode="package" disabled' in html
+    assert "Phase 6" in html and 'class="library"' in html
+
+
+def test_the_favicon_answers_on_both_paths():
+    client = _client()
+    for path in ("/favicon.ico", "/static/favicon.svg"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.mimetype == "image/svg+xml"
+    html = client.get("/").get_data(as_text=True)
+    assert 'rel="icon"' in html and 'href="/static/favicon.svg"' in html
+
+
+def test_the_scroll_container_is_full_width_and_the_reading_width_is_inside():
+    """The play-session dead zones: max-width sat on the scroll
+    container, so the wheel did nothing beside the column. The rule
+    now lives on the inner wrapper."""
+    css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    rules = {}
+    for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        rules[selector.strip()] = body
+    assert "max-width" not in rules[".transcript"]
+    assert "overflow-y: auto" in rules[".transcript"]
+    assert "max-width: 900px" in rules[".transcript-inner"]
+
+
+def test_the_inspector_reads_what_the_interludes_recorded():
+    """Pinned by source text: the SQL attempt ledger with all three
+    lint fields and the override marking, the verdict's plausibility
+    findings by check name and severity, the claim offsets, the
+    diagnosis, and the raw router text on a violation."""
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '["lint", "Fan-out check"]' in script
+    assert '["enum_lint", "Enum check"]' in script
+    assert '["interval_lint", "Interval check"]' in script
+    assert '"executed · override"' in script and '"blocked by lint"' in script
+    assert "finding.check" in script and "finding.severity" in script
+    assert "claim.start" in script and "claim.end" in script and "claim.status" in script
+    assert "event.raw_response" in script
+    assert "function renderSqlLedger" in script and "function renderTrail" in script
+    # Evidence tables honor column_formats through the one renderTable.
+    assert "renderTable(output.table" in script
+    # The inspector fetches the bundle on demand, never with the turn.
+    assert "/api/evidence/" in script
+    # A new conversation is a client-side reset; the row is created by
+    # the first turn (workspace_id on the ask), never by the click.
+    assert "function newConversation" in script
+    assert "body.workspace_id = state.workspaceId" in script
+    assert "localStorage" not in script and "sessionStorage" not in script
+    # Starters ask directly; the empty state is where every new
+    # conversation, a fresh reload included, begins.
+    assert 'addEventListener("click", () => ask(text))' in script
