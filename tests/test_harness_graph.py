@@ -304,6 +304,27 @@ def test_protocol_violation_nudges_then_recovers(tool_pack):
     assert all(e.raw_response is None for e in result.events if e is not violation)
 
 
+def test_a_text_form_control_verb_is_parsed_and_leaves_a_trace(tool_pack):
+    """Polish Pass: the verb written as prose is read as the call —
+    no nudge, one router step — and provenance says the channel error
+    was tolerated, with what the router wrote beside it."""
+    responses = [
+        LLMResponse(content='refuse({"reason": "cannot answer"})', model="s"),
+    ]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("q")
+    assert result.outcome.kind == "refuse"
+    assert result.outcome.reason == "cannot answer"
+    from engine.config.models import PortName
+
+    llm = ports.get(PortName.LLM)
+    assert len(llm.calls) == 1  # no nudge round
+    (trace,) = [e for e in result.events if e.detail.startswith("text-form")]
+    assert trace.detail == "text-form refuse parsed as the call"
+    assert trace.raw_response == 'refuse({"reason": "cannot answer"})'
+    assert not any("protocol violation" in e.detail for e in result.events)
+
+
 BAD_DRAFT = LLMResponse(
     content="There are {{e0.rows[0].count_star()}} rows.", model="s"
 )

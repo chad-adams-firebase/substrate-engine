@@ -346,6 +346,9 @@ def _execute_rep(
                 nudges=sum(
                     "protocol violation" in detail for detail in details
                 ),
+                lenient_parses=sum(
+                    detail.startswith("text-form ") for detail in details
+                ),
             )
         )
         verification = (

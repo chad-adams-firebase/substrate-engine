@@ -318,3 +318,35 @@ def test_engine_dirty_means_modified_tracked_content(tmp_path):
 
     (repo / "tracked.txt").write_text("v2\n", encoding="utf-8")
     assert runner._engine_sha(repo) == (sha, True)  # modified: dirty
+
+
+def test_nudges_and_lenient_parses_are_counted_from_the_trail(
+    monkeypatch, bank, pack_dir, tmp_path
+):
+    """Polish Pass: the router's channel habit is a number in the
+    record — prose nudged back, and text-form verbs read as the call."""
+    from datetime import UTC, datetime
+
+    from engine.harness.events import StatusEvent
+
+    now = datetime.now(UTC)
+    habit = make_result(1, 1, "146 last week.")
+    habit = habit.model_copy(
+        update={
+            "events": [
+                StatusEvent(node="route", phase="finish", detail="protocol violation — nudging", at=now, raw_response="prose"),
+                StatusEvent(node="route", phase="finish", detail="protocol violation — nudging", at=now, raw_response="prose"),
+                StatusEvent(node="route", phase="finish", detail="text-form give_answer parsed as the call", at=now, raw_response='give_answer({"shape":"prose"})'),
+                StatusEvent(node="route", phase="finish", detail="decision: answer", at=now),
+            ]
+        }
+    )
+    install_session(
+        monkeypatch,
+        [habit, make_result(2, 1, "674, 682, 634."), make_result(2, 2, "254 of those.")],
+    )
+    out = tmp_path / "report.jsonl"
+    assert run_bank(bank, pack_dir, out, status=quiet) == 0
+    _, records = load_report(out)
+    b5 = records[0].turns[0]
+    assert (b5.nudges, b5.lenient_parses) == (2, 1)

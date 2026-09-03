@@ -113,6 +113,11 @@ class RowGrade(BaseModel):
     reached: int | None = None
     failure_classes: list[str] = []
     notes: list[str] = []
+    # The router's channel habit over the row's reps: prose responses
+    # nudged back into the tool contract, and control verbs written as
+    # text that the harness read as the call (Polish Pass).
+    nudges: int = 0
+    lenient_parses: int = 0
 
     @property
     def pass_rate(self) -> float:
@@ -750,6 +755,20 @@ def _severity(assertion: Assertion, view: _TurnView) -> BreachSeverity:
     return "unsupported"
 
 
+def _router_note(nudges: int, lenient_parses: int) -> str:
+    """The channel habit, in the grade: how often the router wrote prose
+    and was nudged, and how often it wrote a control verb as text that
+    the harness read as the call."""
+    parts = []
+    if nudges:
+        parts.append(f"{nudges} nudge{'' if nudges == 1 else 's'}")
+    if lenient_parses:
+        parts.append(
+            f"{lenient_parses} text-form call{'' if lenient_parses == 1 else 's'} parsed"
+        )
+    return "router: " + ", ".join(parts)
+
+
 def _token_notes(
     reps: list[tuple[RunRecord, bool]]
 ) -> list[str]:
@@ -881,13 +900,21 @@ def grade(
                 [(record, outcome == "passed") for record, outcome in reached]
             )
         )
+        nudges = sum(turn.nudges for record in row_records for turn in record.turns)
+        lenient = sum(
+            turn.lenient_parses for record in row_records for turn in record.turns
+        )
+        if nudges or lenient:
+            notes.append(_router_note(nudges, lenient))
         row_grades.append(
             RowGrade(
                 row_id=row.id, category=row.category, reps=len(graded),
                 passes=passes, threshold=threshold, status=status,
                 xfail_ref=_xfail_ref(row),
-                        xfail_keep_until=_xfail_keep_until(row), failure_classes=failure_classes,
+                xfail_keep_until=_xfail_keep_until(row),
+                failure_classes=failure_classes,
                 notes=notes, reached=len(reached) if has_setup else None,
+                nudges=nudges, lenient_parses=lenient,
             )
         )
 

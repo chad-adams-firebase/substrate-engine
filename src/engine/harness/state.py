@@ -51,6 +51,10 @@ class RouteDecision(BaseModel):
     reason: str = ""  # refuse / escalate
     question: str = ""  # clarify
     what_would_work: str = ""  # refuse
+    # The verb arrived as prose, not a tool call, and was read as the
+    # call anyway (Polish Pass): the graph records that the channel
+    # error was tolerated, and the eval counts it beside nudges.
+    parsed_from_text: bool = False
 
 
 class TurnState(BaseModel):

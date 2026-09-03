@@ -109,6 +109,15 @@ def render(report: GradeReport) -> str:
         for note in row.notes:
             lines.append(f"        - {note}")
 
+    nudges = sum(row.nudges for row in report.rows)
+    lenient = sum(row.lenient_parses for row in report.rows)
+    if nudges or lenient:
+        lines.append("")
+        lines.append(
+            f"Router channel habit: {nudges} nudge(s), {lenient} text-form "
+            "call(s) parsed across the run"
+        )
+
     if report.route_pairs:
         lines.append("")
         lines.append("Route pairs (first-decision tool must agree):")

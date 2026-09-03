@@ -8,12 +8,24 @@ direction, including fail-closed, arrives schema-validated.
 """
 
 import json
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from engine.harness.state import RouteDecision, ToolSelection
-from engine.ports.types import LLMResponse, ToolSpec
+from engine.ports.types import LLMResponse, ToolCall, ToolSpec
+
+# A control verb written as prose — give_answer({"shape":"prose"}) —
+# the whole response, optionally behind the "Requested: " echo the
+# loop transcript uses, with a JSON object (or nothing) in the
+# parentheses. Read as the call it plainly is (Polish Pass): B2's
+# router wrote exactly this on nine runs, in the wrong channel, and was
+# nudged into budget exhaustion four times per rep.
+_TEXT_FORM_CALL = re.compile(
+    r"^\s*(?:Requested:\s*)?(give_answer|refuse|clarify|escalate)\s*\((.*)\)\s*$",
+    re.DOTALL,
+)
 
 
 class GiveAnswerArgs(BaseModel):
@@ -107,14 +119,36 @@ class RouteProtocolViolation(Exception):
         self.raw_response = raw_response
 
 
+def text_form_call(content: str) -> ToolCall | None:
+    """The control call a prose response spells out, or None. Only the
+    whole response, only a control verb (a real tool written as text
+    stays a violation — the closed surface is entered by tool calls),
+    only a JSON object or nothing as arguments."""
+    match = _TEXT_FORM_CALL.match(content or "")
+    if match is None:
+        return None
+    name, body = match.group(1), match.group(2).strip()
+    if not body:
+        return ToolCall(name=name, arguments={})
+    try:
+        arguments = json.loads(body)
+    except ValueError:
+        return None
+    if not isinstance(arguments, dict):
+        return None
+    return ToolCall(name=name, arguments=arguments)
+
+
 def parse_route(response: LLMResponse) -> RouteDecision:
     """A router response, parsed into a decision.
 
     Real tool calls win over control calls in the same response: a
     model that asks for run_sql and give_answer together has not seen
-    the rows yet. Control-only responses take the first control call.
-    Anything else — prose, no calls, malformed control arguments — is
-    a protocol violation.
+    the rows yet. Control-only responses take the first control call; a
+    control verb written as text is read as that call and the decision
+    says so (parsed_from_text), so the graph can leave a trace. Anything
+    else — prose, no calls, malformed control arguments — is a protocol
+    violation.
     """
     real = [c for c in response.tool_calls if c.name not in CONTROL_NAMES]
     if real:
@@ -126,14 +160,20 @@ def parse_route(response: LLMResponse) -> RouteDecision:
         )
 
     control = [c for c in response.tool_calls if c.name in CONTROL_NAMES]
-    if not control:
-        raise RouteProtocolViolation(
-            "Respond by calling one of the provided tools — either an "
-            "evidence tool, or give_answer / refuse / clarify / escalate.",
-            raw_response=response.content,
-        )
+    parsed_from_text = False
+    if control:
+        call = control[0]
+    else:
+        spelled = text_form_call(response.content)
+        if spelled is None:
+            raise RouteProtocolViolation(
+                "Respond by calling one of the provided tools — either an "
+                "evidence tool, or give_answer / refuse / clarify / escalate.",
+                raw_response=response.content,
+            )
+        call = spelled
+        parsed_from_text = True
 
-    call = control[0]
     try:
         args = _CONTROL_MODELS[call.name].model_validate(call.arguments)
     except ValidationError as exc:
@@ -151,11 +191,24 @@ def parse_route(response: LLMResponse) -> RouteDecision:
             kind="answer",
             answer_shape=args.shape,
             evidence_index=args.evidence_index,
+            parsed_from_text=parsed_from_text,
         )
     if isinstance(args, RefuseArgs):
         return RouteDecision(
-            kind="refuse", reason=args.reason, what_would_work=args.what_would_work
+            kind="refuse",
+            reason=args.reason,
+            what_would_work=args.what_would_work,
+            parsed_from_text=parsed_from_text,
         )
     if isinstance(args, ClarifyArgs):
-        return RouteDecision(kind="clarify", question=args.question)
-    return RouteDecision(kind="escalate", reason=args.reason)
+        return RouteDecision(
+            kind="clarify", question=args.question, parsed_from_text=parsed_from_text
+        )
+    return RouteDecision(
+        kind="escalate", reason=args.reason, parsed_from_text=parsed_from_text
+    )
+
+
+def control_verb(decision: RouteDecision) -> str:
+    """The verb a terminal decision came from, for the trace."""
+    return {"answer": "give_answer"}.get(decision.kind, decision.kind)

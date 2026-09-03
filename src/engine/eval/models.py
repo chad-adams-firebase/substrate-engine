@@ -555,6 +555,11 @@ class TurnRecord(BaseModel):
     emitted_tokens: EmittedTokens = EmittedTokens()
     placeholder_failures: list[str] = []
     nudges: int = 0
+    # Control verbs the router wrote as text and the harness read as
+    # the call anyway (Polish Pass): a model habit worth a number beside
+    # the nudges it used to cost, so a pin that changes it shows in the
+    # grade, not only in provenance.
+    lenient_parses: int = 0
     error: str | None = None
 
 

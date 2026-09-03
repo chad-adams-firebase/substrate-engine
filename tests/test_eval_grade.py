@@ -829,6 +829,30 @@ def test_token_stratification_note(tmp_path):
     assert any("file_paths" in note for note in row.notes)
 
 
+def test_the_router_channel_habit_is_a_grade_note(tmp_path):
+    """Polish Pass: nudges and text-form calls read as the call are
+    counted per row and across the run, so a pin that changes the
+    habit shows in the grade, not only in provenance."""
+    from engine.eval.report import render
+
+    bank, header, world, pack = make_env(tmp_path, ROW_DATA)
+    records = [
+        make_record("B5", 1, make_turn("146 exactly.").model_copy(update={"nudges": 4, "lenient_parses": 1})),
+        make_record("B5", 2, make_turn("146 exactly.").model_copy(update={"lenient_parses": 1})),
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    (row,) = result.rows
+    assert (row.nudges, row.lenient_parses) == (4, 2)
+    assert "router: 4 nudges, 2 text-form calls parsed" in row.notes
+    text = render(result)
+    assert "        - router: 4 nudges, 2 text-form calls parsed" in text
+    assert "Router channel habit: 4 nudge(s), 2 text-form call(s) parsed across the run" in text
+    # A quiet run says nothing about it.
+    quiet = grade(bank, header, [make_record("B5", 1, make_turn("146 exactly."))], world, pack_root=pack)
+    assert "router:" not in " ".join(quiet.rows[0].notes)
+    assert "Router channel habit" not in render(quiet)
+
+
 ROW_SUPPLIER = """\
 - id: C5
   provenance: scripted

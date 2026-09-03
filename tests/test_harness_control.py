@@ -119,3 +119,44 @@ def test_protocol_violations_carry_what_the_router_wrote():
     with pytest.raises(RouteProtocolViolation) as malformed:
         parse_route(_response(ToolCall(name="refuse", arguments={})))
     assert malformed.value.raw_response == "refuse({})"
+
+
+# --- Polish Pass: a control verb written as text is the call it is ----
+
+
+def test_a_text_form_control_verb_is_the_call_it_plainly_is():
+    """B2's nine-run root cause: the router wrote
+    give_answer({"shape":"prose","evidence_index":3}) as text — the
+    right call in the wrong channel — and was nudged four times into
+    budget exhaustion. It parses as the call, and the decision says so."""
+    decision = parse_route(
+        _response(content='give_answer({"shape":"prose","evidence_index":3})')
+    )
+    assert (decision.kind, decision.answer_shape, decision.evidence_index) == (
+        "answer", "prose", 3,
+    )
+    assert decision.parsed_from_text is True
+    # The loop transcript's echo prefix, a bare call, and the other verbs.
+    assert parse_route(_response(content='Requested: give_answer({"shape":"prose"})')).kind == "answer"
+    assert parse_route(_response(content="give_answer()")).kind == "answer"
+    refuse = parse_route(_response(content='refuse({"reason": "no", "what_would_work": "x"})'))
+    assert (refuse.kind, refuse.reason, refuse.what_would_work) == ("refuse", "no", "x")
+    assert parse_route(_response(content='clarify({"question": "which?"})')).question == "which?"
+    assert parse_route(_response(content='escalate({"reason": "policy"})')).kind == "escalate"
+    # A structured call is never marked lenient.
+    assert parse_route(_response(ToolCall(name="refuse", arguments={"reason": "r"}))).parsed_from_text is False
+
+
+def test_text_form_calls_still_validate_and_prose_still_nudges():
+    with pytest.raises(RouteProtocolViolation, match="requires evidence_index") as info:
+        parse_route(_response(content='give_answer({"shape":"table"})'))
+    assert info.value.raw_response == 'give_answer({"shape": "table"})'
+    for content in (
+        "give_answer(shape=prose)",  # not JSON
+        'The answer is give_answer({"shape":"prose"}).',  # not the whole response
+        'traverse_code_knowledge_graph({"entry": "abc", "hop": "callees"})',  # a real tool
+        "The answer is probably 42.",
+    ):
+        with pytest.raises(RouteProtocolViolation) as info:
+            parse_route(_response(content=content))
+        assert info.value.raw_response == content

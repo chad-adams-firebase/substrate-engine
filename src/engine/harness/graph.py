@@ -24,6 +24,7 @@ from engine.harness.control import (
     RouteProtocolViolation,
     control_specs,
     parse_route,
+    control_verb,
 )
 from engine.harness.drafter import Drafter
 from engine.harness.events import EventLog
@@ -184,6 +185,16 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 + [Message(role="user", content=str(violation))],
             }
 
+        if decision.parsed_from_text:
+            # The right call in the wrong channel, tolerated — and said
+            # so in provenance (raw_response keeps what was written),
+            # never on the live trail line.
+            deps.events.emit(
+                "route",
+                "finish",
+                f"text-form {control_verb(decision)} parsed as the call",
+                raw_response=response.content or None,
+            )
         deps.events.emit("route", "finish", f"decision: {decision.kind}")
         update: dict = {
             "decision": decision,
