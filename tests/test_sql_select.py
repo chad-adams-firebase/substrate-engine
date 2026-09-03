@@ -69,11 +69,11 @@ def test_cte_columns_resolve_to_the_real_columns_behind_them():
 
 def test_arithmetic_over_cte_columns_keeps_its_shape_and_its_opaque_parts():
     items = resolve_select_items(TURN_2_11)
-    assert items["invoice_count"] == Aggregate("count", Column("findings", "invoice_id"))
+    assert items["invoice_count"] == Aggregate("count", Column("findings", "invoice_id"), True)
     ratio = items["avg_savings_per_invoice"]
     assert isinstance(ratio, Arith) and ratio.op == "/"
     assert ratio.left == Arith("*", Opaque(), Number())  # SUM(CASE ...) is Opaque
-    assert ratio.right == Aggregate("count", Column("findings", "invoice_id"))
+    assert ratio.right == Aggregate("count", Column("findings", "invoice_id"), True)
 
 
 def test_derived_tables_are_followed_and_scalar_subqueries_are_opaque():
@@ -109,7 +109,7 @@ def test_plain_aggregates_arithmetic_and_wrappers():
     assert items["avg_per_invoice"] == Arith(
         "/",
         Arith("*", Aggregate("sum", Column("findings", "amount")), Number()),
-        Aggregate("count", Column("invoices", "id")),
+        Aggregate("count", Column("invoices", "id"), True),
     )
     assert items["flagged_share"] == Arith(
         "/",
@@ -240,3 +240,15 @@ def test_quoted_identifiers_resolve_like_bare_ones():
     )
     assert quoted == bare
     assert bare["total"] == Aggregate("sum", Column("invoices", "invoice_total"))
+
+
+def test_count_distinct_is_recorded_on_the_aggregate():
+    """The Verifier's count checks read the flag: a distinct count
+    compares against distinct_count, a plain one against row_count."""
+    items = resolve_select_items(
+        "SELECT COUNT(DISTINCT f.invoice_id) AS n, COUNT(*) AS rows_seen "
+        "FROM findings f"
+    )
+    assert items["n"] == Aggregate("count", Column("findings", "invoice_id"), True)
+    assert items["rows_seen"] == Aggregate("count", None)
+    assert items["rows_seen"].distinct is False

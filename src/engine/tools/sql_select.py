@@ -155,6 +155,10 @@ class Column:
 class Aggregate:
     func: str  # sum | avg | min | max | count
     arg: "Expr | None"  # None for COUNT(*)
+    # COUNT(DISTINCT x): the Verifier's count checks compare a distinct
+    # count against distinct_count and a plain one against row_count
+    # (Polish Pass — the classification used to be a regex).
+    distinct: bool = False
 
 
 @dataclass(frozen=True)
@@ -442,13 +446,15 @@ class _Parser:
                 self.take()
                 self.expect(")")
                 return Aggregate(name, None)
+            distinct = False
             if self.peek() == ("name", "DISTINCT") or self.peek() == ("name", "distinct"):
                 if name != "count":
                     raise _Bail  # SUM(DISTINCT x) is a challenged band-aid, not a shape
                 self.take()
+                distinct = True
             arg = self.expr()
             self.expect(")")
-            return Aggregate(name, arg)
+            return Aggregate(name, arg, distinct)
         if name in _INTERVAL_DIFFERENCE:
             left = self.expr()
             self.expect(",")

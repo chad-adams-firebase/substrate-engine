@@ -283,6 +283,64 @@ def test_zero_challenge_is_pack_config():
     assert result.plausibility == []
 
 
+# --- Polish Pass: a count is what the parse says it is -----------------
+
+
+def test_a_ratio_of_counts_is_not_a_count():
+    """The live refusal: "How many invoices do we receive per day on
+    average?" drafted as COUNT(*) / COUNT(DISTINCT DATE(received_at)),
+    gold-exact at 30.6, refused as "COUNT over invoices returned 30.6;
+    stats row_count is 161". A ratio is not a count; the select-list
+    parse says so (DATE(...) even leaves it Opaque), and no row_count
+    comparison applies."""
+    per_day = sql_invocation(
+        "SELECT COUNT(*) * 1.0 / COUNT(DISTINCT DATE(received_at)) AS per_day "
+        "FROM invoices",
+        [{"per_day": 30.615384615384617}],
+    )
+    verifier, _ = make_verifier(stats=INVOICE_STATS)
+    result = verifier.verify(
+        question="How many invoices do we receive per day on average?",
+        draft=DraftAnswer(kind="prose", text="About 30.62 invoices per day."),
+        evidence=[per_day],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+    assert result.plausibility == []
+
+
+def test_a_subquery_count_inside_a_ratio_draws_neither_count_check():
+    """NP4's shape over one table used to satisfy both the plain and
+    the DISTINCT regex through the scalar subquery's SELECT COUNT(*)."""
+    rate = sql_invocation(
+        "SELECT COUNT(DISTINCT id) * 1.0 / (SELECT COUNT(*) FROM invoices) AS r "
+        "FROM invoices WHERE status = 'open'",
+        [{"r": 0.42}],
+    )
+    verifier, _ = make_verifier(stats=INVOICE_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="42% are open."),
+        evidence=[rate],
+        attempt=1,
+    )
+    assert result.plausibility == []
+
+
+def test_arithmetic_over_a_count_is_not_bounded():
+    """Accepted cost of classifying by the parse: COUNT(*) + 0 is an
+    Arith, not a count, so the row_count pin does not read it."""
+    padded = sql_invocation("SELECT COUNT(*) + 0 AS n FROM invoices", [{"n": 1_000_000}])
+    verifier, _ = make_verifier(stats=INVOICE_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="prose", text="There are 1,000,000 invoices."),
+        evidence=[padded],
+        attempt=1,
+    )
+    assert [f.check for f in result.plausibility] == []
+
+
 # --- Play pass: COUNT(DISTINCT) vs distinct_count (R4) ---------------
 
 RULE_STATS = [

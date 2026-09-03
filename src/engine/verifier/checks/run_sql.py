@@ -91,6 +91,7 @@ from engine.verifier.checks.base import (
 from engine.tools.sql_select import (
     Aggregate,
     Arith,
+    Column,
     Expr,
     Numeric,
     Opaque,
@@ -106,11 +107,6 @@ from engine.verifier.models import (
 )
 
 _FROM_JOIN = re.compile(r"\b(?:from|join)\s+([A-Za-z_]\w*)", re.IGNORECASE)
-_COUNT_ONLY = re.compile(r"select\s+count\s*\(\s*(?!distinct\b)", re.IGNORECASE)
-_COUNT_DISTINCT = re.compile(
-    r"select\s+count\s*\(\s*distinct\s+(?:[A-Za-z_]\w*\.)?([A-Za-z_]\w*)\s*\)",
-    re.IGNORECASE,
-)
 _WHERE = re.compile(r"\bwhere\b", re.IGNORECASE)
 # A non-DISTINCT count aliased in the select list — the grouped shape
 # of the joined-count bound (COUNT(DISTINCT ...) stays with the
@@ -176,6 +172,17 @@ def _fmt(value: float) -> str:
     """Thousands-separated, never scientific: findings are read by
     humans deciding whether to trust an answer."""
     return format(value, ",.10g")
+
+
+def _lone_count(sql: str, table) -> Aggregate | None:
+    """The single result column's expression when it IS a count —
+    Aggregate("count", …) at the root of the select-list parse — else
+    None. Every executed statement aliases its items (the tool's alias
+    guard), so the parse sees the column by name."""
+    tree = resolve_select_items(sql).get(table.columns[0])
+    if isinstance(tree, Aggregate) and tree.func == "count":
+        return tree
+    return None
 
 
 def _as_float(text: str | None) -> float | None:
@@ -443,9 +450,18 @@ class RunSqlCheck(SubstrateCheck):
             and len(table.rows) == 1
             and len(table.columns) == 1
         )
+        # What the lone cell is, per the select-list parse (Polish
+        # Pass): a plain COUNT compares against row_count, a
+        # COUNT(DISTINCT col) against the column's distinct_count, and
+        # anything else — a ratio of counts, a difference, an aggregate
+        # the parse cannot read — is not a count and gets no row_count
+        # comparison. The regex this replaces matched `SELECT COUNT(`
+        # inside `COUNT(*) * 1.0 / COUNT(DISTINCT DATE(received_at))`
+        # and refused a correct per-day average as 30.6 vs 1,990.
+        lone_count = _lone_count(sql, table) if is_single_cell else None
 
         # 1 & 2: COUNT sanity against known table sizes.
-        is_single_count = _COUNT_ONLY.search(sql) and is_single_cell
+        is_single_count = lone_count is not None and not lone_count.distinct
         if is_single_count and queried[0] in stats_by_table:
             cell = table.rows[0][table.columns[0]]
             known = float(stats_by_table[queried[0]][0].row_count)
@@ -483,9 +499,13 @@ class RunSqlCheck(SubstrateCheck):
         # distinct_count — never against row_count, which refused the
         # play pass's correct cardinality answer (R4). A column with no
         # stats row gets no check at all.
-        distinct_match = _COUNT_DISTINCT.search(sql)
-        if distinct_match and is_single_cell and queried[0] in stats_by_table:
-            column = distinct_match.group(1).lower()
+        is_distinct_count = (
+            lone_count is not None
+            and lone_count.distinct
+            and isinstance(lone_count.arg, Column)
+        )
+        if is_distinct_count and queried[0] in stats_by_table:
+            column = lone_count.arg.column.lower()
             stat = next(
                 (
                     row
@@ -644,11 +664,12 @@ class RunSqlCheck(SubstrateCheck):
             return []
         value: float | None = None
         described = ""
-        if (
-            len(table.rows) == 1
-            and len(table.columns) == 1
-            and _COUNT_ONLY.search(sql)
-        ):
+        lone_count = (
+            _lone_count(sql, table)
+            if len(table.rows) == 1 and len(table.columns) == 1
+            else None
+        )
+        if lone_count is not None and not lone_count.distinct:
             cell = table.rows[0][table.columns[0]]
             if isinstance(cell, (int, float)) and not isinstance(cell, bool):
                 value = float(cell)
