@@ -169,7 +169,9 @@ def test_alias_criterion_matches_the_placeholder_segment_grammar():
     from engine.tools.run_sql import _ADDRESSABLE_COLUMN
 
     name_grammar = _ADDRESSABLE_COLUMN.pattern.strip("^$")
-    assert _SEGMENT.pattern == rf"^({name_grammar})((?:\[\d+\])*)$"
+    # The bracket suffix is the placeholder's own (indices may be
+    # negative since the Polish Pass); the pin is the name grammar.
+    assert _SEGMENT.pattern == rf"^({name_grammar})((?:\[-?\d+\])*)$"
 
 
 def test_grounding_prompt_matches_the_golden_fixture(

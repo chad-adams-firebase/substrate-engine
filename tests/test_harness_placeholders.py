@@ -171,9 +171,70 @@ def test_the_exact_c1b_placeholder_resolves():
     assert resolution.text == "The sweep ran 16 times."
 
 
+def test_the_exact_s5_placeholder_resolves():
+    """Polish Pass: {{e1.output.errors[-1].invoice_id}} — S5's drafter
+    named the last error the way anyone would, and the resolver
+    accepted only non-negative indices (three of five reps retried,
+    one shipped [UNVERIFIED])."""
+    padding = _sql_evidence([{"n": 1}])
+    evidence = padding + [
+        ToolInvocation(
+            tool="check_execution",
+            arguments={},
+            status="ok",
+            output=CheckExecutionOutput(
+                errors=[
+                    {"ts": "2026-03-11T08:00:00", "invoice_id": 4471},
+                    {"ts": "2026-03-11T09:30:00", "invoice_id": 4519},
+                ],
+                error_count=2,
+            ),
+            substrates_read=[],
+        )
+    ]
+    resolution = resolve_placeholders(
+        "The last fallback hit invoice {{e1.output.errors[-1].invoice_id}}; "
+        "the first, {{e1.errors[-2].invoice_id}}.",
+        evidence,
+    )
+    assert resolution.failures == []
+    assert resolution.text == "The last fallback hit invoice 4519; the first, 4471."
+    assert [span.ref for span in resolution.injected_spans] == [
+        "e1.errors[-1].invoice_id",
+        "e1.errors[-2].invoice_id",
+    ]
+    # Out of range stays a visible failure, negative or not.
+    beyond = resolve_placeholders("{{e1.errors[-3].invoice_id}}", evidence)
+    assert beyond.failures == ["{{e1.errors[-3].invoice_id}}"]
+
+
+def test_the_output_wrapper_is_skipped_at_any_depth():
+    """The wrapper a drafter believes it saw may land mid-path; where
+    no such key exists it is skipped, and where one does it wins."""
+    evidence = _sql_evidence([{"n": 146}])
+    nested = resolve_placeholders("{{e0.table.output.rows[0].n}}", evidence)
+    assert nested.failures == [] and nested.text == "146"
+    assert [span.ref for span in nested.injected_spans] == ["e0.table.rows[0].n"]
+    evidence = [
+        ToolInvocation(
+            tool="check_execution",
+            arguments={},
+            status="ok",
+            output=CheckExecutionOutput(
+                errors=[{"output": "E42", "invoice_id": 1}],
+                error_count=1,
+            ),
+            substrates_read=[],
+        )
+    ]
+    genuine = resolve_placeholders("{{e0.output.errors[0].output}}", evidence)
+    assert genuine.failures == [] and genuine.text == "E42"
+    assert [span.ref for span in genuine.injected_spans] == ["e0.errors[0].output"]
+
+
 def test_bare_output_is_still_a_failure():
-    # {{e0.output}} names the whole structure, not a scalar; the strip
-    # applies only to an "output." prefix with a path behind it.
+    # {{e0.output}} names the whole structure, not a scalar: skipping
+    # the wrapper leaves the tree, and a tree is not a value.
     evidence = _sql_evidence([{"n": 146}])
     resolution = resolve_placeholders("{{e0.output}}", evidence)
     assert resolution.failures == ["{{e0.output}}"]

@@ -26,8 +26,16 @@ from engine.tools.envelope import ColumnFormat, ToolInvocation
 from engine.verifier.models import InjectedSpan
 
 _PLACEHOLDER = re.compile(r"\{\{e(\d+)\.([^{}]+)\}\}")
-_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)((?:\[\d+\])*)$")
-_INDEXES = re.compile(r"\[(\d+)\]")
+# Indices may be negative — errors[-1] is the last error, which is how
+# a drafter naturally names it (S5 wrote exactly that, the Polish Pass).
+_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)((?:\[-?\d+\])*)$")
+_INDEXES = re.compile(r"\[(-?\d+)\]")
+# render_evidence nests each tool result under "output", and drafters
+# believe the JSON they see over the prompt's examples: an `output`
+# segment that is not a key where it stands is the wrapper, not a
+# field, and is skipped — at the root or at any depth. A genuine
+# output field, should one ever exist, still wins.
+_WRAPPER = "output"
 # A fenced code block in the draft (an unclosed fence runs to the
 # end): the one place a passage-valued placeholder may sit.
 _FENCE = re.compile(r"```[^\n]*\n.*?(?:```|\Z)", re.DOTALL)
@@ -67,28 +75,19 @@ def referenced_indices(surfaces: list[str]) -> list[int]:
     ]
 
 
-def _candidates(path: str) -> tuple[str, ...]:
-    """The paths a surface may mean, in trust order: as written, then —
-    because render_evidence nests each tool result under "output" and
-    drafters believe the JSON they see over the prompt's examples —
-    the same path with that wrapper segment stripped once. As-written
-    wins, so a genuine output field, should one ever exist, still
-    resolves."""
-    if path.startswith("output."):
-        return (path, path[len("output.") :])
-    return (path,)
-
-
 class PathIntoText(TypeError):
     """The path continued past a text field: text is a value, not a
     structure to navigate."""
 
 
-def _navigate(value: object, path: str) -> object:
-    """Walk a dot/bracket path into a model_dump(mode="json") tree.
-    Raises KeyError/IndexError/TypeError on a bad step — the caller
-    turns any of those into a resolution failure, and PathIntoText
-    into the text-path feedback."""
+def _navigate(value: object, path: str) -> tuple[object, str]:
+    """Walk a dot/bracket path into a model_dump(mode="json") tree:
+    (the value, the path actually walked — wrapper segments dropped,
+    so a span's ref and a table cell's display hint read the real
+    path). Raises KeyError/IndexError/TypeError on a bad step — the
+    caller turns any of those into a resolution failure, and
+    PathIntoText into the text-path feedback."""
+    walked: list[str] = []
     for segment in path.split("."):
         match = _SEGMENT.match(segment)
         if match is None:
@@ -98,12 +97,15 @@ def _navigate(value: object, path: str) -> object:
             raise PathIntoText(segment)
         if not isinstance(value, dict):
             raise TypeError(segment)
+        if name == _WRAPPER and not brackets and name not in value:
+            continue  # the evidence wrapper, not a field
+        walked.append(segment)
         value = value[name]
         for index in _INDEXES.findall(brackets):
             if not isinstance(value, list):
                 raise TypeError(segment)
             value = value[int(index)]
-    return value
+    return value, ".".join(walked)
 
 
 def _render(value: object, column_format: ColumnFormat | None = None) -> str | None:
@@ -177,20 +179,14 @@ def resolve_placeholders(
         into_text = False
         if 0 <= index < len(evidence) and evidence[index].output is not None:
             tree = evidence[index].output.model_dump(mode="json")
-            for candidate in _candidates(path):
-                try:
-                    rendered = _render(
-                        _navigate(tree, candidate),
-                        _column_format(tree, candidate),
-                    )
-                except PathIntoText:
-                    rendered = None
-                    into_text = True
-                except (KeyError, IndexError, TypeError, ValueError):
-                    rendered = None
-                if rendered is not None:
-                    effective = candidate
-                    break
+            try:
+                value, effective = _navigate(tree, path)
+                rendered = _render(value, _column_format(tree, effective))
+            except PathIntoText:
+                rendered = None
+                into_text = True
+            except (KeyError, IndexError, TypeError, ValueError):
+                rendered = None
 
         if rendered is None:
             failures.append(surface)
