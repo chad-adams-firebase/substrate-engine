@@ -19,7 +19,7 @@ import re
 
 from langgraph.graph import END, START, StateGraph
 
-from engine.config.models import HarnessSettings
+from engine.config.models import ContextSettings, HarnessSettings
 from engine.harness.control import (
     RouteProtocolViolation,
     control_specs,
@@ -36,9 +36,11 @@ from engine.harness.outcomes import (
     RefuseOutcome,
     TableAnswer,
 )
+from engine.harness.prompts import render_summary_feedback
 from engine.harness.router import (
     assistant_echo,
     build_router_messages,
+    context_window,
     execute_selections,
     results_message,
     summarize_invocation,
@@ -51,6 +53,11 @@ from engine.harness.state import (
     kind_of_outcome,
     transcript_text,
     upgrade_history,
+)
+from engine.harness.summary import (
+    build_summary_messages,
+    scrub_figures,
+    summary_problems,
 )
 from engine.harness.tables import caption_for, project_table
 from engine.harness.verifier_protocol import VerifierProtocol
@@ -72,6 +79,7 @@ class GraphDeps:
         drafter: Drafter,
         settings: HarnessSettings,
         router_prompt: str,
+        summarizer_prompt: str,
     ) -> None:
         self.llm = llm
         self.registry = registry
@@ -79,7 +87,13 @@ class GraphDeps:
         self.drafter = drafter
         self.settings = settings
         self.router_prompt = router_prompt
+        self.summarizer_prompt = summarizer_prompt
         self.events: EventLog = EventLog()
+        # The context window and summary cadence in force for the
+        # current turn — the pack's, unless the caller of ask() names
+        # another (the eval bank's per-row override). Swapped per turn
+        # by AskSession under its lock, like events.
+        self.context: ContextSettings = settings.context
 
 
 # A prose answer that asserts the evidence cannot answer, and grounds
@@ -173,7 +187,12 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             }
 
         messages = build_router_messages(
-            deps.router_prompt, state.history, state.question, state.scratch
+            deps.router_prompt,
+            context_window(state.history, state.summary_through_turn),
+            state.question,
+            state.scratch,
+            summary=state.summary,
+            summary_through_turn=state.summary_through_turn,
         )
         specs = deps.registry.to_specs() + control_specs()
         response = deps.llm.complete(messages, tools=specs, temperature=0.0)
@@ -503,6 +522,64 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             ],
         }
 
+    def summarize(state: TurnState) -> dict:
+        """Fold the turns that have fallen past the verbatim window into
+        the running summary (Brief §10.3) — once enough of them have,
+        so the LLM call is every summary_refresh_after_turns turns, not
+        every turn. Any failure keeps the previous summary: this node
+        runs after the outcome exists and can never cost the answer."""
+        context = deps.context
+        fold_through = state.turn - context.last_n_turns
+        if (
+            fold_through - state.summary_through_turn
+            < context.summary_refresh_after_turns
+        ):
+            return {}
+        records = [
+            record
+            for record in state.history
+            if state.summary_through_turn < record.turn <= fold_through
+        ]
+        if not records:  # every turn in the range raised before finalize
+            return {"summary_through_turn": fold_through}
+        deps.events.emit("summarize", "start", "Updating conversation summary…")
+        try:
+            messages = build_summary_messages(
+                deps.summarizer_prompt, state.summary, records, fold_through
+            )
+            reply = deps.llm.complete(messages, temperature=0.0).content.strip()
+            if not reply:
+                raise ValueError("empty reply")
+            problems = summary_problems(reply, records, fold_through)
+            if problems.any():
+                # One regeneration with the rule named, then the scrub
+                # settles whatever is left.
+                messages = messages + [
+                    Message(role="assistant", content=reply),
+                    Message(
+                        role="user",
+                        content=render_summary_feedback(
+                            problems.figures, problems.bad_refs, fold_through
+                        ),
+                    ),
+                ]
+                retry = deps.llm.complete(messages, temperature=0.0).content.strip()
+                reply = retry or reply
+            summary, scrubbed = scrub_figures(reply, records, fold_through)
+        except Exception as exc:  # noqa: BLE001 - never sink a finished turn
+            deps.events.emit(
+                "summarize",
+                "finish",
+                f"summary refresh failed: {type(exc).__name__}: {exc} — "
+                "previous summary kept",
+            )
+            return {}
+        detail = f"summary updated through turn {fold_through}"
+        if scrubbed:
+            detail += f"; {scrubbed} scrubbed"
+        deps.events.emit("summarize", "finish", detail)
+        return {"summary": summary, "summary_through_turn": fold_through}
+
     def after_route(state: TurnState) -> str:
         if state.decision is None:
             return "route"  # protocol violation nudge; cap ends the loop
@@ -531,6 +608,7 @@ def build_graph(deps: GraphDeps, checkpointer=None):
     builder.add_node("draft", draft)
     builder.add_node("verify", verify)
     builder.add_node("finalize", finalize)
+    builder.add_node("summarize", summarize)
     builder.add_edge(START, "begin")
     builder.add_edge("begin", "route")
     builder.add_conditional_edges(
@@ -552,7 +630,8 @@ def build_graph(deps: GraphDeps, checkpointer=None):
     builder.add_conditional_edges(
         "verify", after_verify, {"finalize": "finalize", "draft": "draft"}
     )
-    builder.add_edge("finalize", END)
+    builder.add_edge("finalize", "summarize")
+    builder.add_edge("summarize", END)
     return builder.compile(checkpointer=checkpointer)
 
 

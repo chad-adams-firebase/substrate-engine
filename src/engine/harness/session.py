@@ -14,6 +14,9 @@ import hashlib
 import threading
 from datetime import UTC, datetime
 
+from pydantic import BaseModel, ConfigDict
+
+from engine.config.models import ContextSettings
 from engine.harness.events import EventLog, StatusListener
 from engine.harness.graph import GraphDeps, build_graph
 from engine.harness.outcomes import TurnResult, dumps_outcome
@@ -45,6 +48,16 @@ def evidence_ref_of(payload: str) -> str:
     """Content-addressed bundle ref — sha256 prefix over the canonical
     JSON, the manifest_id precedent."""
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+class ConversationContext(BaseModel):
+    """A conversation's running summary as the checkpoint holds it
+    (Brief §10.3) — what the page's banner and inspector read."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    summary: str = ""
+    summary_through_turn: int = 0
 
 
 class AskSession:
@@ -112,21 +125,40 @@ class AskSession:
         *,
         workspace_id: int | None = None,
         listener: StatusListener | None = None,
+        context: ContextSettings | None = None,
     ) -> TurnResult:
         """One turn. `workspace_id` places a NEW conversation (ignored
         when conversation_id continues one). `listener` receives this
         call's status events live (an SSE queue); omitted, the
         session's constructor listener (the CLI's stderr trail) does.
-        Raises TurnInProgressError instead of waiting if another turn
-        holds the session."""
+        `context` overrides the pack's context window and summary
+        cadence for this turn only (the eval bank's per-row override);
+        omitted, the pack's settings apply. Raises TurnInProgressError
+        instead of waiting if another turn holds the session."""
         if not self._turn_lock.acquire(blocking=False):
             raise TurnInProgressError("A turn is already running.")
         try:
             return self._ask(
-                question, conversation_id, workspace_id, listener or self._listener
+                question,
+                conversation_id,
+                workspace_id,
+                listener or self._listener,
+                context,
             )
         finally:
             self._turn_lock.release()
+
+    def context_of(self, conversation_id: int) -> ConversationContext:
+        """The running summary the conversation's checkpoint holds —
+        a read through the saver, safe beside a running turn."""
+        snapshot = self._graph.get_state(
+            {"configurable": {"thread_id": str(conversation_id)}}
+        )
+        values = snapshot.values or {}
+        return ConversationContext(
+            summary=values.get("summary", ""),
+            summary_through_turn=values.get("summary_through_turn", 0),
+        )
 
     def _ask(
         self,
@@ -134,6 +166,7 @@ class AskSession:
         conversation_id: int | None,
         workspace_id: int | None,
         listener: StatusListener | None,
+        context: ContextSettings | None,
     ) -> TurnResult:
         self._work_store.ensure_schema()
         conversation, created = self._resolve_conversation(
@@ -141,9 +174,13 @@ class AskSession:
         )
 
         events = EventLog(listener)
-        # Assigned only under the turn lock: nodes read deps.events by
-        # closure, so two turns on one session would cross-wire trails.
+        # Assigned only under the turn lock: nodes read deps.events and
+        # deps.context by closure, so two turns on one session would
+        # cross-wire trails and windows.
         self._deps.events = events
+        self._deps.context = (
+            context if context is not None else self._deps.settings.context
+        )
         config = {"configurable": {"thread_id": str(conversation.id)}}
         try:
             raw_state = self._graph.invoke({"question": question}, config)
@@ -213,4 +250,6 @@ class AskSession:
             evidence_bundle_ref=evidence_ref,
             verdict=state.verdict,
             events=events.events,
+            summary=state.summary,
+            summary_through_turn=state.summary_through_turn,
         )

@@ -227,6 +227,7 @@ def test_full_graph_ask_to_answer_with_complete_provenance():
     from engine.harness.prompts import (
         render_drafter_prompt,
         render_router_prompt,
+        render_summarizer_prompt,
     )
     from engine.harness.session import AskSession
     from engine.ports.types import ToolCall
@@ -278,6 +279,7 @@ def test_full_graph_ask_to_answer_with_complete_provenance():
             inline_value_max_chars=pack.config.harness.inline_value_max_chars,
         ),
         settings=pack.config.harness,
+        summarizer_prompt=render_summarizer_prompt(app_name=pack.config.name),
         router_prompt=render_router_prompt(
             app_name=pack.config.name,
             app_description=pack.config.description,

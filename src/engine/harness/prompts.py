@@ -199,3 +199,52 @@ def render_draft_feedback(feedback: list[str]) -> str:
         "Redraft the answer using only values, names, and quotes "
         "present in the evidence, with placeholders for every figure."
     )
+
+
+def render_summarizer_prompt(*, app_name: str) -> str:
+    """The running-summary writer (Brief §10.3): turns are cited by
+    number, figures are never restated — the router re-gathers a
+    number with a tool when it needs one, so the summary must never
+    become a second, unverified source of figures."""
+    return f"""\
+You maintain the running summary of a conversation with an assistant \
+that answers questions about the {app_name} application from verified \
+evidence. The summary stands in for turns the assistant can no longer \
+see verbatim; the newest turns are always shown to it in full.
+
+Rules, all mandatory:
+- Refer to turns by number: "in turn 3 the user asked …", "the \
+assistant answered in turn 4 with a table of …". Cite only turns you \
+were given or that the previous summary already cites.
+- Never restate a figure from an assistant's answer — no amount, \
+count, percentage, duration or date the assistant reported. Write \
+"(see turn N)" in its place; the assistant re-reads that turn's \
+evidence when it needs the number.
+- Keep what a follow-up question needs to resolve: names (suppliers, \
+items, rules, auditors, tables, columns), codes and dates the user \
+typed, the reading an answer said it used, what the user is trying to \
+establish, and what a pronoun such as "that supplier" refers to.
+- Fold the previous summary in; do not append to it or repeat it.
+- At most 200 words of plain prose. No headings, no lists, no preamble."""
+
+
+def render_summary_feedback(
+    figures: list[str], bad_refs: list[str], through_turn: int
+) -> str:
+    """One regeneration round, then the scrub: the reply restated a
+    figure or cited a turn that does not exist."""
+    lines = ["Your summary broke the rules:"]
+    if figures:
+        lines.append(
+            "- it restates these figures from the assistant's answers: "
+            + ", ".join(figures)
+            + ". Replace each with \"(see turn N)\" — the turn that reported it."
+        )
+    if bad_refs:
+        lines.append(
+            "- it cites turns that do not exist: "
+            + ", ".join(bad_refs)
+            + f". The turns you may cite are 1 through {through_turn}."
+        )
+    lines.append("Rewrite the whole summary with these corrected.")
+    return "\n".join(lines)

@@ -28,14 +28,38 @@ def expand_history(history: list[HistoryTurn]) -> list[Message]:
     return messages
 
 
+def context_window(
+    history: list[HistoryTurn], summary_through_turn: int
+) -> list[HistoryTurn]:
+    """The turns the router sees verbatim: every record newer than the
+    running summary (Brief §10.3) — at least last_n_turns of them,
+    by the summarize node's gate."""
+    return [record for record in history if record.turn > summary_through_turn]
+
+
 def build_router_messages(
     system_prompt: str,
     history: list[HistoryTurn],
     question: str,
     scratch: list[Message],
+    *,
+    summary: str = "",
+    summary_through_turn: int = 0,
 ) -> list[Message]:
+    """System prompt (with the running summary as a section of it, when
+    there is one — never a second system role mid-list), the verbatim
+    window as (user, assistant) pairs, the question, the loop's
+    working messages."""
+    system = system_prompt
+    if summary:
+        system += (
+            f"\n\nConversation summary through turn {summary_through_turn} "
+            "(those turns are not shown; when a figure from one is "
+            "needed, gather it again with a tool this turn):\n"
+            f"{summary}"
+        )
     return [
-        Message(role="system", content=system_prompt),
+        Message(role="system", content=system),
         *expand_history(history),
         Message(role="user", content=question),
         *scratch,

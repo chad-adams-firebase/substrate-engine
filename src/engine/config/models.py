@@ -13,7 +13,7 @@ and typos fail loudly.
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SubstrateName(StrEnum):
@@ -167,6 +167,28 @@ class ToolSettings(BaseModel):
     check_execution: CheckExecutionSettings = CheckExecutionSettings()
 
 
+class ContextSettings(BaseModel):
+    """What the router sees of a long conversation (Brief §10.3, Phase
+    5 Block 4): every turn newer than the running summary verbatim, and
+    the summary for the rest. Turn counts, not characters — determin-
+    istic and testable. The verbatim window is never shorter than
+    last_n_turns and never longer than last_n_turns +
+    summary_refresh_after_turns - 1: the summary folds in the turns
+    beyond the window once summary_refresh_after_turns of them have
+    accumulated, so no turn is ever neither summarized nor shown."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    # The least number of recent turns the router always sees verbatim.
+    last_n_turns: int = Field(default=10, ge=1)
+    # How many turns must fall past the window before the summary is
+    # regenerated (one LLM call, synchronous inside the turn in v1).
+    summary_refresh_after_turns: int = Field(default=5, ge=1)
+    # The turn count past which the page nudges toward a fresh
+    # conversation — a dismissible banner, never a forced boundary.
+    nudge_after_turns: int = Field(default=30, ge=1)
+
+
 class HarnessSettings(BaseModel):
     """Knobs for the Phase 4 agent harness (Brief §8). Every bound the
     graph enforces is pack config, never a constant in graph code."""
@@ -199,6 +221,8 @@ class HarnessSettings(BaseModel):
     # R1/R3/R5). Empty (default) renders no status values; the
     # mechanism mirrors check_execution's coverage_columns.
     lifecycle_status_columns: list[str] = []
+    # The conversation-context window and summary cadence (§10.3).
+    context: ContextSettings = ContextSettings()
 
 
 class JudgeSettings(BaseModel):

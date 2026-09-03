@@ -5,7 +5,11 @@ from engine.config.models import PortName, ToolName
 from engine.config.pack_loader import load_pack
 from engine.harness.drafter import Drafter
 from engine.harness.graph import GraphDeps
-from engine.harness.prompts import render_drafter_prompt, render_router_prompt
+from engine.harness.prompts import (
+    render_drafter_prompt,
+    render_router_prompt,
+    render_summarizer_prompt,
+)
 from engine.harness.session import AskSession
 from engine.ports.types import LLMResponse, ToolCall
 from engine.runtime.harness import build_verifier
@@ -121,6 +125,7 @@ def build_ask_session(
             inline_value_max_chars=pack.config.harness.inline_value_max_chars,
         ),
         settings=pack.config.harness,
+        summarizer_prompt=render_summarizer_prompt(app_name=pack.config.name),
         router_prompt=render_router_prompt(
             app_name=pack.config.name,
             app_description=pack.config.description,

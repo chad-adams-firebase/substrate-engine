@@ -129,3 +129,8 @@ class TurnResult(BaseModel):
     evidence_bundle_ref: str | None = None
     verdict: VerifierVerdict | None = None
     events: list[StatusEvent] = []
+    # The running summary as it stands after this turn, and the last
+    # turn it covers (Brief §10.3) — read by the page's banner and
+    # inspector, `engine ask --json`, and the bank's summary assertions.
+    summary: str = ""
+    summary_through_turn: int = 0

@@ -362,3 +362,28 @@ def test_router_prompt_carries_the_verbatim_rule_and_its_one_exception():
     # The exception sits inside the run_sql bullet, after the rule.
     bullet = prompt.split("run_sql.", 1)[1].split("\n-", 1)[0]
     assert bullet.index("as the user asked it") < bullet.index("One exception")
+
+
+def test_router_summary_rides_in_the_system_message_only():
+    """Brief §10.3: the summary is a section of the one system message,
+    never a second system role mid-list, and absent when empty."""
+    from engine.harness.router import context_window
+    from engine.harness.state import HistoryTurn
+
+    history = [
+        HistoryTurn(turn=t, question=f"q{t}", answer=f"a{t}", kind="prose")
+        for t in (1, 2, 3)
+    ]
+    window = context_window(history, summary_through_turn=1)
+    assert [r.turn for r in window] == [2, 3]
+    messages = build_router_messages(
+        "SYSTEM", window, "now", [], summary="Turn 1 asked (see turn 1).",
+        summary_through_turn=1,
+    )
+    assert [m.role for m in messages] == [
+        "system", "user", "assistant", "user", "assistant", "user"
+    ]
+    assert messages[0].content.startswith("SYSTEM\n\nConversation summary through turn 1")
+    assert messages[0].content.endswith("Turn 1 asked (see turn 1).")
+    assert "gather it again with a tool this turn" in messages[0].content
+    assert build_router_messages("SYSTEM", window, "now", [])[0].content == "SYSTEM"

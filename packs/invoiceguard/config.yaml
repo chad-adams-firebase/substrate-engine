@@ -136,6 +136,14 @@ harness:
   # questions reach app_primer first (play pass R1/R3/R5).
   lifecycle_status_columns:
     - invoice_history.to_status
+  # Conversation context (Brief §10.3): the router always sees at
+  # least the last 10 turns verbatim; once 5 turns have fallen past
+  # that window the running summary folds them in (one LLM call inside
+  # the turn); at 30 turns the page nudges toward a fresh conversation.
+  context:
+    last_n_turns: 10
+    summary_refresh_after_turns: 5
+    nudge_after_turns: 30
 
 verifier:
   max_regenerate_retries: 1

@@ -8,7 +8,11 @@ from engine.config.pack_loader import LoadedPack
 from engine.harness.drafter import Drafter
 from engine.harness.events import StatusListener
 from engine.harness.graph import GraphDeps
-from engine.harness.prompts import render_drafter_prompt, render_router_prompt
+from engine.harness.prompts import (
+    render_drafter_prompt,
+    render_router_prompt,
+    render_summarizer_prompt,
+)
 from engine.harness.session import AskSession
 from engine.runtime.container import ResolvedPorts
 from engine.runtime.tools import (
@@ -53,6 +57,7 @@ def build_harness(
             inline_value_max_chars=pack.config.harness.inline_value_max_chars,
         ),
         settings=pack.config.harness,
+        summarizer_prompt=render_summarizer_prompt(app_name=pack.config.name),
         router_prompt=render_router_prompt(
             app_name=pack.config.name,
             app_description=pack.config.description,
