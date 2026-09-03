@@ -66,11 +66,15 @@ color, and starter prompts come from the pack's `ui:` block — the
 page never knows which pack it serves.
 
 **SSE contract.** `POST /api/ask` with `{"question": str,
-"conversation_id": int | null}` returns `text/event-stream`. Before
-the stream starts, a bad body is `400`, an unknown conversation
-`404`, and a turn already running `409` (one turn per process; the
-session refuses to interleave). Frames are `event:` + one JSON
-`data:` line:
+"conversation_id": int | null, "workspace_id": int | null}` returns
+`text/event-stream`. `workspace_id` places a new conversation (the
+sidebar's current workspace; omitted, the owner's scratch workspace);
+with a `conversation_id` it is ignored. Before the stream starts, a
+bad body is `400`, an unknown conversation or workspace `404`, and a
+turn already running `409` (one turn per process; the session refuses
+to interleave). No row is created before the turn runs, and a turn
+that raises deletes the conversation it opened, so a failed first
+turn leaves no orphan. Frames are `event:` + one JSON `data:` line:
 
 | event | data | when |
 |---|---|---|
@@ -82,6 +86,30 @@ session refuses to interleave). Frames are `event:` + one JSON
 No answer text is ever streamed before its verdict exists (Brief
 §9.2, §10.2 as amended in v2.2). The browser reads the stream with
 `fetch` (POST) and a small frame parser in `static/app.js`.
+
+**Workspaces, conversations, receipts** (`src/engine/web/routes_work.py`,
+Phase 5 Block 3). Every workspace a route touches belongs to the
+current user; another user's is `404`, never `403`. The scratch
+workspace is created on the first listing.
+
+| route | does |
+|---|---|
+| `GET /api/workspaces` · `POST {name}` | list (creating scratch on first use) · create |
+| `DELETE /api/workspaces/<id>` | `204`; `409` while conversations remain |
+| `GET /api/workspaces/<id>/conversations` · `POST {title}` | list · create |
+| `PATCH /api/conversations/<id> {title}` · `DELETE` | rename · delete the turns, the bundles only it cites, its checkpoint thread (`409` under a running turn) |
+| `GET /api/conversations/<id>/turns` | every logged turn: question, outcome, verdict, status events, `evidence_bundle_ref` — the shapes the terminal frame carries; `?format=text` renders the transcript through `web/render.py` |
+| `GET /api/evidence/<ref>` | the bundle JSON as stored, fetched by the inspector on demand |
+
+The turn log carries the question and the outcome since Block 3
+(`turn_log.question`, `turn_log.outcome`); an older `work.db` gains
+the two columns in place on the next `ensure_schema`, and its rows
+read back with an empty question and no outcome.
+
+**The chip** reads the status trail, not `tools_used`: a bounced
+`run_sql` and its English retry are `1 tool · 1 retry`, an errored
+call nothing followed is `1 failed`; `web/render.py:chip_label` and
+`app.js` apply the one rule.
 
 **Cell rendering.** `Table.column_formats` carries a per-column hint
 that run_sql resolves from the pack, and the CLI, the eval grader's
@@ -131,12 +159,30 @@ function starting at its `def` line).
 **Fail-closed cards.** A refusal's `reason` and `what_would_work` are
 plain language for the person who asked; the engineer's diagnosis
 (which bound tripped, by how much) is `RefuseOutcome.detail`, which
-the CLI prints and no card renders — the inspector will.
-`src/engine/web/render.py` renders every outcome kind as text exactly
-as the page shows it, for tests and for text surfaces that show past
-turns.
+the CLI prints and no card renders — the inspector shows it, labelled
+as the diagnosis. `src/engine/web/render.py` renders every outcome
+kind as text exactly as the page shows it, for tests and for the text
+form of the turns endpoint.
+
+**Inspector** (Brief §10.4; the right pane). Clicking a turn's chip
+shows its receipts, none of which the transcript shows: the SQL
+attempt ledger — each attempt's fan-out, enum and interval challenges
+and whether it was blocked, executed, or executed as an override (the
+licensed resend the Verifier warns on); the result table under the
+same `column_formats`; CKG nodes, edges and conditionals; source under
+a language label; the verdict claim by claim, the final draft marked
+by each claim's status from its char offsets, and every plausibility
+finding by check name and severity; the refusal's diagnosis; the
+progress trail with per-step durations and, on a protocol violation,
+the raw router text. The bundle is fetched when the chip is clicked.
+This is the per-turn slice of what `engine eval exposure` computes
+over a whole report — recorded at the time, never recomputed. Package
+mode is a disabled tab until Phase 6.
 
 **Frontend.** Vanilla JS + vendored marked.js and highlight.js (the
 common-languages build), pinned in
 `src/engine/web/static/vendor/VERSIONS.md` with their licenses beside
-them. No build pipeline, no framework, no CDN, no browser storage.
+them. No build pipeline, no framework, no CDN, no browser storage: a
+reload opens the first workspace's empty state with the starter
+prompts. The JS is pinned by source text in `tests/test_web_static.py`
+and `tests/test_web_render.py`; nothing in the suite executes it.

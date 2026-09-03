@@ -432,3 +432,37 @@ Watch-for on the re-run: a green row whose SQL aliases a count with an
 entity noun over a fanning join now loses its badge — correct
 direction; note it. And any enum challenge at all — after the
 narrowing, one fires only on a filter guaranteed empty.
+
+## Block 3 riders (2026-09-02, after the post-guard-pass run)
+
+The post-guard run (report `2026-09-02-post-guard`, committed
+`850f869`, bank `5b2e1e127616bdc0`) read `INVARIANT: ok`. Block 3
+(workspaces, conversations, the inspector) landed on it without a bank
+re-run: nothing in the block is model-facing — no prompt, lint,
+verifier, grading or map text moved — and the committed report grades
+identically at the block's HEAD (the only diff is the engine-drift
+warning naming the newer sha). What the ledger records from the run:
+
+- **Verified-but-not-live-witnessed, the standing list: the
+  expression-join lint (A1), the dead-LEFT-JOIN lint (A4), the
+  interval-arithmetic lint, and the entity-count bound.** The run's
+  five `fan_out_override` traces are the older guard; `interval_
+  arithmetic_override`, `enum_literal_override` and
+  `entity_count_exceeds_table` each read zero across the report. All
+  four are test-verified on their breach fixtures, run-tested through
+  `run_sql` or the Verifier, and replayed by `engine eval exposure`;
+  none has fired on a live turn. Grounding first, guard behind it —
+  the order the design intends, and the list stays here until a model
+  habit walks past the grounding and one of them speaks.
+- **The inspector shows the per-turn slice of what exposure computes,
+  recorded, never recomputed.** Each attempt's three lint fields and
+  the verdict's plausibility records are what the turn wrote; the
+  report-level replay stays a CLI artifact.
+
+Deferred to the Polish Pass after this block, not built here: W1's
+false-downgrade pair (direction-blind fan-out reasoning; the
+`sum_vs_stats` cap under a rounded `null_rate`); a text-form
+`give_answer(...)` parsed as the call it is (B2's nine-run root
+cause); the fan-out challenge's remaining "aggregate from the table
+that carries the filtered column" phrase; placeholder negative indices
+and the `output.` prefix (S5).
