@@ -20,18 +20,25 @@ a guard lands is what the guard would have said.
 The world must match: the bounds read the stats substrate, and a
 report that ran against other stats would expose the wrong thing —
 refused, as grade refuses.
+
+A work store's conversation is measured the same way (Polish Pass): the
+browser's turns log the same evidence bundles a report inlines, so the
+statements a manager typed face today's guards exactly like a bank row's.
+Each turn's substrate_versions must name manifests this world has.
 """
 
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 
 from pydantic import BaseModel, ConfigDict
 
 from engine.config.models import PlausibilitySettings, ToolName
 from engine.eval.models import RunRecord, RunReportHeader
+from engine.ports.work_store import WorkStorePort
 from engine.substrates.models import DictionaryMap, DictionaryRow, StatsRow
 from engine.tools.enum_lint import lint_enum_literals
-from engine.tools.envelope import RunSqlOutput, loads_turn_evidence
+from engine.tools.envelope import RunSqlOutput, ToolInvocation, loads_turn_evidence
 from engine.tools.interval_lint import lint_interval_arithmetic
 from engine.tools.sql_lint import lint_fan_out
 from engine.verifier.checks.base import PlausibilityContext
@@ -90,8 +97,86 @@ def check_world(header: RunReportHeader, world_manifests: dict[str, str]) -> Non
             )
 
 
+@dataclass(frozen=True)
+class Statement:
+    """One executed run_sql invocation with its attribution: a report's
+    row/rep/turn, or a work store's conversation (row_id `conv<id>`,
+    rep 1, the engine turn number)."""
+
+    row_id: str
+    rep: int
+    turn_index: int
+    invocation_index: int
+    invocation: ToolInvocation
+
+
+def _executed(invocations: Iterable[ToolInvocation]) -> Iterator[tuple[int, ToolInvocation]]:
+    for index, invocation in enumerate(invocations):
+        if invocation.tool == ToolName.RUN_SQL and isinstance(
+            invocation.output, RunSqlOutput
+        ):
+            yield index, invocation
+
+
+def report_statements(records: Iterable[RunRecord]) -> Iterator[Statement]:
+    """Every executed run_sql statement a report's records carry."""
+    for record in records:
+        for turn in record.turns:
+            if not turn.evidence_payload:
+                continue
+            for index, invocation in _executed(loads_turn_evidence(turn.evidence_payload)):
+                yield Statement(record.row_id, record.rep, turn.turn_index, index, invocation)
+
+
+def work_store_statements(
+    store: WorkStorePort,
+    conversation_ids: Iterable[int],
+    world_manifests: dict[str, str],
+) -> list[Statement]:
+    """Every executed run_sql statement the named conversations logged —
+    the browser's turns, measured like a report. A turn whose
+    substrate_versions name a manifest this world does not have is
+    refused, exactly as a report from another world is."""
+    known = set(world_manifests.values())
+    statements: list[Statement] = []
+    for conversation_id in conversation_ids:
+        if store.get_conversation(conversation_id) is None:
+            raise ExposureError(
+                f"conversation {conversation_id} does not exist in this work store."
+            )
+        for entry in store.list_turn_logs(conversation_id):
+            foreign = sorted(set(entry.substrate_versions) - known)
+            if foreign:
+                raise ExposureError(
+                    f"world mismatch: conversation {conversation_id} turn "
+                    f"{entry.turn} ran against manifest(s) {', '.join(foreign)} "
+                    "this world does not have — the bounds would read stats "
+                    "the statements never ran against."
+                )
+            if not entry.evidence_bundle_ref:
+                continue
+            payload = store.load_evidence_bundle(entry.evidence_bundle_ref)
+            if payload is None:
+                continue
+            for index, invocation in _executed(loads_turn_evidence(payload)):
+                statements.append(
+                    Statement(
+                        f"conv{conversation_id}", 1, entry.turn, index, invocation
+                    )
+                )
+    return statements
+
+
+def _statements(source: Iterable[RunRecord | Statement]) -> Iterator[Statement]:
+    for item in source:
+        if isinstance(item, Statement):
+            yield item
+        else:
+            yield from report_statements([item])
+
+
 def expose(
-    records: Iterable[RunRecord],
+    records: Iterable[RunRecord | Statement],
     *,
     stats: list[StatsRow],
     dictionary: list[DictionaryRow],
@@ -100,54 +185,49 @@ def expose(
     checks: Iterable[str] | None = None,
     report_path: str | None = None,
 ) -> ExposureReport:
-    """Every executed run_sql statement in the records, under today's
-    guards. `checks` narrows the hits to the named checks."""
+    """Every executed run_sql statement in the records (or the
+    already-attributed statements), under today's guards. `checks`
+    narrows the hits to the named checks."""
     wanted = list(checks or [])
     keep = set(wanted)
     context = PlausibilityContext(stats=stats, settings=settings)
     verifier_check = RunSqlCheck()
     hits: list[ExposureHit] = []
     statements = 0
-    for record in records:
-        for turn in record.turns:
-            if not turn.evidence_payload:
+    for statement in _statements(records):
+        invocation = statement.invocation
+        output = invocation.output
+        assert isinstance(output, RunSqlOutput)
+        statements += 1
+        found: list[tuple[str, str, str]] = [
+            (finding.check, finding.severity, finding.detail)
+            for finding in verifier_check.plausibility(invocation, context)
+        ]
+        for name, reason in (
+            ("lint.fan_out", lint_fan_out(output.sql, dictionary, dictionary_map)),
+            ("lint.enum_literal", lint_enum_literals(output.sql, dictionary)),
+            (
+                "lint.interval_arithmetic",
+                lint_interval_arithmetic(output.sql, dictionary),
+            ),
+        ):
+            if reason is not None:
+                found.append((name, "challenge", reason))
+        for check, severity, detail in found:
+            if keep and check not in keep:
                 continue
-            for index, invocation in enumerate(loads_turn_evidence(turn.evidence_payload)):
-                output = invocation.output
-                if invocation.tool != ToolName.RUN_SQL or not isinstance(
-                    output, RunSqlOutput
-                ):
-                    continue
-                statements += 1
-                found: list[tuple[str, str, str]] = [
-                    (finding.check, finding.severity, finding.detail)
-                    for finding in verifier_check.plausibility(invocation, context)
-                ]
-                for name, reason in (
-                    ("lint.fan_out", lint_fan_out(output.sql, dictionary, dictionary_map)),
-                    ("lint.enum_literal", lint_enum_literals(output.sql, dictionary)),
-                    (
-                        "lint.interval_arithmetic",
-                        lint_interval_arithmetic(output.sql, dictionary),
-                    ),
-                ):
-                    if reason is not None:
-                        found.append((name, "challenge", reason))
-                for check, severity, detail in found:
-                    if keep and check not in keep:
-                        continue
-                    hits.append(
-                        ExposureHit(
-                            row_id=record.row_id,
-                            rep=record.rep,
-                            turn_index=turn.turn_index,
-                            invocation_index=index,
-                            check=check,
-                            severity=severity,
-                            detail=detail,
-                            sql=output.sql,
-                        )
-                    )
+            hits.append(
+                ExposureHit(
+                    row_id=statement.row_id,
+                    rep=statement.rep,
+                    turn_index=statement.turn_index,
+                    invocation_index=statement.invocation_index,
+                    check=check,
+                    severity=severity,
+                    detail=detail,
+                    sql=output.sql,
+                )
+            )
     return ExposureReport(
         report_path=report_path, statements=statements, checks=wanted, hits=hits
     )

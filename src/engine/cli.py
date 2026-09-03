@@ -261,7 +261,21 @@ def main(argv: list[str] | None = None) -> int:
         "--bank", required=True, help="Bank root (e.g. evals/invoiceguard)."
     )
     eval_exposure.add_argument(
-        "--report", required=True, type=_cwd_path, help="Run report JSONL."
+        "--report", type=_cwd_path, help="Run report JSONL."
+    )
+    eval_exposure.add_argument(
+        "--work-store",
+        action="store_true",
+        help="Instead of a report: the pack's configured work store — the "
+        "browser's turns, measured like a report. Requires --conversation.",
+    )
+    eval_exposure.add_argument(
+        "--conversation",
+        action="append",
+        dest="conversations",
+        type=int,
+        metavar="ID",
+        help="With --work-store: the conversation to replay (repeatable).",
     )
     eval_exposure.add_argument(
         "--pack",
@@ -661,12 +675,17 @@ def _eval_exposure(args) -> int:
         check_world,
         expose,
         render_exposure,
+        work_store_statements,
     )
     from engine.eval.grade import pack_world_manifests
     from engine.eval.runner import RunnerError, load_report
     from engine.ports.substrate_store import SubstrateStoreError
     from engine.runtime.container import AdapterBuildError, build_port
 
+    if (args.report is None) == (not args.work_store):
+        raise CliError("Give exactly one of --report or --work-store.")
+    if args.work_store and not args.conversations:
+        raise CliError("--work-store needs at least one --conversation ID.")
     try:
         bank = load_bank(args.bank)
         pack_dir = (
@@ -676,16 +695,26 @@ def _eval_exposure(args) -> int:
         )
         pack = load_pack(pack_dir)
         store = build_port(pack, PortName.SUBSTRATE_STORE)
-        header, records = load_report(Path(args.report))
-        check_world(header, pack_world_manifests(pack_dir))
+        world = pack_world_manifests(pack_dir)
+        if args.work_store:
+            work_store = build_port(pack, PortName.WORK_STORE)
+            work_store.ensure_schema()
+            source = work_store_statements(work_store, args.conversations, world)
+            label = "work store · conversation " + ", ".join(
+                str(c) for c in args.conversations
+            )
+        else:
+            header, source = load_report(Path(args.report))
+            check_world(header, world)
+            label = Path(args.report).name
         result = expose(
-            records,
+            source,
             stats=store.stats(),
             dictionary=store.dictionary(),
             dictionary_map=store.dictionary_map(),
             settings=pack.config.verifier.plausibility,
             checks=args.checks,
-            report_path=Path(args.report).name,
+            report_path=label,
         )
     except (
         BankLoadError,

@@ -167,3 +167,115 @@ def test_the_cli_verb_runs_offline_against_the_committed_report(capsys, tmp_path
     assert "run_sql.entity_count_exceeds_table  3" in text
     assert text.count("AMB2 rep") == 3
     assert out.read_text(encoding="utf-8") == text
+
+
+# --- Polish Pass: a work store's conversation, measured like a report ---
+
+
+def _seed_conversation(store, invocations, substrate_versions):
+    """One logged turn with a run_sql bundle, written through the port
+    exactly as a browser turn lands (no graph needed)."""
+    from datetime import UTC, datetime
+
+    from engine.harness.session import evidence_ref_of
+    from engine.ports.types import TurnLogEntry
+
+    store.ensure_schema()
+    workspace = store.create_workspace("dev", "scratch")
+    conversation = store.create_conversation(workspace.id, "browser")
+    payload = dumps_turn_evidence(list(invocations))
+    ref = evidence_ref_of(payload)
+    store.save_evidence_bundle(ref, payload)
+    store.append_turn_log(
+        TurnLogEntry(
+            conversation_id=conversation.id,
+            turn=1,
+            actor="dev",
+            action="ask",
+            tools_used=["run_sql"],
+            evidence_bundle_ref=ref,
+            substrate_versions=substrate_versions,
+            question="how many open?",
+            created_at=datetime.now(UTC),
+        )
+    )
+    return conversation
+
+
+def test_a_work_store_conversation_is_measured_like_a_report(tool_pack):
+    from engine.config.models import PortName
+    from engine.eval.exposure import work_store_statements
+    from tests.harness_support import build_ask_session
+
+    _, ports, _ = build_ask_session(tool_pack, [])
+    store = ports.get(PortName.WORK_STORE)
+    walked = sql_invocation(AMB2_HISTORY, [{"invoice_count": 6432}])
+    conversation = _seed_conversation(store, [walked], ["stats-1", "dict-1"])
+    world = {"stats": "stats-1", "dictionary": "dict-1", "ckg": "ckg-1"}
+
+    statements = work_store_statements(store, [conversation.id], world)
+    assert [(s.row_id, s.rep, s.turn_index, s.invocation_index) for s in statements] == [
+        (f"conv{conversation.id}", 1, 1, 0)
+    ]
+    report = expose(
+        statements,
+        stats=STATS,
+        dictionary=ENUM_DICTIONARY,
+        dictionary_map=EMPTY_MAP,
+        settings=PlausibilitySettings(),
+        report_path=f"work store · conversation {conversation.id}",
+    )
+    assert report.statements == 1
+    assert [(h.row_id, h.check) for h in report.hits] == [
+        (f"conv{conversation.id}", "run_sql.entity_count_exceeds_table")
+    ]
+    assert f"conv{conversation.id} rep 1 turn 1 [warn]" in render_exposure(report)
+
+    # A turn that ran against a manifest this world lacks is refused,
+    # as a report from another world is; a missing conversation too.
+    with pytest.raises(ExposureError, match="world mismatch"):
+        work_store_statements(store, [conversation.id], {"stats": "stats-2"})
+    with pytest.raises(ExposureError, match="does not exist"):
+        work_store_statements(store, [conversation.id + 1], world)
+
+
+def test_the_cli_verb_replays_the_packs_work_store(tool_pack, tmp_path, capsys):
+    import yaml
+
+    from engine.config.models import PortName
+    from engine.eval.grade import pack_world_manifests
+    from tests.harness_support import build_ask_session
+
+    config_path = tool_pack / "config.yaml"
+    config = yaml.safe_load(config_path.read_text())
+    config["adapters"]["work_store"]["settings"]["database"] = str(tmp_path / "work.db")
+    config_path.write_text(yaml.safe_dump(config))
+    _, ports, _ = build_ask_session(tool_pack, [])
+    store = ports.get(PortName.WORK_STORE)
+    fine = sql_invocation("SELECT COUNT(*) AS n FROM invoices", [{"n": 50}])
+    conversation = _seed_conversation(
+        store, [fine], list(pack_world_manifests(tool_pack).values())
+    )
+
+    code = cli.main([
+        "eval", "exposure",
+        "--bank", str(ROOT / "evals" / "invoiceguard"),
+        "--pack", str(tool_pack),
+        "--work-store", "--conversation", str(conversation.id),
+        "--check", "lint.fan_out",
+    ])
+    assert code == 0
+    text = capsys.readouterr().out
+    assert text.startswith(
+        f"Eval exposure — report: work store · conversation {conversation.id} · statements: 1"
+    )
+    assert "lint.fan_out  0" in text
+
+    # Exactly one source, and a conversation with it.
+    assert cli.main(["eval", "exposure", "--bank", str(ROOT / "evals" / "invoiceguard")]) == 1
+    assert "exactly one of --report or --work-store" in capsys.readouterr().err
+    assert cli.main([
+        "eval", "exposure", "--bank", str(ROOT / "evals" / "invoiceguard"),
+        "--pack", str(tool_pack), "--work-store",
+    ]) == 1
+    assert "--conversation" in capsys.readouterr().err
