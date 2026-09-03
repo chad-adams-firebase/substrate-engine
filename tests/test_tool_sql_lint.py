@@ -128,7 +128,8 @@ def test_mt2_fan_out_draws_the_lint_naming_the_join_path():
     reason = lint_fan_out(MT2_FANOUT, DICTIONARY, MAP)
     assert reason is not None
     assert "findings.invoice_id = compliance_reports.invoice_id" in reason
-    assert "both columns are foreign keys to invoices.id" in reason
+    assert "both columns are foreign keys with the same target" in reason
+    assert "invoices.id" not in reason  # the unqueried target is not named
     assert "invoices_to_compliance" in reason
     assert "COUNT(DISTINCT <table>.id)" in reason
     assert "resend the statement unchanged" in reason
@@ -163,7 +164,8 @@ def test_join_to_the_many_side_draws_the_lint():
     reason = lint_fan_out(FO_EXCEPT_NAIVE, DICTIONARY, MAP)
     assert reason is not None
     assert "findings.invoice_id is a foreign key" in reason
-    assert "finding_feedback" not in reason.split("Join condition")[1].split("Count the")[0]
+    assert "COUNT(*) reads invoices" in reason
+    assert "finding_feedback" not in reason.split("Aggregate each side")[0]
 
 
 def test_join_without_a_foreign_key_is_challenged_not_exempt():
@@ -193,13 +195,21 @@ JOIN invoice_lines l ON i.id = l.invoice_id
 GROUP BY s.name
 """
 
+# Polish Pass: the fixture reads the one side (invoices, repeated once
+# per line) — its earlier AVG(l.extended_price) read the many side,
+# which cannot fan, and is now the silent LINE_AVG below.
 AVG_FANOUT = """
-SELECT s.name AS supplier_name, AVG(l.extended_price) AS avg_line_price
+SELECT s.name AS supplier_name, AVG(i.invoice_total) AS avg_invoice_total
 FROM suppliers s
 JOIN invoices i ON s.id = i.supplier_id
 JOIN invoice_lines l ON i.id = l.invoice_id
 GROUP BY s.name
 """
+
+LINE_AVG = AVG_FANOUT.replace(
+    "AVG(i.invoice_total) AS avg_invoice_total",
+    "AVG(l.extended_price) AS avg_line_price",
+)
 
 W7_BANDAID = """
 SELECT u.short_name AS reviewer,
@@ -217,8 +227,14 @@ def test_w1_shape_still_trips_after_the_count_repair():
     detection-only re-lint records on the executed attempt."""
     reason = lint_fan_out(W1_OVERRIDE, DICTIONARY, MAP)
     assert reason is not None
-    assert "invoices.supplier_id is a foreign key" in reason
-    assert "subquery joined back per entity" in reason
+    # Direction-aware (Polish Pass): the step that repeats invoices is
+    # the lines join, and the suppliers join — which repeats only
+    # suppliers, a table no aggregate reads — is not named.
+    assert "SUM(i.invoice_total) reads invoices" in reason
+    assert "invoice_lines.invoice_id is a foreign key" in reason
+    assert "invoices.supplier_id" not in reason
+    assert "SUM(l.extended_price)" not in reason  # the many side cannot fan
+    assert "Aggregate each side in its own scope" in reason
     assert "resend the statement unchanged" in reason
 
 
@@ -227,7 +243,8 @@ def test_avg_over_a_fanning_join_draws_the_lint():
     repeated rows exactly like a fanned SUM."""
     reason = lint_fan_out(AVG_FANOUT, DICTIONARY, MAP)
     assert reason is not None
-    assert "COUNT/SUM/AVG" in reason
+    assert "AVG(i.invoice_total) reads invoices" in reason
+    assert lint_fan_out(LINE_AVG, DICTIONARY, MAP) is None
 
 
 def test_sum_distinct_bandaid_is_challenged_not_exempt():
@@ -479,3 +496,109 @@ def test_an_unaliased_table_before_join_still_registers():
     assert table_aliases("FROM invoices AS i JOIN findings f ON f.invoice_id = i.id") == {
         "invoices": "invoices", "i": "invoices", "findings": "findings", "f": "findings",
     }
+
+
+# --- Polish Pass: the direction rule ----------------------------------
+
+# The flagship table's two live attempts (browser, 2026-09-03).
+FLAGSHIP_ATTEMPT_1 = """
+SELECT s.name AS supplier_name,
+       SUM(i.invoice_total) AS total_invoice_amount,
+       SUM(il.extended_price) AS total_line_item_amount
+FROM suppliers s
+LEFT JOIN invoices i ON s.id = i.supplier_id
+LEFT JOIN invoice_lines il ON i.id = il.invoice_id
+GROUP BY s.name ORDER BY s.name
+"""
+FLAGSHIP_ATTEMPT_2 = """
+SELECT s.name AS supplier_name,
+       (SELECT SUM(i.invoice_total) FROM invoices i WHERE i.supplier_id = s.id) AS total_invoice_amount,
+       (SELECT SUM(il.extended_price) FROM invoices i JOIN invoice_lines il ON i.id = il.invoice_id
+        WHERE i.supplier_id = s.id) AS total_line_item_amount
+FROM suppliers s ORDER BY s.name
+"""
+# W1's first turn: every aggregate reads the many side.
+W1_TURN_0 = """
+SELECT s.name AS supplier_name, COUNT(i.id) AS invoice_count,
+       SUM(i.invoice_total) AS total_invoice_amount, SUM(i.opportunity) AS total_opportunity
+FROM suppliers s LEFT JOIN invoices i ON s.id = i.supplier_id
+GROUP BY s.name ORDER BY invoice_count DESC
+"""
+# W1 reps 3/4's second turn: the line count pre-aggregated per invoice
+# in a derived table, joined back — invisible to the step scan, and
+# the outer aggregates read invoices, which only suppliers' join
+# touches (and suppliers is what it repeats).
+W1_DERIVED_LINES = """
+SELECT s.name AS supplier_name, COUNT(DISTINCT i.id) AS invoice_count,
+       SUM(i.invoice_total) AS total_invoice_amount, SUM(il.line_count) AS total_invoice_line_count
+FROM suppliers s
+LEFT JOIN invoices i ON s.id = i.supplier_id
+LEFT JOIN (SELECT invoice_id, COUNT(*) AS line_count FROM invoice_lines GROUP BY invoice_id) il
+  ON i.id = il.invoice_id
+GROUP BY s.name ORDER BY s.name
+"""
+TWO_MANY_SIDES = """
+SELECT i.id AS invoice_id, SUM(l.extended_price) AS line_total, SUM(f.amount) AS finding_total
+FROM invoices i
+JOIN invoice_lines l ON l.invoice_id = i.id
+JOIN findings f ON f.invoice_id = i.id
+GROUP BY i.id
+"""
+LOOKUP_SIDE_SUM = """
+SELECT s.name AS supplier_name, SUM(s.credit_limit) AS credit
+FROM invoices i JOIN suppliers s ON i.supplier_id = s.id
+GROUP BY s.name
+"""
+
+
+def test_the_correlated_flagship_shape_is_silent_and_the_flat_one_is_not():
+    """The brief's two live statements: attempt 2 aggregates each side
+    in its own scope (the lines scope joins invoices ⟵ invoice_lines and
+    reads the many side); attempt 1 reads invoices across the lines join
+    that repeats it. The lint challenged both before, and the correct
+    resend shipped [UNVERIFIED] via fan_out_override."""
+    assert lint_fan_out(FLAGSHIP_ATTEMPT_2, DICTIONARY, MAP) is None
+    reason = lint_fan_out(FLAGSHIP_ATTEMPT_1, DICTIONARY, MAP)
+    assert reason is not None
+    assert "SUM(i.invoice_total) reads invoices" in reason
+    assert "invoices.id = invoice_lines.invoice_id" in reason
+    assert "SUM(il.extended_price)" not in reason
+    assert "suppliers.id = invoices.supplier_id" not in reason
+
+
+def test_aggregating_the_many_side_per_one_side_cannot_fan():
+    """W1's first turn — five reps, four runs, all challenged on
+    suppliers.id = invoices.supplier_id, which repeats suppliers only."""
+    assert lint_fan_out(W1_TURN_0, DICTIONARY, MAP) is None
+    assert lint_fan_out(W1_DERIVED_LINES, DICTIONARY, MAP) is None
+
+
+def test_two_many_sides_of_one_table_repeat_each_other():
+    reason = lint_fan_out(TWO_MANY_SIDES, DICTIONARY, MAP)
+    assert reason is not None
+    assert "SUM(l.extended_price) reads invoice_lines" in reason
+    assert "SUM(f.amount) reads findings" in reason
+    assert "joins invoices to both" in reason
+
+
+def test_aggregating_the_lookup_side_is_a_fan_the_old_rule_missed():
+    """A many-to-one lookup repeats the one side once per from-side
+    row: SUM over the looked-up table fans. The from-side exemption
+    used to exempt this by table position alone."""
+    reason = lint_fan_out(LOOKUP_SIDE_SUM, DICTIONARY, MAP)
+    assert reason is not None
+    assert "SUM(s.credit_limit) reads suppliers" in reason
+    assert "repeats each suppliers row once per invoices row" in reason
+
+
+def test_an_indicator_over_a_correlated_subquery_counts_the_row_grain():
+    """A CASE over EXISTS(...) reads no outer column: it is attributed
+    to the FROM table like COUNT(*), so the lookup chain stays silent
+    (the correction_application_rate template's shape)."""
+    sql = """
+    SELECT COUNT(*) AS n,
+           SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM invoice_lines sl WHERE sl.invoice_id = i.id)
+               THEN 1 ELSE 0 END) AS lineless
+    FROM findings f JOIN invoices i ON f.invoice_id = i.id
+    """
+    assert lint_fan_out(sql, DICTIONARY, MAP) is None

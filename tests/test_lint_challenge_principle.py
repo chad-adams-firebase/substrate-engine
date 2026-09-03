@@ -5,12 +5,13 @@ the enum challenge said where else a value was observed, the model
 read it as an instruction, and 6,432 transitions shipped verified as
 an invoice count.
 
-Mechanised: every dictionary table a challenge names OUTSIDE
-parentheses is a table the statement already queries. Parenthesised
-text is explanation (the fan-out check's "(both columns are foreign
-keys to invoices.id — …)" names the FK target to explain the fan);
-imperative text is where a destination would hide. One test per lint,
-on the fixture that breached it into existence."""
+Mechanised: every dictionary table a challenge names — anywhere in
+its text — is a table the statement already queries. The guard pass
+exempted parenthesised explanation (the fan-out check's "(both
+columns are foreign keys to invoices.id — …)"); the Polish Pass
+removed the exemption and rewrote that reason ("… with the same
+target"), so a parenthetical cannot hide a destination either. One
+test per lint, on the fixtures that breached it into existence."""
 
 import re
 
@@ -22,16 +23,14 @@ from tests import test_tool_interval_lint as interval_fixtures
 from tests import test_tool_sql_lint as fan_out_fixtures
 from tests.verifier_support import W3_REP4_SQL
 
-_PARENTHESISED = re.compile(r"\([^()]*\)")
 _WORD = re.compile(r"\b[a-z_]+\b")
 _FROM_JOIN = re.compile(r"\b(?:from|join)\s+([A-Za-z_]\w*)", re.IGNORECASE)
 
 
-def tables_named_outside_parentheses(challenge: str, tables: set[str]) -> set[str]:
-    text = challenge
-    while (stripped := _PARENTHESISED.sub("", text)) != text:
-        text = stripped
-    return {word for word in _WORD.findall(text.lower()) if word in tables}
+def tables_named(challenge: str, tables: set[str]) -> set[str]:
+    """Every dictionary table the challenge names, parentheses included:
+    explanation is text a model reads too."""
+    return {word for word in _WORD.findall(challenge.lower()) if word in tables}
 
 
 def queried_tables(sql: str) -> set[str]:
@@ -46,9 +45,9 @@ def _tables(dictionary) -> set[str]:
 
 def _assert_keeps_its_tables(challenge: str, sql: str, dictionary) -> None:
     assert challenge is not None
-    named = tables_named_outside_parentheses(challenge, _tables(dictionary))
+    named = tables_named(challenge, _tables(dictionary))
     assert named <= queried_tables(sql), (
-        f"challenge names an unqueried table outside parentheses: "
+        f"challenge names an unqueried table: "
         f"{sorted(named - queried_tables(sql))}\n{challenge}"
     )
 
@@ -68,6 +67,13 @@ def test_the_fan_out_challenges_keep_their_tables():
         fixtures.MT2_EXPRESSION_JOIN,
         fixtures.B5_DEAD_LEFT_JOIN,
         fixtures.S2_AVG_OVER_NULL_SIDE,
+        fixtures.FO_EXCEPT_NAIVE,
+        fixtures.W1_OVERRIDE,
+        fixtures.W7_BANDAID,
+        fixtures.S3_NO_FK,
+        fixtures.FLAGSHIP_ATTEMPT_1,
+        fixtures.TWO_MANY_SIDES,
+        fixtures.LOOKUP_SIDE_SUM,
     ):
         challenge = lint_fan_out(sql, fixtures.DICTIONARY, fixtures.MAP)
         _assert_keeps_its_tables(challenge, sql, fixtures.DICTIONARY)
@@ -76,20 +82,21 @@ def test_the_fan_out_challenges_keep_their_tables():
 def test_the_interval_challenge_names_no_table_at_all():
     challenge = lint_interval_arithmetic(W3_REP4_SQL, interval_fixtures.DICTIONARY)
     assert challenge is not None
-    assert tables_named_outside_parentheses(
+    assert tables_named(
         challenge, _tables(interval_fixtures.DICTIONARY)
     ) == set()
 
 
-def test_the_helper_reads_parentheses_as_explanation():
-    """The mechanism the rule relies on, pinned: a table inside
-    parentheses is explanation and does not count; the same name
-    outside does."""
+def test_the_helper_reads_parentheses_too():
+    """The mechanism the rule relies on, pinned: a table named inside
+    parentheses counts exactly like one outside — the Polish Pass
+    dropped the explanation exemption."""
     tables = {"invoices", "findings"}
-    assert tables_named_outside_parentheses(
+    assert tables_named(
         "count findings (several findings rows share one invoices row)", tables
-    ) == {"findings"}
-    assert tables_named_outside_parentheses(
-        "count findings; query invoices instead", tables
     ) == {"findings", "invoices"}
-    assert tables_named_outside_parentheses("(a (nested invoices) note)", tables) == set()
+    assert tables_named("count findings; query invoices instead", tables) == {
+        "findings", "invoices",
+    }
+    assert tables_named("(a (nested invoices) note)", tables) == {"invoices"}
+    assert tables_named("the invoices_to_lines path", tables) == set()

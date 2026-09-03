@@ -13,18 +13,34 @@ Regex-level on purpose (the house precedent, generators/ckg/sql_tables
 are split on parentheses so a correlated or scalar subquery is linted
 as its own SELECT, never mistaken for a join in its parent.
 
-What fires: a scope with a non-DISTINCT COUNT/SUM/AVG in its select
-list and at least one JOIN ... ON whose equality can multiply the
-rows of the tables already in scope — a join to the many side of a
-foreign key, a join of two foreign keys (MT2's shape), or a join no
-foreign key or declared one-to-one path vouches for. SUM(DISTINCT)
-and AVG(DISTINCT) also fire in such a scope: DISTINCT inside SUM/AVG
-silently drops repeated values (the play pass's W7 band-aid), so it
-is a challenged pattern, not a repair. What is exempt: lookups along
-a foreign key from the from-side (findings -> invoices -> suppliers),
-joins the Dictionary Map declares one_to_one, and COUNT(DISTINCT ...).
-Comma-separated FROM lists escape the check (the model does not write
-them).
+What fires (the Polish Pass's direction rule): a scope whose
+COUNT/SUM/AVG reads a table its joins REPEAT. A join along a foreign
+key, one.id = many.fk, repeats each one-side row once per many-side
+row and never repeats the many side — so SUM(invoices.invoice_total)
+across invoices JOIN invoice_lines fans, and SUM(invoice_lines
+.extended_price) across the same join does not (W1's four runs at 0/5
+were the direction-blind reading of exactly that pair). In a scope
+whose every step is such a vouched one-to-many join, the repeated
+tables are the one side of each step plus any many sides that share a
+one side (siblings repeat each other); a scope with a step nothing
+vouches for — both sides foreign keys to each other or to the same
+target (MT2's shape), no foreign key at all, or a key derived by an
+expression — repeats every table in it, the conservative stance kept
+from before. An aggregate is attributed to the tables its argument
+reads; one that reads no outer column (COUNT(*), a CASE over a
+correlated subquery) counts the scope's row grain and is attributed to
+the FROM table, which keeps a lookup chain from the from-side
+(findings -> invoices -> suppliers) silent. SUM(DISTINCT) and
+AVG(DISTINCT) are read like plain aggregates and, when they fire, are
+named as the band-aid they are (the play pass's W7): DISTINCT inside
+SUM/AVG silently drops repeated values. Exempt: joins the Dictionary
+Map declares one_to_one, and COUNT(DISTINCT ...). Comma-separated FROM
+lists escape the check (the model does not write them).
+
+The challenge names the aggregate, the table it reads, and the step
+that repeats it — never a destination (the guard pass's principle:
+a challenge names what is wrong, and no table the statement does not
+already query, anywhere in its text).
 
 The pin pass added three join-shape checks (the post-play-pass
 breach's three mechanisms):
@@ -112,6 +128,23 @@ _AVG_QUALIFIED = re.compile(
     r"\bavg\s*\(\s*([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)\s*\)", re.IGNORECASE
 )
 _FUNC_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+_AGGREGATE_CALL = re.compile(r"\b(count|sum|avg)\s*\(", re.IGNORECASE)
+_DISTINCT_PREFIX = re.compile(r"^\s*distinct\b", re.IGNORECASE)
+_QUALIFIED_REF = re.compile(r"\b([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)")
+_WORD = re.compile(r"\b([A-Za-z_]\w*)\b")
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
+# Words an aggregate argument may hold that are never a column of the
+# scope's tables — keywords and type names. A function name is
+# recognised by the parenthesis after it, a string literal is already
+# blanked, a hoisted subquery reads as its placeholder.
+_ARGUMENT_KEYWORDS = {
+    "distinct", "case", "when", "then", "else", "end", "null", "and", "or",
+    "not", "in", "is", "like", "between", "as", "true", "false", "interval",
+    "exists", "any", "all", "some", "escape", "integer", "bigint", "smallint",
+    "double", "float", "real", "decimal", "numeric", "varchar", "text",
+    "date", "timestamp", "boolean", "current_date", "current_timestamp",
+    "year", "month", "week", "day", "hour", "minute", "second",
+}
 # Logical connectors that precede a parenthesis without deriving a
 # value — everything else before "(" is a function call.
 _NOT_FUNCTIONS = {"in", "exists", "any", "all", "some", "not", "and", "or"}
@@ -265,6 +298,160 @@ def select_list_of(scope: str) -> str:
     return _select_list(scope)
 
 
+def _aggregate_arguments(select_list: str) -> list[tuple[str, str]]:
+    """(function, argument text) for every COUNT/SUM/AVG in a select
+    list, the argument read to its balanced closing parenthesis."""
+    found: list[tuple[str, str]] = []
+    for match in _AGGREGATE_CALL.finditer(select_list):
+        depth = 0
+        start = match.end() - 1
+        for index in range(start, len(select_list)):
+            if select_list[index] == "(":
+                depth += 1
+            elif select_list[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    found.append((match.group(1).lower(), select_list[start + 1 : index]))
+                    break
+    return found
+
+
+def _tables_read(
+    argument: str,
+    aliases: dict[str, str],
+    columns_of: dict[str, set[str]],
+    in_scope: set[str],
+) -> set[str] | None:
+    """The tables an aggregate argument reads. None for the row grain —
+    COUNT(*), COUNT(1) — which the caller attributes to the FROM table.
+    A qualified column resolves through the scope's aliases; a bare one
+    through the dictionary when exactly one in-scope table owns it; an
+    identifier nothing owns is "?" (the caller reads it conservatively).
+    Keywords, function names and hoisted subqueries are not columns."""
+    text = _DISTINCT_PREFIX.sub("", argument).strip()
+    if text in ("*", "") or _NUMBER.fullmatch(text):
+        return None
+    tables: set[str] = set()
+    for qualifier, _ in _QUALIFIED_REF.findall(text):
+        tables.add(aliases.get(qualifier.lower(), qualifier.lower()))
+    bare = _QUALIFIED_REF.sub(" ", text)
+    called = {name.lower() for name in _FUNC_CALL.findall(bare)}
+    for word in _WORD.findall(bare):
+        lowered = word.lower()
+        if (
+            lowered in _ARGUMENT_KEYWORDS
+            or lowered in called
+            or lowered in aliases
+            or lowered.startswith("__")
+        ):
+            continue
+        owners = {t for t in in_scope if lowered in columns_of.get(t, set())}
+        tables.add(owners.pop() if len(owners) == 1 else "?")
+    return tables
+
+
+def _join_steps(
+    scope: str,
+    sql: str,
+    aliases: dict[str, str],
+    fk_of: dict[tuple[str, str], str],
+    one_to_one: set[frozenset[tuple[str, str]]],
+) -> list[tuple[str, str | None, str | None, set[str], str]]:
+    """Every join step in the scope that is not declared one_to_one:
+    (kind, one, many, tables, text). kind is "one_to_many" when exactly
+    one side is a foreign key to the other, else "unvouched"; text is
+    the condition with its reason in parentheses."""
+    steps: list[tuple[str, str | None, str | None, set[str], str]] = []
+    for joined, _, condition in _JOIN_ON.findall(scope):
+        joined = joined.lower()
+        equalities = _EQUALITY.findall(condition)
+        for a, c1, b, c2 in equalities:
+            ta, tb = aliases.get(a.lower(), a.lower()), aliases.get(b.lower(), b.lower())
+            c1, c2 = c1.lower(), c2.lower()
+            left, right = f"{ta}.{c1}", f"{tb}.{c2}"
+            if frozenset({(ta, c1), (tb, c2)}) in one_to_one:
+                continue
+            a_fk = fk_of.get((ta, c1)) == right
+            b_fk = fk_of.get((tb, c2)) == left
+            if a_fk and b_fk:
+                steps.append((
+                    "unvouched", None, None, {ta, tb},
+                    f"{left} = {right} (each side is a foreign key to the other)",
+                ))
+            elif a_fk or b_fk:
+                many, one, fk = (ta, tb, c1) if a_fk else (tb, ta, c2)
+                steps.append((
+                    "one_to_many", one, many, {ta, tb},
+                    f"{left} = {right} ({many}.{fk} is a foreign key — "
+                    f"several {many} rows can share one {one} row)",
+                ))
+            else:
+                shared = fk_of.get((ta, c1))
+                if shared and shared == fk_of.get((tb, c2)):
+                    reason = (
+                        "both columns are foreign keys with the same target — "
+                        f"every {ta} row pairs with every {tb} row that shares it"
+                    )
+                else:
+                    reason = "no foreign key relates these columns"
+                steps.append(("unvouched", None, None, {ta, tb}, f"{left} = {right} ({reason})"))
+        # A condition with no plain column equality at all that derives
+        # its key with an expression (MT2's CONCAT join): no foreign key
+        # can vouch for a computed key, and a non-unique derived key
+        # fans. Any plain equality above either fired, or vouched the
+        # join's grain (AND-ed predicates only filter further) — so this
+        # arm is reached only when FK reasoning had nothing to read.
+        if not equalities and _derives_a_key(condition):
+            snippet = original_fragment(sql, condition)
+            tables = {joined} | {
+                aliases.get(q.lower(), q.lower())
+                for q in re.findall(r"([A-Za-z_]\w*)\s*\.", condition)
+            }
+            steps.append((
+                "unvouched", None, None, tables,
+                f"join to {joined} on {snippet} (the join condition derives "
+                "its key with an expression — expression joins defeat "
+                "foreign-key reasoning, and a derived key that is non-unique "
+                "fans out; the Dictionary Map's canonical join paths use real "
+                "key columns)",
+            ))
+    return steps
+
+
+def _repeated_tables(
+    steps: list[tuple[str, str | None, str | None, set[str], str]],
+    in_scope: set[str],
+) -> dict[str, list[str]]:
+    """table -> the reasons this scope's joins repeat its rows. With a
+    step nothing vouches for, every table in scope is repeated (by all
+    the steps); otherwise the one side of each one-to-many step, and
+    the many sides that share a one side."""
+    if any(kind == "unvouched" for kind, *_ in steps):
+        listed = "; ".join(text for *_, text in steps)
+        reason = f"across join condition(s) nothing vouches for: {listed}"
+        return {table: [reason] for table in in_scope}
+    repeated: dict[str, list[str]] = {}
+    siblings: dict[str, list[str]] = {}
+    for _, one, many, _, text in steps:
+        assert one is not None and many is not None
+        condition, _, reason = text.partition(" (")
+        repeated.setdefault(one, []).append(
+            f"and {condition} repeats each {one} row once per {many} row ({reason}"
+        )
+        if many not in siblings.setdefault(one, []):
+            siblings[one].append(many)
+    for one, manys in siblings.items():
+        for many in manys:
+            others = [m for m in manys if m != many]
+            if others:
+                repeated.setdefault(many, []).append(
+                    f"and this scope joins {one} to both {many} and "
+                    f"{', '.join(others)}, so each {many} row repeats once per "
+                    f"{', '.join(others)} row of the same {one}"
+                )
+    return repeated
+
+
 def lint_fan_out(
     sql: str, dictionary: list[DictionaryRow], dictionary_map: DictionaryMap
 ) -> str | None:
@@ -309,64 +496,35 @@ def lint_fan_out(
         aliases = table_aliases(scope)
 
         if plain_agg or bandaid:
-            fan_before = len(fan)
-            for joined, _, condition in _JOIN_ON.findall(scope):
-                joined = joined.lower()
-                equalities = _EQUALITY.findall(condition)
-                for a, c1, b, c2 in equalities:
-                    ta, tb = aliases.get(a.lower(), a.lower()), aliases.get(b.lower(), b.lower())
-                    c1, c2 = c1.lower(), c2.lower()
-                    left, right = f"{ta}.{c1}", f"{tb}.{c2}"
-                    if frozenset({(ta, c1), (tb, c2)}) in one_to_one:
-                        continue
-                    a_fk = fk_of.get((ta, c1)) == right
-                    b_fk = fk_of.get((tb, c2)) == left
-                    if a_fk and b_fk:
-                        reason = "each side is a foreign key to the other"
-                    elif a_fk or b_fk:
-                        many = ta if a_fk else tb
-                        if many != joined:
-                            continue  # a lookup from the from-side: many-to-one
-                        reason = (
-                            f"{many}.{c1 if a_fk else c2} is a foreign key — "
-                            f"several {many} rows can share one "
-                            f"{tb if a_fk else ta} row"
-                        )
-                    else:
-                        shared = fk_of.get((ta, c1))
-                        if shared and shared == fk_of.get((tb, c2)):
-                            reason = (
-                                f"both columns are foreign keys to {shared} — "
-                                f"every {ta} row pairs with every {tb} row of "
-                                f"the same {shared.split('.')[0]}"
-                            )
-                        else:
-                            reason = "no foreign key relates these columns"
-                    fan.append(f"{left} = {right} ({reason})")
-                    involved.update({ta, tb})
-                # A condition with no plain column equality at all that
-                # derives its key with an expression (MT2's CONCAT join):
-                # no foreign key can vouch for a computed key, and a
-                # non-unique derived key fans. Any plain equality above
-                # either fired, or vouched the join's grain (AND-ed
-                # predicates only filter further) — so this arm is
-                # reached only when FK reasoning had nothing to read.
-                if not equalities and _derives_a_key(condition):
-                    snippet = original_fragment(sql, condition)
-                    fan.append(
-                        f"join to {joined} on {snippet} (the join "
-                        "condition derives its key with an expression — "
-                        "expression joins defeat foreign-key reasoning, "
-                        "and a derived key that is non-unique fans out; "
-                        "the Dictionary Map's canonical join paths use "
-                        "real key columns)"
-                    )
-                    involved.add(joined)
+            in_scope = set(aliases.values())
+            refs = _TABLE_REF.findall(scope)
+            from_table = refs[0][1].lower() if refs else None
+            steps = _join_steps(scope, sql, aliases, fk_of, one_to_one)
+            repeated = _repeated_tables(steps, in_scope)
+            fired_here = False
+            for func, argument in _aggregate_arguments(select_list):
+                if func == "count" and _DISTINCT_PREFIX.match(argument):
+                    continue  # COUNT(DISTINCT x) is the sanctioned repair
+                reads = _tables_read(argument, aliases, columns_of, in_scope)
+                if reads is None:
+                    reads = {from_table} if from_table else set()
+                if "?" in reads:
+                    reads = (reads - {"?"}) | set(repeated)
+                hit = [table for table in sorted(reads) if table in repeated]
+                if not hit:
+                    continue
+                fired_here = True
+                shown = original_fragment(sql, f"{func}({argument})")
+                for table in hit:
+                    for reason in repeated[table]:
+                        entry = f"{shown} reads {table} {reason}"
+                        if entry not in fan:
+                            fan.append(entry)
                     involved.update(
-                        aliases.get(q.lower(), q.lower())
-                        for q in re.findall(r"([A-Za-z_]\w*)\s*\.", condition)
+                        t for kind, _, _, tables, _ in steps for t in tables
+                        if kind == "unvouched" or table in tables
                     )
-            if bandaid and len(fan) > fan_before:
+            if bandaid and fired_here:
                 bandaid_seen = True
 
         for match in _LEFT_JOIN_ON.finditer(scope):
@@ -433,14 +591,11 @@ def lint_fan_out(
             else ""
         )
         parts.append(
-            "Fan-out check: COUNT/SUM/AVG over a multi-table join "
-            "aggregates join combinations, not entities. Join condition(s) "
-            f"that can multiply rows: {listed}. Count the entity the "
-            "question is about with COUNT(DISTINCT <table>.id); for SUM or "
-            "AVG, aggregate the fanning table in a subquery joined back "
-            "per entity, or aggregate from the table that carries the "
-            f"filtered column.{bandaid_note}{hint} If this join cannot "
-            "multiply rows, resend the statement unchanged."
+            f"Fan-out check: {listed} — the aggregate adds join "
+            "combinations, not entities. Aggregate each side in its own "
+            "scope, then join the results; count an entity with "
+            f"COUNT(DISTINCT <table>.id).{bandaid_note}{hint} If this join "
+            "cannot multiply rows, resend the statement unchanged."
         )
     if dead:
         names = ", ".join(dict.fromkeys(dead))

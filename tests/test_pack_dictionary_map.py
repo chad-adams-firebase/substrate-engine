@@ -199,3 +199,18 @@ def test_rate_gotcha_recommends_the_exists_indicator(pack_map):
         if path.cardinality == "one_to_one"
         for s in path.steps
     )
+
+
+def test_the_polish_pass_silent_shapes_stay_silent(pack_map, pack_dictionary):
+    """Named silent fixtures under the pack's own dictionary and map:
+    the flagship table's correlated shape (each aggregate in its own
+    scope, the browser's correct resend that used to ship [UNVERIFIED])
+    and the correction_application_rate template, whose SUM(CASE WHEN
+    NOT EXISTS …) reads no outer column and counts the row grain."""
+    from tests.test_tool_sql_lint import FLAGSHIP_ATTEMPT_2
+
+    assert lint_fan_out(FLAGSHIP_ATTEMPT_2, pack_dictionary, pack_map) is None
+    template = next(
+        m for m in pack_map.metrics if m.name == "correction_application_rate"
+    )
+    assert lint_fan_out(template.template_sql, pack_dictionary, pack_map) is None
