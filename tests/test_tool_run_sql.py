@@ -465,8 +465,11 @@ def test_both_lints_challenge_together_in_one_round(tool_pack):
     attempts = invocation.evidence.attempts
     assert len(attempts) == 2
     assert "Fan-out check:" in attempts[0].error and "Enum check:" in attempts[0].error
-    assert "'IN_REVIEW' is an observed value of" in attempts[0].error
-    assert "`invoice_history.to_status`" in attempts[0].error
+    assert "`invoices.status` never takes 'IN_REVIEW'" in attempts[0].error
+    assert "Keep the query on `invoices`" in attempts[0].error
+    # The guard pass: the challenge never names the table that does
+    # hold the value — AMB2's rep 1 read that as a destination.
+    assert "invoice_history" not in attempts[0].enum_lint
     assert attempts[0].lint and attempts[0].enum_lint
     # The resend executes with both override traces.
     assert attempts[1].error is None
