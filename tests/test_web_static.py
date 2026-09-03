@@ -126,6 +126,11 @@ def test_the_inspector_reads_what_the_interludes_recorded():
     assert "renderTable(output.table" in script
     # The inspector fetches the bundle on demand, never with the turn.
     assert "/api/evidence/" in script
+    # A legacy turn's chip reads the trail and the verdict (Polish
+    # Pass); the transcript no longer gates the chip on the outcome.
+    assert "function chipKey(outcome, events, verdict)" in script
+    assert "if (chipKey(record.outcome, record.events, record.verdict)) turnEl.appendChild(chipFor(record));" in script
+    assert 'e.node === "finalize" && e.phase === "finish"' in script
     # A new conversation is a client-side reset; the row is created by
     # the first turn (workspace_id on the ask), never by the click.
     assert "function newConversation" in script

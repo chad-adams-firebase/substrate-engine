@@ -384,6 +384,39 @@ class SqliteWorkStore:
             )
 
     @_locked
+    def evidence_bundle_visible_to(self, ref: str, owner: str) -> bool:
+        row = self._connection.execute(
+            """
+            SELECT 1 FROM turn_log t
+            JOIN conversation c ON c.id = t.conversation_id
+            JOIN workspace w ON w.id = c.workspace_id
+            WHERE t.evidence_bundle_ref = ? AND w.owner = ?
+            LIMIT 1
+            """,
+            (ref, owner),
+        ).fetchone()
+        return row is not None
+
+    @_locked
+    def turns_without_question(self) -> list[tuple[int, int]]:
+        rows = self._connection.execute(
+            "SELECT conversation_id, turn FROM turn_log "
+            "WHERE question IS NULL OR question = '' "
+            "ORDER BY conversation_id, turn"
+        ).fetchall()
+        return [(row["conversation_id"], row["turn"]) for row in rows]
+
+    @_locked
+    def set_turn_question(self, conversation_id: int, turn: int, question: str) -> None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE turn_log SET question = ? "
+                "WHERE conversation_id = ? AND turn = ? "
+                "AND (question IS NULL OR question = '')",
+                (question, conversation_id, turn),
+            )
+
+    @_locked
     def load_evidence_bundle(self, ref: str) -> str | None:
         row = self._connection.execute(
             "SELECT payload FROM evidence_bundle WHERE ref = ?", (ref,)

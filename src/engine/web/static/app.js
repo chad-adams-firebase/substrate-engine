@@ -227,12 +227,23 @@
     const delta = (Date.parse(events[events.length - 1].at) - Date.parse(events[0].at)) / 1000;
     return Math.max(1, Math.floor(delta + 0.5));
   }
-  function chipKey(outcome) {
-    return outcome.kind === "answer" ? outcome.verification : outcome.kind;
+  // Without an outcome — a row written before the turn log kept
+  // outcomes — the trail's finalize event says what ended the turn and
+  // the recorded verdict says how an answer fared (mirrors chip_key).
+  function chipKey(outcome, events, verdict) {
+    if (outcome) return outcome.kind === "answer" ? outcome.verification : outcome.kind;
+    const ended = (events || []).slice().reverse()
+      .find(e => e.node === "finalize" && e.phase === "finish");
+    if (!ended) return null;
+    if (ended.detail === "answer") {
+      const disposition = verdict && verdict.disposition;
+      return disposition in CHIP_LABELS ? disposition : "unverified";
+    }
+    return ended.detail in CHIP_LABELS ? ended.detail : null;
   }
-  function chipLabel(outcome, events) {
+  function chipLabel(outcome, events, verdict) {
     const tally = toolTally(events);
-    const parts = [CHIP_LABELS[chipKey(outcome)], `${tally.ok} tool${tally.ok === 1 ? "" : "s"}`];
+    const parts = [CHIP_LABELS[chipKey(outcome, events, verdict)], `${tally.ok} tool${tally.ok === 1 ? "" : "s"}`];
     if (tally.retries) parts.push(`${tally.retries} ${tally.retries === 1 ? "retry" : "retries"}`);
     if (tally.failed) parts.push(`${tally.failed} failed`);
     const seconds = elapsedSeconds(events);
@@ -240,7 +251,8 @@
     return parts.join(" · ");
   }
   function chipFor(record) {
-    const chip = el("button", "chip " + chipKey(record.outcome), chipLabel(record.outcome, record.events));
+    const key = chipKey(record.outcome, record.events, record.verdict);
+    const chip = el("button", "chip " + key, chipLabel(record.outcome, record.events, record.verdict));
     chip.type = "button";
     chip.title = "Show this turn's receipts in the inspector";
     chip.addEventListener("click", () => inspect(record));
@@ -301,12 +313,12 @@
     };
     const turnEl = el("div", "turn");
     turnEl.appendChild(el("div", "question", record.question || QUESTION_NOT_RECORDED));
-    if (record.outcome) {
-      turnEl.appendChild(chipFor(record));
-      turnEl.appendChild(renderOutcome(record.outcome));
-    } else {
-      turnEl.appendChild(el("div", "muted", OUTCOME_NOT_RECORDED));
-    }
+    // The chip is drawn whenever the trail can name one: a legacy
+    // turn's verdict, events and evidence are all in the row, and the
+    // inspector shows them; only the outcome card is missing.
+    if (chipKey(record.outcome, record.events, record.verdict)) turnEl.appendChild(chipFor(record));
+    if (record.outcome) turnEl.appendChild(renderOutcome(record.outcome));
+    else turnEl.appendChild(el("div", "muted", OUTCOME_NOT_RECORDED));
     record.element = turnEl;
     state.turns.push(record);
     transcriptInner.appendChild(turnEl);

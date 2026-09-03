@@ -183,9 +183,11 @@ def list_turns(conversation_id: int):
         return _not_found("conversation", conversation_id)
     entries = _store().list_turn_logs(conversation_id)
     if request.args.get("format") == "text":
+        # Flask appends the charset to a text/* mimetype itself; naming
+        # it here emitted "charset=utf-8" twice (Polish Pass).
         return Response(
             render_turns_text(conversation, entries),
-            mimetype="text/plain; charset=utf-8",
+            mimetype="text/plain",
         )
     return jsonify(
         {
@@ -200,8 +202,13 @@ def evidence(ref: str):
     """The evidence bundle behind a turn: the canonical TurnEvidence
     JSON exactly as stored (content-addressed, so the bytes are the
     ref's proof). Fetched by the inspector on demand — bundles are
-    large and most turns are never inspected."""
-    payload = _store().load_evidence_bundle(ref)
+    large and most turns are never inspected. A bundle has no owner of
+    its own: it is visible to a caller whose conversation logged a turn
+    referencing it, and 404 otherwise (Polish Pass)."""
+    store = _store()
+    if not store.evidence_bundle_visible_to(ref, _owner()):
+        return _not_found("evidence bundle", ref)
+    payload = store.load_evidence_bundle(ref)
     if payload is None:
         return _not_found("evidence bundle", ref)
     return Response(payload, mimetype="application/json")

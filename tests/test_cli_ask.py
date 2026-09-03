@@ -219,3 +219,60 @@ def test_table_answers_render_money_hints_as_currency(monkeypatch, capsys, tool_
     out = capsys.readouterr().out
     assert "$8,308.92" in out
     assert "8308.92139" not in out
+
+
+def test_store_backfill_questions_recovers_legacy_rows(tool_pack, tmp_path, capsys):
+    """Polish Pass: a real turn through the graph, its question blanked
+    the way pre-Block-3 rows are, recovered from the checkpoint thread;
+    dry-run writes nothing; a row whose thread has no history is
+    reported, not failed."""
+    from datetime import UTC, datetime
+
+    from engine.config.models import PortName
+    from engine.ports.types import TurnLogEntry
+
+    config_path = tool_pack / "config.yaml"
+    config = yaml.safe_load(config_path.read_text())
+    config["adapters"]["work_store"]["settings"]["database"] = str(tmp_path / "work.db")
+    config_path.write_text(yaml.safe_dump(config))
+    responses = [
+        tool_call("query_univariate_stats", {"table": "invoices", "column": "status"}),
+        tool_call("give_answer", {"shape": "prose"}),
+        LLMResponse(content="Invoices has {{e0.rows[0].row_count}} rows.", model="s"),
+    ]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("how many rows?")
+    store = ports.get(PortName.WORK_STORE)
+    # Blank it the way a pre-Block-3 row reads, and add a row whose
+    # conversation never checkpointed.
+    with store._connection:
+        store._connection.execute(
+            "UPDATE turn_log SET question = '' WHERE conversation_id = ?",
+            (result.conversation_id,),
+        )
+    workspace = store.create_workspace("tester", "w")
+    threadless = store.create_conversation(workspace.id, "no thread")
+    store.append_turn_log(TurnLogEntry(
+        conversation_id=threadless.id, turn=1, actor="tester", action="ask",
+        created_at=datetime.now(UTC),
+    ))
+    capsys.readouterr()
+
+    assert main(["store", "backfill-questions", "--pack", str(tool_pack), "--dry-run"]) == 0
+    out = capsys.readouterr().out
+    assert f"conversation {result.conversation_id} turn 1: would recover 'how many rows?'" in out
+    assert f"conversation {threadless.id} turn 1: no checkpoint history" in out
+    assert "would recover 1 question(s); 1 without history." in out
+    assert store.turns_without_question() == [
+        (result.conversation_id, 1), (threadless.id, 1),
+    ]
+
+    assert main(["store", "backfill-questions", "--pack", str(tool_pack)]) == 0
+    out = capsys.readouterr().out
+    assert "recovered 1 question(s); 1 without history." in out
+    (entry,) = store.list_turn_logs(result.conversation_id)
+    assert entry.question == "how many rows?"
+    assert store.turns_without_question() == [(threadless.id, 1)]
+
+    assert main(["store", "backfill-questions", "--pack", str(tool_pack)]) == 0
+    assert "recovered 0 question(s); 1 without history." in capsys.readouterr().out

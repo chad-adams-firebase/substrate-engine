@@ -71,6 +71,22 @@ class WorkStorePort(Protocol):
 
     def load_evidence_bundle(self, ref: str) -> str | None: ...
 
+    def evidence_bundle_visible_to(self, ref: str, owner: str) -> bool:
+        """Whether a conversation the owner's workspaces hold logged a
+        turn referencing the bundle — a content-addressed bundle has no
+        owner of its own (Polish Pass)."""
+        ...
+
+    def turns_without_question(self) -> list[tuple[int, int]]:
+        """(conversation_id, turn) of every turn_log row written before
+        the log kept the question — the backfill's worklist."""
+        ...
+
+    def set_turn_question(self, conversation_id: int, turn: int, question: str) -> None:
+        """Record a question recovered for a legacy row; a row that is
+        not empty keeps what it has."""
+        ...
+
     def checkpointer(self) -> Any:
         """A LangGraph BaseCheckpointSaver persisting to this store's
         backing storage. Typed Any because ports import only ports,

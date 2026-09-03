@@ -505,3 +505,23 @@ def test_a_path_into_source_text_is_retried_with_the_shape_named(tool_pack):
     assert "{{e0.text.QUANTITY_SPIKE_FACTOR}}" in feedback
     assert "paths into a text passage" in feedback
     assert "placeholders never reach inside text" in feedback
+
+
+def test_question_of_turn_reads_the_message_pair_layout():
+    """The backfill verb's reading of the checkpoint history, pinned
+    to the pre-Block-4 layout it names: one (user, assistant) pair per
+    turn. Block 4 updates or retires it (its reconciliation list)."""
+    from engine.harness.graph import question_of_turn
+    from engine.ports.types import Message
+
+    history = [
+        Message(role="user", content="How many invoices?"),
+        Message(role="assistant", content="[table: result set]"),
+        Message(role="user", content="And per supplier?"),
+        Message(role="assistant", content="[refused: no]"),
+    ]
+    assert question_of_turn(history, 1) == "How many invoices?"
+    assert question_of_turn(history, 2) == "And per supplier?"
+    assert question_of_turn(history, 3) is None
+    assert question_of_turn(history, 0) is None
+    assert question_of_turn([], 1) is None

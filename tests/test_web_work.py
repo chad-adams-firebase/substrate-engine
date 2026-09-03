@@ -119,6 +119,38 @@ def test_another_users_workspace_is_404_not_403(tool_pack):
     assert store.get_conversation(conversation.id) is not None
 
 
+def test_evidence_is_visible_only_through_the_callers_conversations(tool_pack):
+    """Polish Pass: a content-addressed bundle has no owner, so the
+    route asks whether a conversation the caller owns logged a turn
+    referencing it — another owner's is 404, an orphan ref is 404."""
+    from datetime import UTC, datetime
+
+    from engine.harness.session import evidence_ref_of
+    from engine.ports.types import TurnLogEntry
+
+    app, store = _stub_app(tool_pack)
+    client = app.test_client()
+
+    def log(owner, ref):
+        workspace = store.create_workspace(owner, "w")
+        conversation = store.create_conversation(workspace.id, "c")
+        store.append_turn_log(TurnLogEntry(
+            conversation_id=conversation.id, turn=1, actor=owner, action="ask",
+            evidence_bundle_ref=ref, created_at=datetime.now(UTC),
+        ))
+
+    mine, theirs, orphan = "[1]", "[2]", "[3]"
+    for payload in (mine, theirs, orphan):
+        store.save_evidence_bundle(evidence_ref_of(payload), payload)
+    log("tester", evidence_ref_of(mine))
+    log("someone-else", evidence_ref_of(theirs))
+
+    assert client.get(f"/api/evidence/{evidence_ref_of(mine)}").status_code == 200
+    assert client.get(f"/api/evidence/{evidence_ref_of(theirs)}").status_code == 404
+    assert client.get(f"/api/evidence/{evidence_ref_of(orphan)}").status_code == 404
+    assert store.load_evidence_bundle(evidence_ref_of(theirs)) == theirs  # still stored
+
+
 def test_deleting_a_conversation_under_a_running_turn_is_409(tool_pack):
     app, store = _stub_app(tool_pack, busy=True)
     workspace = store.create_workspace("tester", "scratch")
@@ -174,6 +206,8 @@ def test_turns_endpoint_returns_what_a_real_turn_logged(tool_pack):
     assert client.get("/api/evidence/nonesuch").status_code == 404
 
     text = client.get(f"/api/conversations/{conversation_id}/turns?format=text")
+    # Flask adds the charset once (Polish Pass: it used to appear twice).
+    assert text.headers["Content-Type"] == "text/plain; charset=utf-8"
     assert text.status_code == 200 and text.mimetype == "text/plain"
     body = text.get_data(as_text=True)
     assert body.startswith(f"conversation {conversation_id} · how many rows?\n")

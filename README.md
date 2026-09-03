@@ -186,3 +186,23 @@ them. No build pipeline, no framework, no CDN, no browser storage: a
 reload opens the first workspace's empty state with the starter
 prompts. The JS is pinned by source text in `tests/test_web_static.py`
 and `tests/test_web_render.py`; nothing in the suite executes it.
+
+**Past conversations written before the turn log kept questions and
+outcomes** (rows from before Phase 5 Block 3) still carry their
+trail, verdict and evidence ref, so the transcript draws their chip
+from the trail's finalize event and the verdict's disposition, and
+the inspector opens on them; only the outcome card reads "(outcome
+not recorded)". Their questions are recovered once from the
+conversation's checkpoint history:
+
+```
+uv run engine store backfill-questions --pack packs/invoiceguard [--dry-run]
+```
+
+The verb reads the pre-Block-4 history layout (one user/assistant
+message pair per turn); Block 4's reconciliation list carries its
+update or retirement.
+
+**Evidence bundles are owner-scoped.** `GET /api/evidence/<ref>`
+answers only when a conversation in the caller's workspaces logged a
+turn referencing the ref; otherwise 404, like every other route.

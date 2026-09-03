@@ -403,3 +403,40 @@ def test_ensure_schema_migrates_an_older_store_in_place(tmp_path):
     store.append_turn_log(_entry(3, 2))
     assert [e.question for e in store.list_turn_logs(3)] == ["", "how many?"]
     assert store.list_turn_logs(3)[1].outcome == '{"kind": "refuse", "reason": "r"}'
+
+
+def test_evidence_visibility_follows_the_workspace_owner(store):
+    """Polish Pass: a bundle is visible to an owner whose conversation
+    logged a turn referencing it; another owner sees nothing; an
+    unreferenced ref is invisible to everyone."""
+    store.ensure_schema()
+    store.save_evidence_bundle("ref-a", "[]")
+    store.save_evidence_bundle("ref-orphan", "[]")
+    workspace = store.create_workspace("ada", "w")
+    conversation = store.create_conversation(workspace.id, "c")
+    store.append_turn_log(TurnLogEntry(
+        conversation_id=conversation.id, turn=1, actor="ada", action="ask",
+        evidence_bundle_ref="ref-a", created_at=datetime.now(UTC),
+    ))
+    assert store.evidence_bundle_visible_to("ref-a", "ada") is True
+    assert store.evidence_bundle_visible_to("ref-a", "bob") is False
+    assert store.evidence_bundle_visible_to("ref-orphan", "ada") is False
+    assert store.evidence_bundle_visible_to("nonesuch", "ada") is False
+
+
+def test_legacy_rows_are_listed_and_a_recovered_question_is_written_once(store):
+    store.ensure_schema()
+    workspace = store.create_workspace("ada", "w")
+    conversation = store.create_conversation(workspace.id, "c")
+    for turn, question in ((1, ""), (2, "How many?"), (3, "")):
+        store.append_turn_log(TurnLogEntry(
+            conversation_id=conversation.id, turn=turn, actor="ada", action="ask",
+            question=question, created_at=datetime.now(UTC),
+        ))
+    assert store.turns_without_question() == [(conversation.id, 1), (conversation.id, 3)]
+    store.set_turn_question(conversation.id, 3, "How many rows?")
+    store.set_turn_question(conversation.id, 2, "overwritten?")  # a kept question is kept
+    assert store.turns_without_question() == [(conversation.id, 1)]
+    assert [e.question for e in store.list_turn_logs(conversation.id)] == [
+        "", "How many?", "How many rows?",
+    ]

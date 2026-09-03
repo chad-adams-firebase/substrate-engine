@@ -140,9 +140,41 @@ def elapsed_seconds(events: list[StatusEvent]) -> int:
     return max(1, math.floor(delta + 0.5))
 
 
-def chip_label(outcome: TurnOutcome, events: list[StatusEvent]) -> str:
+def chip_key(
+    outcome: TurnOutcome | None,
+    events: list[StatusEvent],
+    verdict_disposition: str | None = None,
+) -> str | None:
+    """Which chip a turn gets. With an outcome: its verification (an
+    answer) or its kind. Without one — a row written before the turn
+    log kept outcomes (Polish Pass) — the trail's finalize event says
+    what ended the turn, and the recorded verdict says how an answer
+    fared; a trail with no finalize gets no chip."""
+    if outcome is not None:
+        return outcome.verification if outcome.kind == "answer" else outcome.kind
+    ended = next(
+        (
+            event.detail
+            for event in reversed(events)
+            if event.node == "finalize" and event.phase == "finish"
+        ),
+        None,
+    )
+    if ended is None:
+        return None
+    if ended == "answer":
+        return verdict_disposition if verdict_disposition in CHIP_LABELS else "unverified"
+    return ended if ended in CHIP_LABELS else None
+
+
+def chip_label(
+    outcome: TurnOutcome | None,
+    events: list[StatusEvent],
+    verdict_disposition: str | None = None,
+) -> str:
     """The collapsed trail: `✓ Verified · 1 tool · 1 retry · 14s`."""
-    key = outcome.verification if outcome.kind == "answer" else outcome.kind
+    key = chip_key(outcome, events, verdict_disposition)
+    assert key is not None, "chip_label needs a chip_key"
     tally = tool_tally(events)
     parts = [CHIP_LABELS[key], f"{tally.ok} tool{'' if tally.ok == 1 else 's'}"]
     if tally.retries:
@@ -153,6 +185,16 @@ def chip_label(outcome: TurnOutcome, events: list[StatusEvent]) -> str:
     if seconds:
         parts.append(f"{seconds}s")
     return " · ".join(parts)
+
+
+def verdict_disposition_of(entry: TurnLogEntry) -> str | None:
+    """The recorded verdict's disposition, read without a model: the
+    column is opaque JSON at the port, and the chip needs one word."""
+    if not entry.verifier_verdict:
+        return None
+    verdict = json.loads(entry.verifier_verdict)
+    disposition = verdict.get("disposition") if isinstance(verdict, dict) else None
+    return disposition if isinstance(disposition, str) else None
 
 
 def events_of(entry: TurnLogEntry) -> list[StatusEvent]:
@@ -171,8 +213,8 @@ def render_turns_text(conversation: Conversation, entries: list[TurnLogEntry]) -
         events = events_of(entry)
         outcome = loads_outcome(entry.outcome) if entry.outcome else None
         head = f"turn {entry.turn}"
-        if outcome is not None:
-            head += " · " + chip_label(outcome, events)
+        if chip_key(outcome, events, verdict_disposition_of(entry)) is not None:
+            head += " · " + chip_label(outcome, events, verdict_disposition_of(entry))
         lines.append(head)
         lines.append(f"> {entry.question}" if entry.question else f"> {QUESTION_NOT_RECORDED}")
         lines.append(

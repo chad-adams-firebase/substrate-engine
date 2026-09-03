@@ -249,3 +249,55 @@ def test_turns_text_form_renders_every_turn_and_says_when_a_row_predates_the_col
         f"{OUTCOME_NOT_RECORDED}\n"
     )
     assert "diag" not in text  # the diagnosis never reaches a text card either
+
+
+def test_a_legacy_turn_gets_its_chip_from_the_trail():
+    """Polish Pass: rows written before the turn log kept outcomes
+    still hold the trail, the verdict and the evidence ref; the chip
+    reads the finalize event and the verdict's disposition, so the
+    inspector opens on them. A trail with no finalize gets no chip."""
+    from engine.web.render import chip_key
+
+    now = datetime.now(UTC)
+
+    def event(node, phase, detail):
+        return StatusEvent(node=node, phase=phase, detail=detail, at=now)
+
+    answered = [
+        event("tool:run_sql", "finish", "evidence[0] ok"),
+        event("verify", "finish", "verdict: verified"),
+        event("finalize", "finish", "answer"),
+    ]
+    assert chip_key(None, answered, "verified") == "verified"
+    assert chip_key(None, answered, "unverified") == "unverified"
+    assert chip_key(None, answered, None) == "unverified"  # an answer with no verdict
+    assert chip_key(None, [event("finalize", "finish", "refuse")], None) == "refuse"
+    assert chip_key(None, [event("route", "start", "Consulting router")], None) is None
+    assert chip_key(None, [], "verified") is None
+
+    conversation = Conversation(id=4, workspace_id=1, title="legacy", created_at=now)
+    entries = [
+        TurnLogEntry(  # written before Block 3: no question, no outcome
+            conversation_id=4, turn=1, actor="dev", action="ask",
+            verifier_verdict='{"disposition": "verified", "mode": "table_passthrough"}',
+            status_events="[" + ",".join(e.model_dump_json() for e in answered) + "]",
+            evidence_bundle_ref="abc", created_at=now,
+        ),
+        TurnLogEntry(
+            conversation_id=4, turn=2, actor="dev", action="ask",
+            status_events="[" + event("finalize", "finish", "refuse").model_dump_json() + "]",
+            created_at=now,
+        ),
+    ]
+    text = render_turns_text(conversation, entries)
+    assert text == (
+        "conversation 4 · legacy\n"
+        "\n"
+        "turn 1 · ✓ Verified · 1 tool · 1s\n"
+        f"> {QUESTION_NOT_RECORDED}\n"
+        f"{OUTCOME_NOT_RECORDED}\n"
+        "\n"
+        "turn 2 · ⊘ Refused · 0 tools\n"
+        f"> {QUESTION_NOT_RECORDED}\n"
+        f"{OUTCOME_NOT_RECORDED}\n"
+    )

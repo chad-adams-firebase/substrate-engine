@@ -571,6 +571,22 @@ def _verifier_refusal(verdict) -> RefuseOutcome:
     )
 
 
+def question_of_turn(history: list[Message], turn: int) -> str | None:
+    """The question turn N asked, read from the checkpoint history.
+
+    Tied to the pre-Block-4 history layout: finalize appends one
+    (user, assistant) Message pair per turn, so turn N's question is
+    history[2 * (N - 1)]. Block 4 replaces the pairs with TurnRecords
+    carrying their own turn number; when it lands, this reads
+    history[N - 1].question — or retires, if every legacy row has been
+    backfilled by then (engine store backfill-questions)."""
+    index = 2 * (turn - 1)
+    if turn < 1 or index >= len(history):
+        return None
+    message = history[index]
+    return message.content if message.role == "user" else None
+
+
 def _transcript_text(outcome) -> str:
     if isinstance(outcome, AnswerOutcome):
         if isinstance(outcome.body, TableAnswer):

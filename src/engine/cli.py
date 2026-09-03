@@ -170,6 +170,27 @@ def main(argv: list[str] | None = None) -> int:
         help="With --turn: also print the resolved evidence bundle.",
     )
 
+    store_cmd = subparsers.add_parser(
+        "store",
+        help="One-shot maintenance of the pack's work store.",
+    )
+    store_sub = store_cmd.add_subparsers(dest="store_command", required=True)
+    backfill = store_sub.add_parser(
+        "backfill-questions",
+        help="Recover the question of every turn_log row written before "
+        "the log kept it (Phase 5 Block 3), from the conversation's "
+        "checkpoint history, so past conversations read back whole.",
+        epilog="Reads the pre-Block-4 history layout (one user/assistant "
+        "message pair per turn); Block 4's reconciliation list carries "
+        "the update or retirement.",
+    )
+    backfill.add_argument("--pack", required=True)
+    backfill.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what would be recovered; write nothing.",
+    )
+
     eval_cmd = subparsers.add_parser(
         "eval",
         help="Phase 4b answer-verification harness: run the bank live, "
@@ -325,6 +346,8 @@ def main(argv: list[str] | None = None) -> int:
             return _serve(args.pack, args.host, args.port)
         if args.command == "turns":
             return _turns(args.pack, args.conversation, args.turn, args.evidence)
+        if args.command == "store" and args.store_command == "backfill-questions":
+            return _store_backfill_questions(args.pack, args.dry_run)
         if args.command == "eval" and args.eval_command == "run":
             return _eval_run(args)
         if args.command == "eval" and args.eval_command == "grade":
@@ -843,6 +866,57 @@ def _serve(pack_dir: str, host: str, port: int) -> int:
     # thread streams. No reloader: it forks two processes, i.e. two
     # sessions over one work.db.
     app.run(host=host, port=port, threaded=True, use_reloader=False)
+    return 0
+
+
+def _store_backfill_questions(pack_dir: str, dry_run: bool) -> int:
+    """engine store backfill-questions: the 18 rows (dev store,
+    2026-09-02) that render "(question not recorded)" have their
+    question in the checkpoint thread the conversation id names. A
+    verb, not ensure_schema: ensure_schema runs on every request and
+    stays a cheap idempotent DDL step, while this opens the
+    checkpointer, decodes history, and says once what it recovered."""
+    from engine.harness.graph import question_of_turn
+
+    pack = load_pack(pack_dir)
+    ports = build(pack)
+    store = ports.get(PortName.WORK_STORE)
+    store.ensure_schema()
+    worklist = store.turns_without_question()
+    if not worklist:
+        print("Every turn_log row has its question; nothing to backfill.")
+        return 0
+    saver = store.checkpointer()
+    recovered = missing = 0
+    try:
+        histories: dict[int, list | None] = {}
+        for conversation_id, turn in worklist:
+            if conversation_id not in histories:
+                state = saver.get(
+                    {"configurable": {"thread_id": str(conversation_id), "checkpoint_ns": ""}}
+                )
+                values = state.get("channel_values", {}) if state else {}
+                histories[conversation_id] = values.get("history")
+            history = histories[conversation_id]
+            question = question_of_turn(history, turn) if history else None
+            if question is None:
+                missing += 1
+                print(
+                    f"conversation {conversation_id} turn {turn}: no checkpoint "
+                    "history for this turn — left as is"
+                )
+                continue
+            recovered += 1
+            verb = "would recover" if dry_run else "recovered"
+            print(f"conversation {conversation_id} turn {turn}: {verb} {question[:60]!r}")
+            if not dry_run:
+                store.set_turn_question(conversation_id, turn, question)
+    finally:
+        connection = getattr(saver, "conn", None)
+        if connection is not None:
+            connection.close()
+    summary = "would recover" if dry_run else "recovered"
+    print(f"{summary} {recovered} question(s); {missing} without history.")
     return 0
 
 
