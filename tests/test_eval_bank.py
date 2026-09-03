@@ -246,3 +246,18 @@ def test_xfail_keep_until_is_optional_and_loads(tmp_path):
     rows = ROW_B5 + '  xfail: {ref: O1, note: "why"}\n'
     bank = load_bank(write_bank(tmp_path / "plain", rows=rows))
     assert bank.rows[0].xfail.keep_until is None
+
+
+def test_retry_count_accepts_a_list_of_counts(tmp_path):
+    """Guard pass: REC-SQL's `errors: [0, 1]` — a rep that rephrases
+    before the bounce recovered pre-emptively. A count below zero, or
+    an empty list, fails at load."""
+    retry = "{kind: retry_count, tool: run_sql, errors: [0, 1], error_contains: \"writes its own SQL\"}"
+    rows = ROW_B5.replace("{kind: route, mode: must_include, tools: [run_sql]}", retry)
+    bank = load_bank(write_bank(tmp_path / "ok", rows=rows))
+    (assertion,) = [a for a in bank.rows[0].expect.assertions if a.kind == "retry_count"]
+    assert assertion.errors == [0, 1]
+    for bad, name in (("[]", "empty"), ("[-1]", "negative")):
+        write_bank(tmp_path / name, rows=rows.replace("[0, 1]", bad))
+        with pytest.raises(BankLoadError, match="retry_count"):
+            load_bank(tmp_path / name)

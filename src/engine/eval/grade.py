@@ -505,10 +505,13 @@ def _check_retries(assertion, invocations) -> tuple[bool, str]:
         and invocation.status == "error"
         and assertion.error_contains in (invocation.error or "")
     ]
-    if len(errored) != assertion.errors:
+    accepted = (
+        assertion.errors if isinstance(assertion.errors, list) else [assertion.errors]
+    )
+    if len(errored) not in accepted:
+        expected = " or ".join(str(count) for count in accepted)
         return False, (
-            f"expected {assertion.errors} matching {tool} error(s), "
-            f"saw {len(errored)}"
+            f"expected {expected} matching {tool} error(s), saw {len(errored)}"
         )
     for index in errored:
         followed = any(

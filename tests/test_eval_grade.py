@@ -1208,3 +1208,35 @@ def test_a_kept_xfail_xpasses_as_a_deliberate_keep(tmp_path):
     failing = [make_record("B5", 1, make_turn(exit_equiv=2))]
     text = render(grade(bank, header, failing, world, pack_root=pack))
     assert "[XFAIL]" in text and "kept until" in text
+
+
+def test_retry_count_accepts_any_of_the_named_counts():
+    """Guard pass, REC-SQL: zero bounces (the router rephrased first) or
+    one bounce followed by a retry both pass `errors: [0, 1]`; two
+    bounces, or a bounce never retried, still fail."""
+    from engine.eval.grade import _check_retries
+    from engine.eval.models import RetryCountAssertion
+    from engine.tools.envelope import ToolInvocation
+
+    def bounced():
+        return ToolInvocation(
+            tool="run_sql", arguments={"question": "SELECT 1"}, status="error",
+            error="run_sql writes its own SQL — send the English question.",
+            substrates_read=[],
+        )
+
+    def answered():
+        return ToolInvocation(
+            tool="run_sql", arguments={"question": "how many?"}, status="ok",
+            substrates_read=[],
+        )
+
+    either = RetryCountAssertion(tool="run_sql", errors=[0, 1], error_contains="writes its own SQL")
+    assert _check_retries(either, [answered()]) == (True, "")
+    assert _check_retries(either, [bounced(), answered()]) == (True, "")
+    passed, detail = _check_retries(either, [bounced(), answered(), bounced(), answered()])
+    assert not passed and "expected 0 or 1" in detail
+    passed, detail = _check_retries(either, [bounced()])
+    assert not passed and "never retried" in detail
+    exactly_one = RetryCountAssertion(tool="run_sql", errors=1, error_contains="writes its own SQL")
+    assert not _check_retries(exactly_one, [answered()])[0]

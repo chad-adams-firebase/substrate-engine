@@ -309,3 +309,126 @@ derive is written here as a rule, not a note:
   EPOCH-shaped item past the ceiling warns rather than refuses, since
   the parse cannot rule out a SUM there. Association verification
   itself stays queued.
+
+## Guard pass riders (2026-09-02, after the post-duration run)
+
+The post-duration run (report `2026-09-02-post-duration`, committed
+`d42687b`) breached three times on AMB2 ("How many invoices are open?")
+while everything the duration pass predicted held (W3 5/5, S2 5/5,
+REC-SQL 4/5, keeps reported as keeps). The class is new: **a guard
+caused the wrong answer.** Rep 1's attempt 1 — `COUNT(*) AS
+invoice_count FROM invoices WHERE status IN ('RECEIVED', 'READY',
+'CLAIMED', 'IN_REVIEW')` — was correct (78, in the gold set). The enum
+lint challenged the three never-observed members and added "'RECEIVED'
+is an observed value of `invoice_history.from_status`,
+`invoice_history.to_status`, if that is the column meant"; the model
+read that as an instruction and attempt 2 counted `invoice_history`
+instead: 6,432 transitions, verified, `plausibility: []`. A filtered
+single-table count under invoice_history's own row_count passes every
+bound, and nothing tied the alias's noun to a table. Two rules come out
+of it, written here as rules:
+
+- **A challenge names what is wrong with the query; it never suggests
+  a different subject table.** Audited across all three lints: the
+  fan-out check names unqueried tables only inside its parenthesised
+  reasons ("(both columns are foreign keys to invoices.id — …)"); the
+  join-shape, NULL-semantics and interval checks name no table; the
+  enum check's cross-column clause was the one sentence a model could
+  read as "query this other thing instead", and it is gone. Mechanised
+  in `tests/test_lint_challenge_principle.py`: every dictionary table a
+  challenge names outside parentheses is one the statement already
+  queries, on each lint's own breach fixture.
+- **A new plausibility bound or lint is run read-only against the
+  latest committed report before it lands, and the change states its
+  hit count and every hit's attribution.** The tool is `engine eval
+  exposure --bank … --report … [--check NAME]`: every executed run_sql
+  statement in the report faces today's Verifier plausibility suite
+  and the three lints under the pack's current substrates, offline,
+  every hit attributed to row, rep, turn and statement. The
+  entity-count bound below was the first guard measured this way (208
+  statements, 53 count aliases resolved, 3 hits, all three AMB2), and
+  `tests/test_eval_exposure.py` pins that attribution against the
+  committed report so the next guard is measured against the same
+  baseline.
+
+What landed, mechanism by mechanism:
+
+- **AMB2 — the enum lint keeps the model on its table, and speaks only
+  where the filter is guaranteed empty.** The challenge now reads
+  "`invoices.status` never takes 'RECEIVED' in this data — observed
+  values: CLOSED, LAPSED, NO_REVIEW_NEEDED, READY. Keep the query on
+  `invoices`: choose among its observed values, or ask the user which
+  they meant." The parenthetical naming where else the value lives
+  does not survive: the grounding prompt already renders every enum
+  column with its full value list, so the pointer added nothing a model
+  could not see, and in both live cases the pointed-at column was the
+  wrong place (AMB2's invoice_history; R-A's supplier_acceptance, when
+  the answer was correction_ignored findings). The coverage-pass ruling
+  ("say where it lives") is reversed. And the lint's unit of judgement
+  is now the column: it fires on a lone `=` against a never-observed
+  value (R-A) or an IN list / OR chain with no observed member, and is
+  silent on a mixed list — attempt 1 was correct reasoning ("open" is
+  the four non-terminal lifecycle states, read from the grounding's own
+  `to_status` values; that the resting column shows two of them is
+  NP6's 4-vs-7 tension, not a defect), its never-observed members are
+  no-ops like the `<>` exemption, and a repair round on a correct query
+  is the mechanism that breached, in weaker form. Accepted gap: a typo
+  beside an observed value (`IN ('READY', 'CLOSD')`) undercounts
+  silently; the grounding's full value list is what prevents it.
+- **AMB2 — the entity-count bound.** `run_sql.entity_count_exceeds_table`
+  (warn): a COUNT column per the select-list parse whose alias names a
+  stats table by a stem rule (strip a count affix — `_count`, `_total`,
+  `n_`, `num_`, `number_of_`, `count_of_`, `total_` — then match the
+  noun, whole or its last segment, singular or plural, against the
+  table names; no affix or no unique table means no claim) must not
+  exceed that table's row_count plus the row-count tolerance. Scalar
+  shape reads the cell, grouped shape sums an untruncated column. Warn
+  because an alias is a convention, not a type. Accepted cost: a
+  grouped count whose key does not partition the entity (invoices per
+  rule) sums past the table honestly and loses its badge; no live
+  statement in 305 turns did. Knob `enforce_entity_count_bound`.
+- **AMB2's bank row keeps `numeric_from_gold` with breach semantics as
+  its only exit-0 content check.** No caption regex on invoice_history:
+  a correct answer may legitimately read it (the latest transition per
+  invoice is a sound way to derive current status, and lands at 78);
+  the mechanism is diagnosed in the verdict by the entity bound, which
+  is a diagnosis, not a regex. Expected: 5/5 across both arms — the
+  exit-0 reps execute attempt 1 at 78 with `enum_lint=None`, and a rep
+  that still walks to the history table ships `[UNVERIFIED]` rather
+  than breaching.
+- **REC-SQL accepts 0 or 1 bounce.** The post-duration miss was rep 3
+  rephrasing before the bounce ("How many rows are there in the
+  invoices table?" on its first call, 1,990): the row measures
+  recovery, and pre-emptive recovery is recovery. `retry_count.errors`
+  takes a list. Expected: 5/5.
+- **The interval lint joins A1/A4 as verified-but-not-live-witnessed.**
+  Zero challenges in 305 turns: the `time_in_status` gotcha's unit
+  paragraph steered every rep to EPOCH/DATE_DIFF first. Test-verified
+  (the W3 rep 4 fixture, every scaled shape, every correct shape) and
+  run-tested through `run_sql`; grounding first, guard behind it.
+- **Three parser residuals closed.** Quoted identifiers
+  (`"invoices"."status"`) bypassed every lint and every parse-based
+  bound; one helper, `unquote_identifiers`, now runs at the four
+  analysis entry points (the executed statement is never rewritten).
+  An unaliased table before JOIN (`FROM findings JOIN
+  compliance_reports`) lost the next table to the alias scan — surfaced
+  by the principle test, latent under this pin (the model aliases
+  everything), fixed with a keyword lookahead. And EPOCH/DATE_DIFF/
+  JULIAN parsed as Opaque, so the duration ceiling could only warn on
+  the gotcha's own recommended shapes; they are Numeric now with their
+  arguments visible — `AVG(EPOCH(a - b)) / 3600` past the span fails,
+  `SUM(DATE_DIFF(...))` is exempt, the floor reads the AVG
+  structurally, and `EPOCH((a - b) / 3600)` draws the interval lint.
+  The recommended shape must never be the shape the guards cannot
+  read — the S2 lesson, third application.
+- **What this pass leaves.** `EXTRACT(EPOCH FROM …)` stays outside the
+  parse — its inner FROM ends the select-list scan, so the item never
+  resolves (ceiling warn-only, floor blind); pinned as a known shape,
+  not built. SQLite's `strftime('%s', …)` is text until cast and stays
+  Opaque. The mixed-list typo gap above. The multi-membership grouped
+  count above. Association verification stays queued.
+
+Watch-for on the re-run: a green row whose SQL aliases a count with an
+entity noun over a fanning join now loses its badge — correct
+direction; note it. And any enum challenge at all — after the
+narrowing, one fires only on a filter guaranteed empty.

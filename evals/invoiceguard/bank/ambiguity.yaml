@@ -60,4 +60,15 @@
     firing ever: 3 of 5 reps asked "pending review, or never
     reviewed?") the clarify must pose two readings. The fp3 re-run's
     third definition (a four-status predicate answering 78) still
-    lands on the exit-0 arm.
+    lands on the exit-0 arm. The post-duration run breached here three
+    times (guard pass): the enum lint challenged that four-status
+    predicate's never-observed members and pointed at invoice_history
+    as where they live; the model read the pointer as an instruction
+    and 6,432 transitions shipped verified as an invoice count. Fixed
+    at the mechanism — the lint no longer names another table or fires
+    on a mixed IN list, and run_sql.entity_count_exceeds_table warns on
+    any invoice_count past the invoices table — so the verdict carries
+    the diagnosis. No caption regex on invoice_history: a correct
+    answer may legitimately read it (the latest transition per invoice
+    is current status) and land at 78; this numeric guard, with breach
+    semantics, is the content check and stays exactly as it is.

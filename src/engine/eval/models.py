@@ -292,12 +292,22 @@ class RouteAssertion(_AssertionBase):
 class RetryCountAssertion(_AssertionBase):
     """The N5 license: exactly `errors` errored invocations of `tool`,
     each followed by a same-tool retry (counted from the evidence
-    bundle's invocation order)."""
+    bundle's invocation order). A list names the counts accepted —
+    REC-SQL's `[0, 1]`: a rep that rephrases before the bounce
+    answered correctly, and pre-emptive recovery is recovery (guard
+    pass)."""
 
     kind: Literal["retry_count"] = "retry_count"
     tool: ToolName
-    errors: int = 1
+    errors: int | list[int] = 1
     error_contains: str = ""
+
+    @model_validator(mode="after")
+    def _counts_are_usable(self) -> "RetryCountAssertion":
+        accepted = self.errors if isinstance(self.errors, list) else [self.errors]
+        if not accepted or any(count < 0 for count in accepted):
+            raise ValueError("retry_count errors must name one or more counts >= 0")
+        return self
 
 
 class EnvelopeAssertion(_AssertionBase):

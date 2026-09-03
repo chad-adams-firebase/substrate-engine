@@ -117,3 +117,21 @@ def test_assoc_rows_are_deliberate_keeps():
     rows = {r.id: r for r in bank.rows}
     for row_id in ("W4", "W2"):
         assert rows[row_id].xfail.keep_until == "association verification", row_id
+
+
+def test_guard_pass_ledger_state():
+    """Guard pass rulings on the bank: REC-SQL counts a rephrase before
+    the bounce as recovery (0 or 1 bounce), and AMB2's exit-0 content
+    check is the breach-carrying numeric alone — no caption regex on
+    invoice_history, because a correct answer may legitimately read it
+    (the latest transition per invoice is current status) and land at
+    78; the mechanism is diagnosed in the verdict by
+    run_sql.entity_count_exceeds_table instead."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    rows = {r.id: r for r in bank.rows}
+    (retry,) = [a for a in rows["REC-SQL"].expect.assertions if a.kind == "retry_count"]
+    assert retry.errors == [0, 1]
+    exit_zero = [a for a in rows["AMB2"].expect.assertions if a.at_exit == [0]]
+    assert [a.kind for a in exit_zero] == ["contains", "numeric_from_gold"]
+    (numeric,) = [a for a in exit_zero if a.kind == "numeric_from_gold"]
+    assert numeric.field == ["ready", "not_closed"] and numeric.breach is True

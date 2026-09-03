@@ -25,15 +25,17 @@
       - {kind: nonempty}
       - kind: retry_count
         tool: run_sql
-        errors: 1
+        errors: [0, 1]
         error_contains: "writes its own SQL"
       - {kind: numeric_from_gold, field: value}
   note: >-
     A SQL-shaped question must bounce at run_sql's boundary
-    (ef55477) and recover through one English rephrase. Exploratory
-    threshold: the router may also translate before ever passing the
-    SQL through, in which case the bounce never fires — the grade's
-    failure classes will say which.
+    (ef55477) and recover through one English rephrase — or be
+    rephrased before it ever reaches the boundary: the post-duration
+    rep 3 sent "How many rows are there in the invoices table?" on its
+    first call, no bounce, 1,990. The row measures recovery, and
+    pre-emptive recovery is recovery (guard pass), so 0 or 1 bounce
+    passes; two would mean the licensed retry was itself SQL.
 
 - id: REC-CKG
   provenance: scripted
