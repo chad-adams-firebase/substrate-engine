@@ -6,7 +6,7 @@ renders them.
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from engine.harness.events import StatusEvent
 from engine.tools.envelope import Table
@@ -100,6 +100,20 @@ def exit_code_of(outcome: "TurnOutcome") -> int:
             outcome.verification if outcome.kind == "answer" else None,
         )
     ]
+
+
+_OUTCOME = TypeAdapter(TurnOutcome)
+
+
+def dumps_outcome(outcome: "TurnOutcome") -> str:
+    """The outcome as the JSON turn_log.outcome stores — opaque to the
+    port, read back by loads_outcome for every surface that shows a
+    past turn."""
+    return _OUTCOME.dump_json(outcome).decode("utf-8")
+
+
+def loads_outcome(text: str) -> "TurnOutcome":
+    return _OUTCOME.validate_json(text)
 
 
 class TurnResult(BaseModel):

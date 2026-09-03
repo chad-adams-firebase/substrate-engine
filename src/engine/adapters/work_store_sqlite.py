@@ -7,7 +7,11 @@ here — no LLM ever generates SQL against the WorkStore).
 ensure_schema creates the full Brief §12 DDL up front so the schema is
 designed and reviewed once; Phase 1 only exercises workspace CRUD, and
 later phases add operations over the remaining tables as they consume
-them. Rows are read name-keyed via sqlite3.Row.
+them. A column added later (turn_log.question / .outcome, Phase 5
+Block 3) is migrated in place: CREATE TABLE IF NOT EXISTS leaves an
+older table alone, so ensure_schema reads PRAGMA table_info and ALTERs
+the missing columns on — a work.db from an earlier block keeps its
+rows. Rows are read name-keyed via sqlite3.Row.
 """
 
 import json
@@ -20,6 +24,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from engine.ports.types import Conversation, TurnLogEntry, UnitSummary, Workspace
+from engine.ports.work_store import WorkspaceNotEmptyError
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS workspace (
@@ -79,6 +84,11 @@ CREATE TABLE IF NOT EXISTS turn_log (
     -- trail with timestamps (StatusEvent JSON) — what Phase 5's
     -- "Verified · 3 tools · 14s" chip and `engine turns` read.
     status_events        TEXT,
+    -- §12 extension (Phase 5 Block 3): the question as asked and the
+    -- TurnOutcome JSON, so reopening a conversation shows every turn.
+    -- Added by migration on older stores (_TURN_LOG_ADDED_COLUMNS).
+    question             TEXT,
+    outcome              TEXT,
     created_at           TEXT NOT NULL
 );
 
@@ -91,6 +101,11 @@ CREATE TABLE IF NOT EXISTS evidence_bundle (
     created_at TEXT NOT NULL
 );
 """
+
+
+# Columns added to turn_log after its first release, in the order they
+# were added; ensure_schema adds whichever an existing table lacks.
+_TURN_LOG_ADDED_COLUMNS = (("question", "TEXT"), ("outcome", "TEXT"))
 
 
 class SqliteWorkStoreSettings(BaseModel):
@@ -147,6 +162,17 @@ class SqliteWorkStore:
     def ensure_schema(self) -> None:
         with self._connection:
             self._connection.executescript(_SCHEMA)
+            present = {
+                row["name"]
+                for row in self._connection.execute(
+                    "PRAGMA table_info(turn_log)"
+                ).fetchall()
+            }
+            for column, sql_type in _TURN_LOG_ADDED_COLUMNS:
+                if column not in present:
+                    self._connection.execute(
+                        f"ALTER TABLE turn_log ADD COLUMN {column} {sql_type}"
+                    )
 
     @_locked
     def create_workspace(self, owner: str, name: str) -> Workspace:
@@ -158,6 +184,39 @@ class SqliteWorkStore:
             )
         return Workspace(
             id=cursor.lastrowid, owner=owner, name=name, created_at=created_at
+        )
+
+    @_locked
+    def get_workspace(self, workspace_id: int) -> Workspace | None:
+        row = self._connection.execute(
+            "SELECT id, owner, name, created_at FROM workspace WHERE id = ?",
+            (workspace_id,),
+        ).fetchone()
+        return self._workspace_from(row) if row else None
+
+    @_locked
+    def delete_workspace(self, workspace_id: int) -> None:
+        with self._connection:
+            remaining = self._connection.execute(
+                "SELECT COUNT(*) AS n FROM conversation WHERE workspace_id = ?",
+                (workspace_id,),
+            ).fetchone()["n"]
+            if remaining:
+                raise WorkspaceNotEmptyError(
+                    f"Workspace {workspace_id} still holds {remaining} "
+                    "conversation(s)."
+                )
+            self._connection.execute(
+                "DELETE FROM workspace WHERE id = ?", (workspace_id,)
+            )
+
+    @staticmethod
+    def _workspace_from(row: sqlite3.Row) -> Workspace:
+        return Workspace(
+            id=row["id"],
+            owner=row["owner"],
+            name=row["name"],
+            created_at=datetime.fromisoformat(row["created_at"]),
         )
 
     @_locked
@@ -194,6 +253,59 @@ class SqliteWorkStore:
         ).fetchall()
         return [self._conversation_from(row) for row in rows]
 
+    @_locked
+    def rename_conversation(
+        self, conversation_id: int, title: str
+    ) -> Conversation | None:
+        with self._connection:
+            self._connection.execute(
+                "UPDATE conversation SET title = ? WHERE id = ?",
+                (title, conversation_id),
+            )
+        return self.get_conversation(conversation_id)
+
+    @_locked
+    def delete_conversation(self, conversation_id: int) -> None:
+        with self._connection:
+            # Bundles are content-addressed and may be shared: a second
+            # conversation that produced byte-identical evidence points
+            # at the same ref, so only bundles no other conversation
+            # cites go with this one.
+            self._connection.execute(
+                "DELETE FROM evidence_bundle WHERE ref IN ("
+                "  SELECT evidence_bundle_ref FROM turn_log "
+                "  WHERE conversation_id = ? AND evidence_bundle_ref IS NOT NULL"
+                ") AND ref NOT IN ("
+                "  SELECT evidence_bundle_ref FROM turn_log "
+                "  WHERE conversation_id <> ? AND evidence_bundle_ref IS NOT NULL"
+                ")",
+                (conversation_id, conversation_id),
+            )
+            self._connection.execute(
+                "DELETE FROM turn_log WHERE conversation_id = ?", (conversation_id,)
+            )
+            self._connection.execute(
+                "DELETE FROM conversation WHERE id = ?", (conversation_id,)
+            )
+        self._delete_checkpoint_thread(conversation_id)
+
+    def _delete_checkpoint_thread(self, conversation_id: int) -> None:
+        """The saver owns its tables, so the thread is deleted through
+        a saver over the same file, whose connection then closes. A
+        ":memory:" store's saver is a separate in-memory database (see
+        checkpointer()), so there is nothing to delete there."""
+        if self._settings.database == ":memory:":
+            return
+        saver = self.checkpointer()
+        try:
+            delete = getattr(saver, "delete_thread", None)
+            if delete is not None:
+                delete(str(conversation_id))
+        finally:
+            connection = getattr(saver, "conn", None)
+            if connection is not None:
+                connection.close()
+
     @staticmethod
     def _conversation_from(row: sqlite3.Row) -> Conversation:
         return Conversation(
@@ -210,7 +322,8 @@ class SqliteWorkStore:
                 "INSERT INTO turn_log (conversation_id, turn, actor, action, "
                 "tools_used, substrates_read, evidence_bundle_ref, "
                 "verifier_verdict, substrate_versions, status_events, "
-                "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "question, outcome, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     entry.conversation_id,
                     entry.turn,
@@ -222,6 +335,8 @@ class SqliteWorkStore:
                     entry.verifier_verdict,
                     json.dumps(entry.substrate_versions),
                     entry.status_events,
+                    entry.question,
+                    entry.outcome,
                     entry.created_at.isoformat(),
                 ),
             )
@@ -232,7 +347,8 @@ class SqliteWorkStore:
         rows = self._connection.execute(
             "SELECT conversation_id, turn, actor, action, tools_used, "
             "substrates_read, evidence_bundle_ref, verifier_verdict, "
-            "substrate_versions, status_events, created_at FROM turn_log "
+            "substrate_versions, status_events, question, outcome, "
+            "created_at FROM turn_log "
             "WHERE conversation_id = ? ORDER BY turn, id",
             (conversation_id,),
         ).fetchall()
@@ -248,6 +364,9 @@ class SqliteWorkStore:
                 verifier_verdict=row["verifier_verdict"],
                 substrate_versions=json.loads(row["substrate_versions"]),
                 status_events=row["status_events"],
+                # Pre-Block-3 rows carry NULL in both migrated columns.
+                question=row["question"] or "",
+                outcome=row["outcome"],
                 created_at=datetime.fromisoformat(row["created_at"]),
             )
             for row in rows
@@ -380,12 +499,4 @@ class SqliteWorkStore:
             "WHERE owner = ? ORDER BY id",
             (owner,),
         ).fetchall()
-        return [
-            Workspace(
-                id=row["id"],
-                owner=row["owner"],
-                name=row["name"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-            )
-            for row in rows
-        ]
+        return [self._workspace_from(row) for row in rows]

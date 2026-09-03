@@ -1,6 +1,7 @@
 """SQLite WorkStore adapter: schema bootstrap is idempotent, workspace
 and conversation CRUD round-trip, turn logs and evidence bundles
-persist, and the checkpointer stays lazy."""
+persist, the checkpointer stays lazy, and an older store migrates in
+place (Phase 5 Block 3)."""
 
 import sqlite3
 from datetime import UTC, datetime
@@ -12,6 +13,7 @@ from engine.adapters.work_store_sqlite import (
     SqliteWorkStoreSettings,
 )
 from engine.ports.types import TurnLogEntry
+from engine.ports.work_store import WorkspaceNotEmptyError
 
 
 @pytest.fixture
@@ -102,6 +104,8 @@ def _entry(conversation_id: int, turn: int, **overrides) -> TurnLogEntry:
         "verifier_verdict": '{"disposition": "verified"}',
         "substrate_versions": ["m1", "m2"],
         "status_events": "[]",
+        "question": "how many?",
+        "outcome": '{"kind": "refuse", "reason": "r"}',
         "created_at": datetime(2026, 5, 30, tzinfo=UTC),
     }
     fields.update(overrides)
@@ -270,3 +274,132 @@ def test_one_store_serves_reads_and_writes_from_two_threads(store):
 
     assert errors == []
     assert len(store.list_turn_logs(conversation.id)) == 20
+
+
+# --- Phase 5 Block 3: workspace/conversation CRUD and the migration ------
+
+
+def test_get_workspace_and_delete_only_when_empty(store):
+    workspace = store.create_workspace("chad", "audit")
+    assert store.get_workspace(workspace.id) == workspace
+    assert store.get_workspace(9999) is None
+
+    conversation = store.create_conversation(workspace.id, "t")
+    with pytest.raises(WorkspaceNotEmptyError, match="1 conversation"):
+        store.delete_workspace(workspace.id)
+    assert store.get_workspace(workspace.id) is not None
+
+    store.delete_conversation(conversation.id)
+    store.delete_workspace(workspace.id)
+    assert store.get_workspace(workspace.id) is None
+    store.delete_workspace(workspace.id)  # missing: a no-op, not an error
+
+
+def test_rename_conversation(store):
+    workspace = store.create_workspace("chad", "scratch")
+    conversation = store.create_conversation(workspace.id, "first words")
+    renamed = store.rename_conversation(conversation.id, "Flag rates by supplier")
+    assert renamed.title == "Flag rates by supplier"
+    assert renamed.id == conversation.id
+    assert renamed.created_at == conversation.created_at
+    assert store.get_conversation(conversation.id).title == "Flag rates by supplier"
+    assert store.rename_conversation(9999, "x") is None
+
+
+def test_delete_conversation_cascades_turn_log_and_unshared_bundles(store):
+    """The rows go; a bundle another conversation also cites stays,
+    because refs are content-addressed and may be shared."""
+    workspace = store.create_workspace("chad", "scratch")
+    doomed = store.create_conversation(workspace.id, "doomed")
+    keeper = store.create_conversation(workspace.id, "keeper")
+    store.save_evidence_bundle("only-doomed", "{}")
+    store.save_evidence_bundle("shared", "{}")
+    store.append_turn_log(_entry(doomed.id, 1, evidence_bundle_ref="only-doomed"))
+    store.append_turn_log(_entry(doomed.id, 2, evidence_bundle_ref="shared"))
+    store.append_turn_log(_entry(keeper.id, 1, evidence_bundle_ref="shared"))
+
+    store.delete_conversation(doomed.id)
+
+    assert store.get_conversation(doomed.id) is None
+    assert store.list_turn_logs(doomed.id) == []
+    assert store.load_evidence_bundle("only-doomed") is None
+    assert store.load_evidence_bundle("shared") == "{}"
+    assert [c.id for c in store.list_conversations(workspace.id)] == [keeper.id]
+    assert len(store.list_turn_logs(keeper.id)) == 1
+    store.delete_conversation(9999)  # missing: a no-op
+
+
+def test_delete_conversation_drops_its_checkpoint_thread(tmp_path):
+    database = tmp_path / "work.db"
+    store = SqliteWorkStore(SqliteWorkStoreSettings(database=str(database)))
+    store.ensure_schema()
+    workspace = store.create_workspace("chad", "scratch")
+    conversation = store.create_conversation(workspace.id, "t")
+    other = store.create_conversation(workspace.id, "other")
+
+    saver = store.checkpointer()
+    checkpoint = {
+        "v": 4, "id": "chk-1", "ts": "2026-05-30T00:00:00+00:00",
+        "channel_values": {"turn": 1}, "channel_versions": {}, "versions_seen": {},
+    }
+    for thread in (conversation.id, other.id):
+        config = {"configurable": {"thread_id": str(thread), "checkpoint_ns": ""}}
+        saver.put(config, checkpoint, {}, {})
+
+    store.delete_conversation(conversation.id)
+
+    reread = store.checkpointer()
+    gone = {"configurable": {"thread_id": str(conversation.id), "checkpoint_ns": ""}}
+    kept = {"configurable": {"thread_id": str(other.id), "checkpoint_ns": ""}}
+    assert reread.get(gone) is None
+    assert reread.get(kept) is not None
+
+
+# The turn_log DDL as it stood before Block 3 (no question/outcome).
+_OLD_TURN_LOG = """
+CREATE TABLE workspace (id INTEGER PRIMARY KEY, owner TEXT NOT NULL,
+    name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE conversation (id INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspace(id),
+    title TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE turn_log (
+    id INTEGER PRIMARY KEY,
+    conversation_id INTEGER NOT NULL REFERENCES conversation(id),
+    turn INTEGER NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL,
+    tools_used TEXT, substrates_read TEXT, evidence_bundle_ref TEXT,
+    verifier_verdict TEXT, substrate_versions TEXT, status_events TEXT,
+    created_at TEXT NOT NULL);
+INSERT INTO workspace VALUES (1, 'chad', 'scratch', '2026-08-31T00:00:00+00:00');
+INSERT INTO conversation VALUES (3, 1, 'old thread', '2026-08-31T00:00:00+00:00');
+INSERT INTO turn_log (conversation_id, turn, actor, action, tools_used,
+    substrates_read, evidence_bundle_ref, verifier_verdict,
+    substrate_versions, status_events, created_at)
+  VALUES (3, 1, 'chad', 'ask', '["run_sql"]', '[]', NULL, NULL, '[]',
+          '[]', '2026-08-31T00:00:01+00:00');
+"""
+
+
+def test_ensure_schema_migrates_an_older_store_in_place(tmp_path):
+    """A work.db written before Block 3 gains the two columns and keeps
+    its rows; old rows read back with an empty question and no
+    outcome, new rows carry both."""
+    database = tmp_path / "work.db"
+    with sqlite3.connect(str(database)) as connection:
+        connection.executescript(_OLD_TURN_LOG)
+    store = SqliteWorkStore(SqliteWorkStoreSettings(database=str(database)))
+
+    store.ensure_schema()
+    store.ensure_schema()  # idempotent after the migration too
+
+    columns = [
+        row[1]
+        for row in store._connection.execute("PRAGMA table_info(turn_log)").fetchall()
+    ]
+    assert "question" in columns and "outcome" in columns
+    (old,) = store.list_turn_logs(3)
+    assert old.turn == 1 and old.tools_used == ["run_sql"]
+    assert old.question == "" and old.outcome is None
+
+    store.append_turn_log(_entry(3, 2))
+    assert [e.question for e in store.list_turn_logs(3)] == ["", "how many?"]
+    assert store.list_turn_logs(3)[1].outcome == '{"kind": "refuse", "reason": "r"}'

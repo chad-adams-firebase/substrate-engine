@@ -117,9 +117,9 @@ class Conversation(BaseModel):
 class TurnLogEntry(BaseModel):
     """One §12 turn_log row — the provenance record every turn writes.
 
-    verifier_verdict and status_events cross this boundary as opaque
-    JSON strings: the port stays neutral about harness/verifier model
-    shapes, exactly the neutrality the TEXT columns encode.
+    verifier_verdict, status_events and outcome cross this boundary as
+    opaque JSON strings: the port stays neutral about harness/verifier
+    model shapes, exactly the neutrality the TEXT columns encode.
     """
 
     conversation_id: int
@@ -132,6 +132,14 @@ class TurnLogEntry(BaseModel):
     verifier_verdict: str | None = None
     substrate_versions: list[str] = []
     status_events: str | None = None
+    # §12 extension (Phase 5 Block 3): the question as asked and the
+    # TurnOutcome JSON — what reopening a past conversation shows. The
+    # checkpoint history holds only a transcript placeholder for
+    # tables, and Block 4 slices that history for LLM context; the two
+    # records serve different readers and stay separate. Rows written
+    # before the extension read back as "" / None.
+    question: str = ""
+    outcome: str | None = None
     created_at: datetime
 
 

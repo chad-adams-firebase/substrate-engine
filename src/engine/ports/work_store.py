@@ -10,7 +10,11 @@ is legitimately empty until Phase 6 publishes into it). Phase 4 adds
 what the ask path consumes: conversation CRUD, the §12 turn_log
 append/read, evidence-bundle storage (content-addressed refs pointing
 at canonical TurnEvidence JSON), and the LangGraph checkpointer.
-Unit-of-Work and comment operations remain Phase 6.
+Phase 5 Block 3 adds what the workspace sidebar consumes: workspace
+lookup and deletion, conversation rename and deletion (the turn log,
+the bundles only that conversation references, and the checkpoint
+thread go with it). Unit-of-Work and comment operations remain
+Phase 6.
 """
 
 from typing import Any, Protocol
@@ -18,12 +22,28 @@ from typing import Any, Protocol
 from engine.ports.types import Conversation, TurnLogEntry, UnitSummary, Workspace
 
 
+class WorkspaceNotEmptyError(Exception):
+    """delete_workspace on a workspace that still holds conversations.
+    Deleting a folder never deletes its contents implicitly."""
+
+
 class WorkStorePort(Protocol):
-    def ensure_schema(self) -> None: ...
+    def ensure_schema(self) -> None:
+        """Create the §12 tables, and bring an older store's tables up
+        to the current columns in place (a work.db from an earlier
+        block keeps its rows)."""
+        ...
 
     def create_workspace(self, owner: str, name: str) -> Workspace: ...
 
+    def get_workspace(self, workspace_id: int) -> Workspace | None: ...
+
     def list_workspaces(self, owner: str) -> list[Workspace]: ...
+
+    def delete_workspace(self, workspace_id: int) -> None:
+        """Raises WorkspaceNotEmptyError while conversations remain.
+        A missing workspace is a no-op."""
+        ...
 
     def create_conversation(
         self, workspace_id: int, title: str
@@ -32,6 +52,16 @@ class WorkStorePort(Protocol):
     def get_conversation(self, conversation_id: int) -> Conversation | None: ...
 
     def list_conversations(self, workspace_id: int) -> list[Conversation]: ...
+
+    def rename_conversation(
+        self, conversation_id: int, title: str
+    ) -> Conversation | None: ...
+
+    def delete_conversation(self, conversation_id: int) -> None:
+        """The conversation, its turn_log rows, the evidence bundles no
+        other conversation references, and its checkpoint thread. A
+        missing conversation is a no-op."""
+        ...
 
     def append_turn_log(self, entry: TurnLogEntry) -> int: ...
 

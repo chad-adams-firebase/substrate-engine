@@ -854,10 +854,12 @@ def _turns(
                     "disposition", "?"
                 )
             tools = ",".join(entry.tools_used) or "-"
+            question = entry.question[:60] + ("…" if len(entry.question) > 60 else "")
             print(
                 f"turn {entry.turn:>2}  {entry.actor}  {entry.action}  "
                 f"tools={tools}  verdict={verdict}  "
                 f"evidence={entry.evidence_bundle_ref or '-'}"
+                + (f"  {question!r}" if question else "")
             )
         return 0
 
