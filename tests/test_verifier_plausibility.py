@@ -484,6 +484,84 @@ def test_repaired_challenge_leaves_no_trace_on_the_verdict():
     assert result.disposition == "verified"
 
 
+# --- Polish Pass: the cap reads the stats at their stored precision ----
+
+# The pack's own invoices.invoice_total row: 1,990 rows, 7 nulls stored
+# as null_rate 0.003518, mean 8413.317448. The true grand total is
+# 16,683,608.50; mean × 1,990 × (1 − 0.003518) is 16,683,601.60.
+INVOICE_TOTAL_STATS = [
+    stats_row(
+        "invoices",
+        "invoice_total",
+        data_type="DOUBLE",
+        row_count=1990,
+        null_rate=0.003518,
+        mean=8413.317448,
+        min_value="686.23",
+        max_value="43117.71",
+    ),
+    stats_row("suppliers", "id", row_count=40),
+]
+PER_SUPPLIER_SQL = (
+    "SELECT s.name AS supplier_name, SUM(i.invoice_total) AS total_invoice_amount "
+    "FROM suppliers s LEFT JOIN invoices i ON s.id = i.supplier_id GROUP BY s.name"
+)
+
+
+def _per_supplier(grand_total: float):
+    share = grand_total / 4
+    return sql_invocation(
+        PER_SUPPLIER_SQL,
+        [{"supplier_name": name, "total_invoice_amount": share} for name in "ABCD"],
+    )
+
+
+def test_the_honest_grand_total_sits_under_the_cap():
+    """W1's second blocker: every rep's correct SUM summed to the true
+    16,683,608.50 and drew a sum_vs_stats warn against a cap $6.90
+    short, because the cap read the rounded null_rate as written."""
+    from engine.verifier.checks.run_sql import non_null_count_upper, sum_cap
+
+    (stat, _) = INVOICE_TOTAL_STATS
+    assert non_null_count_upper(stat) == 1983
+    assert 16_683_608.50 <= sum_cap(stat) < 16_683_608.51
+    verifier, _ = make_verifier(stats=INVOICE_TOTAL_STATS)
+    result = verifier.verify(
+        question="q",
+        draft=DraftAnswer(kind="table_passthrough", text=PER_SUPPLIER_SQL),
+        evidence=[_per_supplier(16_683_608.499999987)],
+        attempt=1,
+    )
+    assert result.disposition == "verified"
+    assert result.plausibility == []
+
+
+def test_a_fanned_total_still_fails_under_the_precise_cap():
+    verifier, _ = make_verifier(stats=INVOICE_TOTAL_STATS)
+    for factor, severity in ((5.0, "fail"), (2.0, "fail"), (1.05, "warn")):
+        result = verifier.verify(
+            question="q",
+            draft=DraftAnswer(kind="table_passthrough", text=PER_SUPPLIER_SQL),
+            evidence=[_per_supplier(16_683_608.50 * factor)],
+            attempt=1,
+        )
+        # A fanned column draws a cell finding and a column-total
+        # finding; the severer one is the verdict's.
+        findings = result.plausibility
+        assert findings and {f.check for f in findings} == {"run_sql.sum_vs_stats"}, factor
+        worst = "fail" if any(f.severity == "fail" for f in findings) else "warn"
+        assert worst == severity, factor
+
+
+def test_the_non_null_count_never_exceeds_the_table():
+    from engine.verifier.checks.run_sql import non_null_count_upper
+
+    assert non_null_count_upper(stats_row("t", "c", row_count=100, null_rate=0.0)) == 100
+    # A large table: the interval may hold several integers; the
+    # largest is the cap's, still bounded by the table.
+    assert non_null_count_upper(stats_row("t", "c", row_count=10_000_000, null_rate=0.25)) == 7_500_005
+
+
 # --- Play pass: aggregate-vs-stats bounds (W1's catch) ---------------
 
 OPPORTUNITY_STATS = [

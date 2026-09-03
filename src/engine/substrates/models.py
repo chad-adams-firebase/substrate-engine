@@ -15,6 +15,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+# Decimal places every float in a StatsRow is rounded to at generation
+# time (null_rate, mean, rendered min/max). One constant, read by the
+# stats generator when it rounds and by the Verifier's SUM cap when it
+# reads the row back at the same precision (Polish Pass): a cap
+# computed from a rounded null_rate sat $7 under the true total of
+# invoices.invoice_total and took the badge off a correct answer.
+STATS_DECIMALS = 6
+
 
 class Provenance(BaseModel):
     """Who vouches for a row, and how strongly (Brief §4)."""

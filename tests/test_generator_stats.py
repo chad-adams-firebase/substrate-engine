@@ -53,3 +53,15 @@ def test_mean_only_for_numeric_columns(snapshot_outputs):
     assert stats_for(snapshot_outputs, "invoices", "invoice_total").mean is not None
     assert stats_for(snapshot_outputs, "invoices", "status").mean is None
     assert stats_for(snapshot_outputs, "invoices", "adjustment_flag").mean is None
+
+
+def test_floats_are_rounded_to_the_declared_precision(snapshot_outputs):
+    """The Verifier's SUM cap reads a row back at STATS_DECIMALS; the
+    generator must round with the same constant."""
+    from engine.substrates.models import STATS_DECIMALS
+
+    assert STATS_DECIMALS == 6
+    for row in snapshot_outputs["univariate_stats"]:
+        assert round(row.null_rate, STATS_DECIMALS) == row.null_rate
+        if row.mean is not None:
+            assert round(row.mean, STATS_DECIMALS) == row.mean

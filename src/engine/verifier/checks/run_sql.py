@@ -68,12 +68,13 @@ Known limitations, documented rather than hidden:
   claim or the noun matches no table.
 """
 
+import math
 import re
 from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 
 from engine.config.models import ToolName
-from engine.substrates.models import StatsRow
+from engine.substrates.models import STATS_DECIMALS, StatsRow
 from engine.tools.durations import duration_seconds, is_timestamp_type
 from engine.tools.envelope import (
     ColumnFormat,
@@ -172,6 +173,30 @@ def _fmt(value: float) -> str:
     """Thousands-separated, never scientific: findings are read by
     humans deciding whether to trust an answer."""
     return format(value, ",.10g")
+
+
+def non_null_count_upper(stat: StatsRow) -> int:
+    """The largest non-null count consistent with the row's stored
+    null_rate: the true rate lies within half a unit of the last stored
+    decimal, so the count lies in an interval — usually one integer
+    (1,983 for invoices.invoice_total at 1,990 rows, null_rate
+    0.003518), and never more than row_count."""
+    half = 0.5 * 10 ** -STATS_DECIMALS
+    upper = stat.row_count * (1.0 - stat.null_rate + half)
+    return min(stat.row_count, math.floor(upper + 1e-9))
+
+
+def sum_cap(stat: StatsRow) -> float:
+    """The largest SUM a non-negative column can honestly reach, read
+    from the stats at their stored precision: the mean's upper half-unit
+    times the largest consistent non-null count. A cap computed from
+    the rounded values as written sat $6.90 under the true total of
+    invoices.invoice_total (mean × 1,982.99918 instead of × 1,983) and
+    took the badge off W1's correct answer on every rep (Polish Pass).
+    The configured tolerance keeps its warn→fail role above the cap."""
+    assert stat.mean is not None
+    half = 0.5 * 10 ** -STATS_DECIMALS
+    return (stat.mean + half) * non_null_count_upper(stat)
 
 
 def _lone_count(sql: str, table) -> Aggregate | None:
@@ -1032,7 +1057,7 @@ class RunSqlCheck(SubstrateCheck):
         low = _as_float(stat.min_value)
         if stat.mean is None or low is None or low < 0:
             return []  # unknown sign, or signed: no valid cap
-        cap = stat.mean * stat.row_count * (1.0 - stat.null_rate)
+        cap = sum_cap(stat)
         findings: list[PlausibilityFinding] = []
         cells = [
             float(cell)

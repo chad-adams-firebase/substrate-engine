@@ -12,7 +12,13 @@ from engine.config.models import GenerationConfig
 from engine.ports.sql import SqlPort
 from engine.ports.types import User
 from engine.substrates.manifest import build_manifest
-from engine.substrates.models import Manifest, Provenance, StatsRow, TopValue
+from engine.substrates.models import (
+    STATS_DECIMALS,
+    Manifest,
+    Provenance,
+    StatsRow,
+    TopValue,
+)
 
 GENERATOR_VERSION = "1.0.0"
 
@@ -27,7 +33,7 @@ def _render(value: object) -> str:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
     if isinstance(value, float):
-        value = round(value, 6)
+        value = round(value, STATS_DECIMALS)
     return str(value)[:RENDER_MAX_CHARS]
 
 
@@ -92,7 +98,7 @@ class StatsGenerator:
             f"COUNT(DISTINCT {quoted}) AS distinct_count FROM \"{table}\""
         )[0]
         null_rate = (
-            round((row_count - base["non_null"]) / row_count, 6)
+            round((row_count - base["non_null"]) / row_count, STATS_DECIMALS)
             if row_count
             else 0.0
         )
@@ -109,7 +115,7 @@ class StatsGenerator:
                 mean_row = self._run(
                     f"SELECT AVG({quoted}) AS mean FROM \"{table}\""
                 )[0]
-                mean = round(float(mean_row["mean"]), 6)
+                mean = round(float(mean_row["mean"]), STATS_DECIMALS)
 
         top_values = []
         if base["non_null"]:
