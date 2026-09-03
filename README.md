@@ -98,6 +98,7 @@ workspace is created on the first listing.
 | `DELETE /api/workspaces/<id>` | `204`; `409` while conversations remain |
 | `GET /api/workspaces/<id>/conversations` · `POST {title}` | list · create |
 | `PATCH /api/conversations/<id> {title}` · `DELETE` | rename · delete the turns, the bundles only it cites, its checkpoint thread (`409` under a running turn) |
+| `GET /api/conversations/<id>` | the conversation with its turn count (every logged row), the running summary and the turn it reaches, and the pack's nudge threshold — one fetch for the banner (Block 4) |
 | `GET /api/conversations/<id>/turns` | every logged turn: question, outcome, verdict, status events, `evidence_bundle_ref` — the shapes the terminal frame carries; `?format=text` renders the transcript through `web/render.py` |
 | `GET /api/evidence/<ref>` | the bundle JSON as stored, fetched by the inspector on demand |
 
@@ -199,9 +200,39 @@ conversation's checkpoint history:
 uv run engine store backfill-questions --pack packs/invoiceguard [--dry-run]
 ```
 
-The verb reads the pre-Block-4 history layout (one user/assistant
-message pair per turn); Block 4's reconciliation list carries its
-update or retirement.
+The verb reads the checkpoint history in either layout — today's
+`HistoryTurn` records, or the user/assistant message pairs a store
+written before Phase 5 Block 4 holds, which upgrade on read (the
+committed fixture under `tests/fixtures/legacy_work_db/` is such a
+store, and `tests/test_harness_legacy_store.py` continues a
+conversation from it).
+
+**Context management** (Brief §10.3; `harness.context` in pack
+config: `last_n_turns`, `summary_refresh_after_turns`,
+`nudge_after_turns`). The router's system message carries the running
+summary of the turns it no longer sees, and every turn newer than the
+summary follows verbatim as user/assistant pairs — never fewer than
+`last_n_turns`, never more than N+K−1: a `summarize` node after
+`finalize` folds the turns past the window into the summary once
+`summary_refresh_after_turns` of them have accumulated (one LLM call
+at temperature 0, synchronous inside the turn, evented as "Updating
+conversation summary…"). The summary cites turns by number and never
+restates a figure: one regeneration names what the reply restated,
+then `engine.harness.summary.scrub_figures` replaces any figure from a
+folded prose answer with "(see turn N)" and blanks a cited turn the
+summary could not have seen to "(an earlier turn)" — a table turn
+contributes its caption line and no figures, and numbers the user
+typed are allowed. A failed refresh keeps the previous summary and
+says so on the trail. `TurnResult.summary` carries the summary the
+turn ended with; `GET /api/conversations/<id>` answers with the turn
+count (every logged row), the summary, and the nudge threshold, and
+the page draws a dismissible banner past it (in-page state only — it
+returns on reopen) and shows the summary in the inspector. A bank row
+may name its own `context:` block, applied to its session for its
+turns only; MT4 runs under a one-turn window so the summarizer prompt
+is measured live, with `summary_contains` and
+`summary_excludes_figures` assertions reading the summary a turn ends
+with.
 
 **Evidence bundles are owner-scoped.** `GET /api/evidence/<ref>`
 answers only when a conversation in the caller's workspaces logged a

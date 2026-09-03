@@ -627,3 +627,80 @@ whose SUM reads a lookup's one side and is newly challenged (none in
 210); any `fan_out_override` at all outside W1's CTE reps. The
 verified-but-not-live-witnessed list is unchanged: A1, A4, the interval
 lint, the entity bound.
+
+## Block 4 — context management (2026-09-03)
+
+Brief §10.3, the last Phase 5 block. Reconciled against 740ec5d before
+it was built; what had moved underneath the plan, and what was decided:
+
+- **History shape.** `TurnState.history` was still Message pairs. It is
+  now `HistoryTurn` records (turn, question, answer, kind) — named apart
+  from the eval's `TurnRecord`, which already existed; the Brief's
+  sentence was amended rather than carrying two classes with one name.
+  A `mode="before"` validator upgrades a pre-Block-4 checkpoint's pairs
+  on read (LangGraph coerces node input through the schema, so it runs
+  at every node entry); the proof is a committed store written by the
+  engine at 850f869 — the dev store the Polish Pass backfilled no
+  longer exists on disk — continued at turn 3 in
+  `tests/test_harness_legacy_store.py`.
+- **`engine store backfill-questions`** is kept, not retired: it reads
+  through the same upgrade, so a store of either layout recovers.
+- **The chip** is keyed by the finalize event's name, not the trail's
+  tail, on both surfaces; `summarize` emits its own events and only
+  when it runs, so a short conversation's trail is unchanged. On a
+  refresh turn the chip's seconds include the summary call — honest.
+- **`substrate_versions`** are written as before; the exposure verb's
+  work-store arm keeps reading them. **`turn_count`** for the banner is
+  every `turn_log` row, legacy rows included.
+- **Formatted figures and the scrub.** Answers carry `$8,308.92`,
+  `92.2%`, `1 hour`, `1.1 days`, plain numbers, ISO dates, `—`. The
+  scrub's grammar mirrors render.py's outputs (its own, small: the
+  Verifier's regex is private and has no duration or date, and the eval
+  side is not importable from the harness) and is anchored on digits
+  with no letter, digit or underscore either side, so `CR147`, `e0`,
+  identifiers and the nine reading names (all letters and hyphens)
+  never match. A restated figure becomes "(see turn N)" — the first
+  turn that stated it; a cited turn outside 1..through becomes "(an
+  earlier turn)", never a number the summarizer did not write.
+- **Table turns** contribute exactly what they did — `[table: <SQL>]` —
+  and no figures by construction (the figure set reads prose records
+  only); the SQL is what "the table above" resolves against, and
+  changing it would have made this run unattributable.
+- **The window.** Verbatim = every turn newer than the summary; the
+  fold runs when `(turn − N) − through ≥ K`, so the window is N..N+K−1
+  and no turn is ever neither summarized nor shown. Defaults 10/5: a
+  30-turn conversation folds at 15, 20, 25, 30.
+- **MT4** (user ruling): no bank row reached turn 11, so the summarizer
+  prompt — model-facing text — had no regression net. A row may carry a
+  `context:` block applied to its own session; MT4 runs 1/1: turn 1
+  names the top supplier and its total in a sentence, turns 2–3 are
+  MT1's and PLAY-R1's questions, turn 4's "that supplier's total again"
+  resolves only through the summary (route must include run_sql, the
+  figure re-gathered), and the summary turn 4 ends with must cite turn
+  1, name the supplier, and carry no figure from turn 1's answer
+  (`summary_contains`, `summary_excludes_figures`: context assertions,
+  never a breach). `--check-gold` PASS with MT4.
+
+Predictions for the post-Block-4 run (`2026-09-03-post-block4`):
+
+| row | mechanism | prediction |
+|---|---|---|
+| MT1, MT2, MT3, W1 | two turns, pack window 10: the router's messages are byte-identical to the post-polish run (records expand to the same pairs; no summary section when the summary is empty) | hold 5/5 each |
+| MT4 | new; the summarizer is live for the first time | ≥ 4/5; the risks are turn 1 answered as a table (the name then never enters the history) and the rewrite at turn 4 dropping the turn-1 citation |
+| every other row | unchanged messages | unchanged; AMB1 3/5, S2 4/5, B2 2/5, W-F 0/5 move only by model variance |
+| INVARIANT | no content path changed | ok |
+
+Watch-for: an MT1–MT3/W1 rep failing to resolve its anchor (that would
+be an expansion bug the router test and the checkpoint test should have
+caught, not a model shift); MT4 turn 4 routing anywhere but run_sql
+(the summary named the supplier but the router answered from it — the
+summary must never be quoted as evidence, and the Verifier would refuse
+a figure with no tool behind it); a `summarize` failure event in any
+MT4 rep (the summary would be empty and the row fails on
+`summary_contains`, which is the right outcome).
+
+Deferred to the Close Pass: CTE-aware fan-out; an interpretation slot
+for table answers (the caption — W-F's `contains` has nowhere to pass
+otherwise, and MT4 would not need a prose-phrased turn 1); the loop
+transcript's `Requested:`/`Tool results:` rendering; W4 under ASSOC;
+the asynchronous `update_state` summary refresh.
