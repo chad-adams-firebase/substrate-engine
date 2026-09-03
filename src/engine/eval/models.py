@@ -18,7 +18,7 @@ from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from engine.config.models import ToolName
+from engine.config.models import ContextSettings, ToolName
 from engine.harness.events import StatusEvent
 from engine.harness.outcomes import TurnOutcome
 from engine.tools.envelope import DurationUnit
@@ -267,6 +267,46 @@ class PatternCountAssertion(_AssertionBase):
         return self
 
 
+class SummaryContainsAssertion(_AssertionBase):
+    """The running summary the turn ends with (TurnResult.summary)
+    carries a pattern, or any of the named gold strings — the turn
+    reference and the anchor name a follow-up resolves against (Brief
+    §10.3). Not a content assertion: a summary is context, never the
+    answer, so its failure gates the rep and rings no alarm."""
+
+    kind: Literal["summary_contains"] = "summary_contains"
+    pattern: str | None = None
+    regex: bool = False
+    case_sensitive: bool = False
+    from_gold_field: str | list[str] | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_source(self) -> "SummaryContainsAssertion":
+        if (self.pattern is None) == (self.from_gold_field is None):
+            raise ValueError(
+                "summary_contains needs exactly one of pattern / from_gold_field"
+            )
+        return self
+
+    def fields(self) -> list[str]:
+        if self.from_gold_field is None:
+            return []
+        if isinstance(self.from_gold_field, str):
+            return [self.from_gold_field]
+        return list(self.from_gold_field)
+
+
+class SummaryExcludesFiguresAssertion(_AssertionBase):
+    """No figure the named earlier turn's answer stated reappears in
+    the running summary this turn ends with — the §10.3 property
+    ("turn references, never restated figures"), measured live. The
+    numbers that turn's question typed are the user's and allowed."""
+
+    kind: Literal["summary_excludes_figures"] = "summary_excludes_figures"
+    # Index into the row's turns (0-based, as turn_index).
+    from_turn: int = Field(ge=0)
+
+
 class CurrencyFormatAssertion(_AssertionBase):
     """Money renders as currency: every $-amount is comma-grouped with
     two decimals, and no float tail (8308.92139…) appears anywhere."""
@@ -365,6 +405,8 @@ Assertion = Annotated[
     | ContainsAssertion
     | NotContainsAssertion
     | PatternCountAssertion
+    | SummaryContainsAssertion
+    | SummaryExcludesFiguresAssertion
     | CurrencyFormatAssertion
     | WindowDataAnchoredAssertion
     | RouteAssertion
@@ -465,6 +507,11 @@ class BankRow(BaseModel):
     sentinel: bool = False
     # Rows sharing a route_pair must route identically (first tool).
     route_pair: str | None = None
+    # The context window and summary cadence this row's turns run
+    # under, applied to its session for its turns only (Brief §10.3):
+    # a four-turn row can exercise the summary live where the pack's
+    # window never would. None: the pack's settings.
+    context: ContextSettings | None = None
     # Why this row exists / where its text came from.
     note: str = ""
 
@@ -492,7 +539,10 @@ class BankRow(BaseModel):
             for turn_expect in self._expectations()
             for a in turn_expect.assertions
             if a.kind in GOLD_ASSERTION_KINDS
-            or (a.kind == "not_contains" and a.from_gold_field is not None)
+            or (
+                a.kind in ("not_contains", "summary_contains")
+                and a.from_gold_field is not None
+            )
         }
         if needs_gold and self.gold is None:
             raise ValueError(
@@ -585,6 +635,10 @@ class TurnRecord(BaseModel):
     # the nudges it used to cost, so a pin that changes it shows in the
     # grade, not only in provenance.
     lenient_parses: int = 0
+    # The running summary the turn ended with and the turn it reaches
+    # (Brief §10.3) — what the summary assertions read.
+    summary: str = ""
+    summary_through_turn: int = 0
     error: str | None = None
 
 

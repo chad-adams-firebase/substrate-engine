@@ -282,7 +282,9 @@ def _execute_rep(
         turn_t0 = time.perf_counter()
         try:
             result = session.ask(
-                turn.question, conversation_id=conversation_id
+                turn.question,
+                conversation_id=conversation_id,
+                context=row.context,
             )
         except Exception as exc:  # record and move on: one bad turn
             wall_ms = int((time.perf_counter() - turn_t0) * 1000)
@@ -349,6 +351,8 @@ def _execute_rep(
                 lenient_parses=sum(
                     detail.startswith("text-form ") for detail in details
                 ),
+                summary=result.summary,
+                summary_through_turn=result.summary_through_turn,
             )
         )
         verification = (

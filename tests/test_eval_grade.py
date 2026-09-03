@@ -1,3 +1,4 @@
+import pathlib
 """The offline grader. The test that matters most fabricates a
 wrong-but-verified report and demands the loud alarm: exit 4, banner
 first, regardless of thresholds, xfail annotations, or sentinel
@@ -1304,3 +1305,118 @@ def test_retry_count_accepts_any_of_the_named_counts():
     assert not passed and "never retried" in detail
     exactly_one = RetryCountAssertion(tool="run_sql", errors=1, error_contains="writes its own SQL")
     assert not _check_retries(exactly_one, [answered()])[0]
+
+
+def _summary_row(assertions: str) -> str:
+    return f"""\
+- id: MT4
+  provenance: scripted
+  category: multiturn
+  gold: gold/g.py
+  turns:
+    - question: "Which supplier billed the most?"
+      expect: {{exit: [0], assertions: [{{kind: nonempty}}]}}
+    - question: "What was that supplier's total again?"
+      expect:
+        exit: [0]
+        assertions:
+{assertions}
+"""
+
+
+MT4_GOLD = """\
+def gold(world):
+    return {"supplier": "RVX01", "supplier_name": "Ravenswood Extrusion"}
+"""
+
+
+def _graded_mt4(tmp_path, assertions: str, summary: str, first_text: str):
+    """(row, report) for a two-turn MT4 rep whose second turn ended
+    with `summary`. Each call gets its own bank directory."""
+    import tempfile
+
+    root = pathlib.Path(tempfile.mkdtemp(dir=tmp_path))
+    bank, header, world, pack = make_env(
+        root, _summary_row(assertions), gold_body=MT4_GOLD
+    )
+    first = make_turn(first_text, index=0).model_copy(
+        update={"question": "Which supplier billed the most?"}
+    )
+    second = make_turn("$1,005,028.40 again.", index=1).model_copy(
+        update={"summary": summary, "summary_through_turn": 1}
+    )
+    report = grade(
+        bank, header, [make_record("MT4", 1, first, second)], world, pack_root=pack
+    )
+    (row,) = report.rows
+    return row, report
+
+
+SUMMARY_ASSERTIONS = """\
+          - {kind: summary_contains, pattern: "turn 1"}
+          - {kind: summary_contains, from_gold_field: [supplier, supplier_name]}
+          - {kind: summary_excludes_figures, from_turn: 0}
+"""
+
+
+def test_summary_assertions_pass_on_a_turn_referenced_figure_free_summary(tmp_path):
+    row, report = _graded_mt4(
+        tmp_path,
+        SUMMARY_ASSERTIONS,
+        summary="In turn 1 the user asked which supplier billed the most; the assistant named Ravenswood Extrusion (see turn 1).",
+        first_text="Ravenswood Extrusion billed $1,005,028.40 across 146 invoices.",
+    )
+    assert row.status == "ok", row
+    assert report.breaches == []
+
+
+def test_summary_assertions_fail_on_a_restated_figure_or_a_missing_anchor(tmp_path):
+    restated, report = _graded_mt4(
+        tmp_path,
+        SUMMARY_ASSERTIONS,
+        summary="In turn 1 Ravenswood Extrusion billed 1,005,028.40.",
+        first_text="Ravenswood Extrusion billed $1,005,028.40 across 146 invoices.",
+    )
+    assert restated.status == "fail"
+    assert "summary_excludes_figures" in restated.failure_classes
+    assert "summary_contains" not in restated.failure_classes
+    # Summary assertions are context, not content: never a breach.
+    assert report.breaches == [] and report.exit_code() == 2
+    nameless, report = _graded_mt4(
+        tmp_path,
+        SUMMARY_ASSERTIONS,
+        summary="The top supplier was named (see turn 1).",
+        first_text="RVX01 billed $1,005,028.40.",
+    )
+    assert nameless.status == "fail"
+    assert "summary_contains" in nameless.failure_classes
+    assert report.breaches == []
+
+
+def test_summary_excludes_figures_allows_what_the_user_typed_and_needs_the_turn(tmp_path):
+    row, _ = _graded_mt4(
+        tmp_path,
+        "          - {kind: summary_excludes_figures, from_turn: 0}\n",
+        summary="In turn 1 the user asked about the top supplier (see turn 1).",
+        first_text="Ravenswood Extrusion billed $1,005,028.40.",
+    )
+    assert row.status == "ok"
+    row, _ = _graded_mt4(
+        tmp_path,
+        "          - {kind: summary_excludes_figures, from_turn: 5}\n",
+        summary="anything",
+        first_text="x",
+    )
+    assert row.status == "fail" and "summary_excludes_figures" in row.failure_classes
+
+
+def test_summary_contains_needs_exactly_one_source():
+    import pytest
+
+    from engine.eval.models import SummaryContainsAssertion
+
+    with pytest.raises(ValueError):
+        SummaryContainsAssertion()
+    with pytest.raises(ValueError):
+        SummaryContainsAssertion(pattern="x", from_gold_field="y")
+    assert SummaryContainsAssertion(from_gold_field=["a", "b"]).fields() == ["a", "b"]

@@ -219,10 +219,15 @@ def pack_world_manifests(pack_root) -> dict[str, str]:
 
 
 class _TurnView:
-    """One recorded turn, with its lazily parsed evidence."""
+    """One recorded turn, with its lazily parsed evidence — and the
+    rep's other turns, for the summary assertions that read across
+    them."""
 
-    def __init__(self, record: TurnRecord) -> None:
+    def __init__(
+        self, record: TurnRecord, turns: list[TurnRecord] | None = None
+    ) -> None:
         self.record = record
+        self.turns = turns if turns is not None else [record]
         self.text = flatten_answer(record.outcome)
         self.body = answer_body(record.outcome)
         self.caption = answer_caption(record.outcome)
@@ -333,6 +338,47 @@ def evaluate(
         found = len(re.findall(pattern, view.text, flags))
         return found == want, (
             f"pattern {assertion.pattern!r} occurs {found} time(s), gold says {want}"
+        )
+
+    if kind == "summary_contains":
+        summary = view.record.summary
+        if assertion.from_gold_field is not None:
+            wants = []
+            for field in assertion.fields():
+                want = _gold_value(gold, field)
+                if not isinstance(want, str) or not want:
+                    return False, f"gold field {field} is not a string"
+                wants.append(want)
+            if any(
+                re.search(rf"\b{re.escape(want)}\b", summary, re.IGNORECASE)
+                for want in wants
+            ):
+                return True, ""
+            label = repr(wants[0]) if len(wants) == 1 else f"any of {wants!r}"
+            return False, f"gold {label} absent from the summary"
+        return _contains(summary, assertion.pattern, assertion.regex,
+                         assertion.case_sensitive), (
+            f"pattern {assertion.pattern!r} absent from the summary"
+        )
+
+    if kind == "summary_excludes_figures":
+        if assertion.from_turn >= len(view.turns):
+            return False, f"turn {assertion.from_turn} was not recorded"
+        source = view.turns[assertion.from_turn]
+        typed = set(extract_numbers(source.question))
+        figures = [
+            value
+            for value in extract_numbers(answer_body(source.outcome))
+            if value not in typed
+        ]
+        restated = [
+            value
+            for value in extract_numbers(view.record.summary)
+            if any(_numbers_match(value, figure) for figure in figures)
+        ]
+        return not restated, (
+            f"summary restates figure(s) {_head(restated)} from turn "
+            f"{assertion.from_turn}"
         )
 
     if kind == "not_contains":
@@ -665,7 +711,7 @@ def _grade_rep(
             failures.append("turn-missing")
             continue
         turn = record.turns[index]
-        view = _TurnView(turn)
+        view = _TurnView(turn, record.turns)
         expectation = bank_turn.expect
         if expectation.setup is not None and not _check_setup(
             expectation.setup, view

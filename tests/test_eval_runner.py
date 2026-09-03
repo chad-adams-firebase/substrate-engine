@@ -32,6 +32,7 @@ ROWS = """\
 - id: MT1
   provenance: user-sourced
   category: multiturn
+  context: {last_n_turns: 1, summary_refresh_after_turns: 1}
   turns:
     - question: "How many invoices arrived per month?"
       expect: {exit: [0], assertions: [{kind: nonempty}]}
@@ -90,8 +91,9 @@ class FakeSession:
         self._results = list(results)
         self.calls: list[tuple[str, int | None]] = []
 
-    def ask(self, question, conversation_id=None):
+    def ask(self, question, conversation_id=None, *, context=None):
         self.calls.append((question, conversation_id))
+        self.contexts = getattr(self, "contexts", []) + [context]
         result = self._results.pop(0)
         if isinstance(result, Exception):
             raise result
@@ -350,3 +352,32 @@ def test_nudges_and_lenient_parses_are_counted_from_the_trail(
     _, records = load_report(out)
     b5 = records[0].turns[0]
     assert (b5.nudges, b5.lenient_parses) == (2, 1)
+
+
+def test_a_rows_context_override_reaches_the_session_and_the_summary_is_recorded(
+    monkeypatch, bank, pack_dir, tmp_path
+):
+    """Block 4: a row names the window its turns run under, and the
+    runner passes it with every ask of that row — the pack's (None)
+    for rows that name none; the summary the turn ends with lands on
+    the record for the summary assertions."""
+    from engine.config.models import ContextSettings
+
+    second = make_result(1, 2, "674 in March.")
+    second = second.model_copy(update={"summary": "Turn 1 asked per month (see turn 1).", "summary_through_turn": 1})
+    session = install_session(
+        monkeypatch,
+        [make_result(7, 1, "146."), make_result(1, 1, "1990."), second],
+    )
+    out = tmp_path / "r.jsonl"
+    assert run_bank(bank, pack_dir, out, status=quiet) == 0
+    assert session.contexts == [
+        None,
+        ContextSettings(last_n_turns=1, summary_refresh_after_turns=1),
+        ContextSettings(last_n_turns=1, summary_refresh_after_turns=1),
+    ]
+    _, records = load_report(out)
+    mt1 = next(r for r in records if r.row_id == "MT1")
+    assert mt1.turns[0].summary == "" and mt1.turns[0].summary_through_turn == 0
+    assert mt1.turns[1].summary == "Turn 1 asked per month (see turn 1)."
+    assert mt1.turns[1].summary_through_turn == 1

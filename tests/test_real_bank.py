@@ -135,3 +135,17 @@ def test_guard_pass_ledger_state():
     assert [a.kind for a in exit_zero] == ["contains", "numeric_from_gold"]
     (numeric,) = [a for a in exit_zero if a.kind == "numeric_from_gold"]
     assert numeric.field == ["ready", "not_closed"] and numeric.breach is True
+
+
+def test_mt4_exercises_the_summary_live():
+    """Phase 5 Block 4: the one row whose window folds the summary
+    within its turns, so the summarizer prompt is under the bank."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    row = next(r for r in bank.rows if r.id == "MT4")
+    assert row.context is not None
+    assert row.context.last_n_turns == 1 and row.context.summary_refresh_after_turns == 1
+    assert len(row.turns) == 4
+    kinds = [a.kind for a in row.turns[3].expect.assertions]
+    assert kinds.count("summary_contains") == 2
+    assert "summary_excludes_figures" in kinds and "route" in kinds
+    assert all(r.context is None for r in bank.rows if r.id != "MT4")

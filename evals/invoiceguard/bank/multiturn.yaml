@@ -73,3 +73,60 @@
           - {kind: route, mode: must_include, tools: [read_source]}
           - {kind: contains, pattern: "def rule_rate_variance("}
   note: The one multi-turn row crossing a tool switch.
+
+- id: MT4
+  provenance: scripted
+  category: multiturn
+  gold: gold/mt4_summary_recall.py
+  expected_gold:
+    supplier: RVX01
+    supplier_name: Ravenswood Extrusion
+    total_invoice_amount: 1005028.40
+    invoice_total: 1990
+  threshold: 0.8
+  # The summary live (Phase 5 Block 4): with a one-turn window and a
+  # refresh every turn, turn 1 is folded into the running summary at
+  # the end of turn 2, so turn 4's router sees turn 1 only through the
+  # summary — a turn reference and the supplier's name, never the
+  # figure — and must re-gather the figure with a tool.
+  context: {last_n_turns: 1, summary_refresh_after_turns: 1}
+  turns:
+    - question: >-
+        Which supplier has the highest total invoice amount? Tell me
+        the supplier and the amount in a sentence.
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: name_from_gold, field: [supplier, supplier_name]}
+          - {kind: numeric_from_gold, field: total_invoice_amount}
+    - question: "How many invoices do we have in total?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: numeric_from_gold, field: invoice_total}
+    - question: "What's the difference between the RECEIVED and READY statuses?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: route, mode: must_include_any_of, tools: [app_primer, lookup_data_dictionary]}
+    - question: "What was that supplier's total invoice amount again?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: route, mode: must_include, tools: [run_sql]}
+          - {kind: numeric_from_gold, field: total_invoice_amount}
+          - {kind: summary_contains, pattern: "turn 1"}
+          - {kind: summary_contains, from_gold_field: [supplier, supplier_name]}
+          - {kind: summary_excludes_figures, from_turn: 0}
+  note: >-
+    Block 4's regression net for the summarizer prompt — model-facing
+    text no other row reaches, since the pack's window is ten turns.
+    Turn 1 is phrased for prose (a table would carry the name only in
+    a cell the history never keeps); turns 2 and 3 are MT1's and
+    PLAY-R1's questions, green on their own rows; turn 4's "that
+    supplier" resolves only through the summary. The summary
+    assertions read the summary turn 4 ends with (through turn 3).
