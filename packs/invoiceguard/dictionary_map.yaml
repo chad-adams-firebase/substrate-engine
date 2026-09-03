@@ -235,6 +235,18 @@ metrics:
       Opportunity dollars on completed reviews, per team per day —
       the audit-yield analog, matching the app's production-rollup
       dashboard exactly.
+    # Whole-phrase matched against the question (Polish Pass): the
+    # play-session question "how much savings have they realized?"
+    # reached only rule_savings through "savings", and the answer
+    # never named its reading. No bare "saved" — common enough to pull
+    # the metric into unrelated questions ("saved to the queue").
+    synonyms:
+      - savings realized
+      - realized savings
+      - realized
+      - savings per auditor
+      - auditor savings
+      - how much has each auditor saved
     tables: [invoice_history, users, invoices]
     filter_sql: "invoice_history.to_status IN ('CLOSED', 'NO_REVIEW_NEEDED')"
     aggregation_sql: "SUM(COALESCE(invoices.opportunity, 0))"

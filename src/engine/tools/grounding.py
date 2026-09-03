@@ -195,7 +195,10 @@ def render_grounding(
     if dictionary_map.metrics:
         lines.append("\n## Canonical metrics (use these definitions)")
         for metric in dictionary_map.metrics:
-            lines.append(f"- {metric.name}: {metric.description}")
+            names = metric.name
+            if metric.synonyms:
+                names += f" (aka {', '.join(metric.synonyms)})"
+            lines.append(f"- {names}: {metric.description}")
             lines.append(f"  tables: {', '.join(metric.tables)}")
             if metric.filter_sql:
                 lines.append(f"  filter: {metric.filter_sql}")

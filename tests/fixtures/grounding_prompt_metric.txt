@@ -179,7 +179,7 @@ notes: Join findings f on f.invoice_id = invoices.id.
 - invoice (aka bill): One supplier bill, scored for audit priority.
 
 ## Canonical metrics (use these definitions)
-- flag_rate: Share of invoices with at least one finding.
+- flag_rate (aka flagged share, share flagged): Share of invoices with at least one finding.
   tables: invoices, findings
   aggregation: COUNT(DISTINCT f.invoice_id) * 1.0 / (SELECT COUNT(*) FROM invoices)
   notes: Join findings f on f.invoice_id = invoices.id.

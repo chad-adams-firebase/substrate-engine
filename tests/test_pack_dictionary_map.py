@@ -214,3 +214,25 @@ def test_the_polish_pass_silent_shapes_stay_silent(pack_map, pack_dictionary):
         m for m in pack_map.metrics if m.name == "correction_application_rate"
     )
     assert lint_fan_out(template.template_sql, pack_dictionary, pack_map) is None
+
+
+def test_savings_realized_reaches_recovered_opportunity(pack_map):
+    """Polish Pass, W-F: the play-session question matched only
+    rule_savings (through "savings") and the answer named no reading.
+    The metric's synonyms are whole-phrase, so the bank's wording must
+    contain one of them; "realized" carries this question, and no bare
+    "saved" exists to over-match."""
+    question = "For each auditor, how much savings have they realized?"
+    matched = [m.name for m in match_metrics(question, pack_map)]
+    assert "recovered_opportunity" in matched
+    assert [m.name for m in match_metrics("How much has each auditor saved?", pack_map)] == [
+        "recovered_opportunity"
+    ]
+    assert match_metrics("Which invoices were saved to the queue?", pack_map) == []
+    metric = next(m for m in pack_map.metrics if m.name == "recovered_opportunity")
+    assert "saved" not in metric.synonyms
+    assert [i.name for i in metric.interpretations] == [
+        "closed-invoice opportunity",
+        "closed-invoice findings",
+        "feedback-authored findings",
+    ]

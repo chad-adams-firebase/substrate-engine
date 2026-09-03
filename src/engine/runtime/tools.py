@@ -212,7 +212,14 @@ def resolve_interpretation_terms(
             readings = "; ".join(
                 f"{i.name} ({i.meaning})" for i in entry.interpretations
             )
-            lines.append(f"  {entry.name}: {readings}")
+            # The synonyms ride along (Polish Pass): the rule says
+            # "when your answer uses one of them", and a drafter that
+            # wrote "savings realized" did not connect the phrase to
+            # recovered_opportunity until the line said so.
+            term = entry.name
+            if entry.synonyms:
+                term += f" (also: {', '.join(entry.synonyms)})"
+            lines.append(f"  {term}: {readings}")
     return "\n".join(lines) or None
 
 

@@ -196,7 +196,9 @@ def test_interpretation_terms_resolve_from_the_fixture_map(tool_pack):
     _, ports = _build(tool_pack)
     terms = resolve_interpretation_terms(load_pack(tool_pack), ports)
     assert terms is not None
-    assert "flag_rate:" in terms
+    # The synonyms ride beside the term (Polish Pass), so a drafter that
+    # wrote the synonym connects it to the readings.
+    assert "flag_rate (also: flagged share, share flagged):" in terms
     assert "substantive" in terms
 
 
