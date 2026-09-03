@@ -860,6 +860,7 @@ def _serve(pack_dir: str, host: str, port: int) -> int:
         ports.get(PortName.IDENTITY),
         ui=pack.config.ui,
         pack_name=pack.config.name,
+        context=pack.config.harness.context,
     )
     print(f"serving {pack.config.name} on http://{host}:{port}", file=sys.stderr)
     # threaded: the turn runs on a worker thread while the request

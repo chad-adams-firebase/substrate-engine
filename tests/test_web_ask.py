@@ -30,7 +30,12 @@ class _StubSession:
         self._events = events
         self.asked = []
 
-    def ask(self, question, conversation_id=None, *, workspace_id=None, listener=None):
+    def context_of(self, conversation_id):
+        from engine.harness.session import ConversationContext
+
+        return ConversationContext()
+
+    def ask(self, question, conversation_id=None, *, workspace_id=None, listener=None, context=None):
         self.asked.append((question, conversation_id, workspace_id))
         for index in range(self._events):
             listener(

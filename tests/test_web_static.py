@@ -139,3 +139,23 @@ def test_the_inspector_reads_what_the_interludes_recorded():
     # Starters ask directly; the empty state is where every new
     # conversation, a fresh reload included, begins.
     assert 'addEventListener("click", () => ask(text))' in script
+
+
+def test_the_page_nudges_past_the_threshold_with_in_page_state_only():
+    """Brief §10.3: a dismissible banner, never a forced boundary; the
+    count, the summary and the threshold come from one fetch; nothing
+    is remembered across a reload."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    assert 'id="nudge"' in html and 'id="nudge-text"' in html
+    assert 'id="nudge-new"' in html and 'id="nudge-dismiss"' in html
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert "function refreshContext" in script and "function updateNudge" in script
+    assert "`/api/conversations/${state.conversationId}`" in script
+    assert "state.turnCount >= state.nudgeAfterTurns && !state.nudgeDismissed" in script
+    assert 'document.getElementById("nudge-new").addEventListener("click", newConversation)' in script
+    assert "state.nudgeDismissed = true" in script
+    # The inspector shows the summary the assistant works from.
+    assert "function summarySection" in script and "summarySection()," in script
+    assert "localStorage" not in script and "sessionStorage" not in script
+    css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+    assert ".banner {" in css and ".summary-text" in css

@@ -24,6 +24,8 @@
   const sideNote = document.getElementById("side-note");
   const inspectorTitle = document.getElementById("inspector-title");
   const inspectorBody = document.getElementById("inspector-body");
+  const nudge = document.getElementById("nudge");
+  const nudgeText = document.getElementById("nudge-text");
 
   // ---- state (in-page only) ------------------------------------------
   const state = {
@@ -31,6 +33,11 @@
     conversations: [], conversationId: null,
     turns: [],          // this conversation's turn records, oldest first
     inspecting: null,   // the record whose receipts the inspector shows
+    // What the assistant keeps of a long conversation (Brief §10.3):
+    // the running summary and the turn it reaches, the turn count as
+    // the server counts it, the pack's nudge threshold, and whether the
+    // banner was dismissed — in-page only, so it returns on reopen.
+    summary: "", summaryThroughTurn: 0, turnCount: 0, nudgeAfterTurns: null, nudgeDismissed: false,
   };
 
   function el(tag, cls, text) {
@@ -361,6 +368,7 @@
           turnEl.appendChild(chipFor(record));
           turnEl.appendChild(renderOutcome(result.outcome));
           if (opened) await loadConversations();   // the new conversation joins the sidebar
+          await refreshContext();                  // the count, the summary, the banner
         } else if (event === "error") {
           throw new Error(payload.message);
         }
@@ -470,6 +478,8 @@
   function newConversation() {
     state.conversationId = null;
     state.turns = [];
+    state.summary = ""; state.summaryThroughTurn = 0; state.turnCount = 0; state.nudgeDismissed = false;
+    updateNudge();
     clearTranscript();
     emptyState.hidden = false;
     clearInspector();
@@ -487,8 +497,40 @@
     clearInspector();
     renderConversations();
     payload.turns.forEach(appendPastTurn);
+    state.nudgeDismissed = false;
+    await refreshContext();
     scrollToEnd();
     input.focus();
+  }
+
+  // ---- context: the summary and the nudge (Brief §10.3) -----------------
+  // One fetch says how long the conversation is (every logged turn,
+  // rows from before the log kept outcomes included), what the
+  // assistant keeps of the older turns, and the pack's threshold.
+  async function refreshContext() {
+    if (state.conversationId === null) return;
+    let meta;
+    try { meta = await api("GET", `/api/conversations/${state.conversationId}`); }
+    catch (err) { note(err.message); return; }
+    state.turnCount = meta.turn_count;
+    state.summary = meta.summary || "";
+    state.summaryThroughTurn = meta.summary_through_turn || 0;
+    state.nudgeAfterTurns = meta.nudge_after_turns;
+    updateNudge();
+  }
+  function updateNudge() {
+    const due = state.conversationId !== null && state.nudgeAfterTurns !== null
+      && state.turnCount >= state.nudgeAfterTurns && !state.nudgeDismissed;
+    nudge.hidden = !due;
+    if (due) {
+      nudgeText.textContent = `This conversation is ${state.turnCount} turns long. `
+        + "Its earlier turns now reach the assistant as a summary; a fresh conversation keeps answers sharp.";
+    }
+  }
+  function summarySection() {
+    if (!state.summary) return null;
+    return section(`Conversation summary · through turn ${state.summaryThroughTurn}`,
+      el("p", "summary-text", state.summary));
   }
 
   // ---- inspector: the receipts (Brief §10.4) ---------------------------
@@ -531,6 +573,7 @@
       section("Verifier verdict", renderVerdict(record.verdict, record.outcome)),
       evidenceSection,
       section("Progress trail", renderTrail(record.events)),
+      summarySection(),
     );
     if (!record.evidence_bundle_ref) return;
     try {
@@ -913,6 +956,8 @@
 
   document.getElementById("new-workspace").addEventListener("click", createWorkspace);
   document.getElementById("new-conversation").addEventListener("click", newConversation);
+  document.getElementById("nudge-new").addEventListener("click", newConversation);
+  document.getElementById("nudge-dismiss").addEventListener("click", () => { state.nudgeDismissed = true; updateNudge(); });
   composer.addEventListener("submit", ev => { ev.preventDefault(); ask(input.value); });
   boot();
 })();

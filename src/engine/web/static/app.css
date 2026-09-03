@@ -129,6 +129,20 @@ code { font-family: var(--mono); font-size: 13px; }
 .card dt { font-size: 12px; color: var(--muted); margin-top: 6px; }
 .card dd { margin: 0; }
 
+/* The nudge past the turn threshold (Brief §10.3): dismissible, in-page
+   only — it returns on reload or reopen by design. */
+.banner {
+  display: flex; align-items: center; gap: 10px; padding: 8px 20px; font-size: 13px;
+  background: #fffbeb; color: var(--ink); border-bottom: 1px solid var(--warn);
+}
+.banner span { flex: 1; }
+.banner button {
+  font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--warn);
+  border-radius: 6px; background: var(--paper); color: var(--ink); cursor: pointer;
+}
+.banner button.dismiss { border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; }
+.summary-text { margin: 0; white-space: pre-wrap; }
+
 .composer { display: flex; gap: 8px; padding: 12px 20px; background: var(--paper); border-top: 1px solid var(--line); }
 .composer input { flex: 1; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
 .composer input:focus { outline: 2px solid var(--accent); border-color: transparent; }

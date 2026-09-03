@@ -122,6 +122,29 @@ def create_conversation(workspace_id: int):
     return jsonify(conversation.model_dump(mode="json")), 201
 
 
+@bp.get("/api/conversations/<int:conversation_id>")
+def get_conversation(conversation_id: int):
+    """The conversation, how long it is, and what the assistant keeps
+    of it (Brief §10.3): the turn count — every logged turn, rows
+    written before the log kept outcomes included — the running
+    summary from the checkpoint with the turn it reaches, and the
+    pack's nudge threshold, so the page draws the banner from one
+    fetch."""
+    conversation = _owned_conversation(conversation_id)
+    if conversation is None:
+        return _not_found("conversation", conversation_id)
+    context = current_app.config["ENGINE_SESSION"].context_of(conversation_id)
+    return jsonify(
+        {
+            "conversation": conversation.model_dump(mode="json"),
+            "turn_count": len(_store().list_turn_logs(conversation_id)),
+            "summary": context.summary,
+            "summary_through_turn": context.summary_through_turn,
+            "nudge_after_turns": current_app.config["ENGINE_CONTEXT"].nudge_after_turns,
+        }
+    )
+
+
 @bp.patch("/api/conversations/<int:conversation_id>")
 def rename_conversation(conversation_id: int):
     if _owned_conversation(conversation_id) is None:

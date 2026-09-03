@@ -5,7 +5,7 @@ from pathlib import Path
 
 from flask import Flask, send_from_directory
 
-from engine.config.models import UiSettings
+from engine.config.models import ContextSettings, UiSettings
 from engine.web.routes_ask import bp as ask_bp
 from engine.web.routes_work import bp as work_bp
 
@@ -20,6 +20,7 @@ def create_app(
     ui: UiSettings,
     pack_name: str,
     sse_keepalive_seconds: float = 15.0,
+    context: ContextSettings | None = None,
 ) -> Flask:
     app = Flask(
         "engine.web",
@@ -33,6 +34,9 @@ def create_app(
         ENGINE_UI=ui,
         ENGINE_PACK_NAME=pack_name,
         ENGINE_SSE_KEEPALIVE_SECONDS=sse_keepalive_seconds,
+        # The pack's context settings: the page reads the nudge
+        # threshold from them (Brief §10.3).
+        ENGINE_CONTEXT=context if context is not None else ContextSettings(),
     )
     app.register_blueprint(ask_bp)
     app.register_blueprint(work_bp)

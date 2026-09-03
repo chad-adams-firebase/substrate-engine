@@ -3,10 +3,14 @@ scoping, the turns endpoint (JSON and text) after a real turn through
 the graph, and the evidence endpoint. Flask test client only."""
 
 import json
+from datetime import UTC, datetime
+
+import yaml
 
 from engine.config.models import PortName, UiSettings
+from engine.config.pack_loader import load_pack
 from engine.harness.outcomes import RefuseOutcome, TurnResult
-from engine.ports.types import LLMResponse, User
+from engine.ports.types import LLMResponse, TurnLogEntry, User
 from engine.web.app import create_app
 from tests.harness_support import build_ask_session, tool_call
 from tests.test_web_ask import _StubSession, parse_frames
@@ -28,6 +32,7 @@ def _real_app(tool_pack, responses):
         ports.get(PortName.IDENTITY),
         ui=UiSettings(),
         pack_name="toolpack",
+        context=load_pack(tool_pack).config.harness.context,
     )
     return app, ports, verifier
 
@@ -114,6 +119,7 @@ def test_another_users_workspace_is_404_not_403(tool_pack):
     assert client.get(f"/api/workspaces/{theirs.id}/conversations").status_code == 404
     assert client.delete(f"/api/workspaces/{theirs.id}").status_code == 404
     assert client.get(f"/api/conversations/{conversation.id}/turns").status_code == 404
+    assert client.get(f"/api/conversations/{conversation.id}").status_code == 404
     assert client.patch(f"/api/conversations/{conversation.id}", json={"title": "x"}).status_code == 404
     assert client.delete(f"/api/conversations/{conversation.id}").status_code == 404
     assert store.get_conversation(conversation.id) is not None
@@ -227,3 +233,56 @@ def test_a_refused_turn_lists_with_its_card_and_no_diagnosis_in_text(tool_pack):
     body = client.get(f"/api/conversations/{conversation_id}/turns?format=text").get_data(as_text=True)
     assert "turn 1 · ⊘ Refused · 0 tools" in body
     assert "This can't be answered\nWhy: out of scope\nWhat would work: a data question" in body
+
+
+def _ask(client, question, conversation_id=None):
+    body = {"question": question}
+    if conversation_id is not None:
+        body["conversation_id"] = conversation_id
+    frames = parse_frames(client.post("/api/ask", json=body).get_data(as_text=True))
+    assert frames[-1][0] == "result", frames[-1]
+    return frames[-1][1]["result"]
+
+
+def test_conversation_endpoint_reports_length_summary_and_threshold(tool_pack):
+    """Brief §10.3: one fetch for the banner — every logged turn counts,
+    a row written before the log kept outcomes included."""
+    app, ports, _ = _real_app(tool_pack, [tool_call("refuse", {"reason": "r"})])
+    client = app.test_client()
+    result = _ask(client, "q")
+    assert result["summary"] == "" and result["summary_through_turn"] == 0
+    conversation_id = result["conversation_id"]
+    payload = client.get(f"/api/conversations/{conversation_id}").get_json()
+    assert payload["conversation"]["id"] == conversation_id
+    assert payload["turn_count"] == 1
+    assert payload["summary"] == "" and payload["summary_through_turn"] == 0
+    assert payload["nudge_after_turns"] == 30  # the pack default
+    ports.get(PortName.WORK_STORE).append_turn_log(TurnLogEntry(
+        conversation_id=conversation_id, turn=2, actor="tester", action="ask",
+        created_at=datetime.now(UTC),
+    ))
+    assert client.get(f"/api/conversations/{conversation_id}").get_json()["turn_count"] == 2
+    assert client.get("/api/conversations/999").status_code == 404
+
+
+def test_conversation_endpoint_carries_the_running_summary(tool_pack):
+    config_path = tool_pack / "config.yaml"
+    config = yaml.safe_load(config_path.read_text())
+    config["harness"] = {
+        "context": {"last_n_turns": 1, "summary_refresh_after_turns": 1, "nudge_after_turns": 2}
+    }
+    config_path.write_text(yaml.safe_dump(config))
+    app, _, _ = _real_app(tool_pack, [
+        tool_call("refuse", {"reason": "first"}),
+        tool_call("refuse", {"reason": "second"}),
+        LLMResponse(content="In turn 1 the user asked q1 and was refused.", model="s"),
+    ])
+    client = app.test_client()
+    first = _ask(client, "q1")
+    second = _ask(client, "q2", first["conversation_id"])
+    assert second["summary"] == "In turn 1 the user asked q1 and was refused."
+    assert second["summary_through_turn"] == 1
+    payload = client.get(f"/api/conversations/{first['conversation_id']}").get_json()
+    assert payload["turn_count"] == 2 and payload["nudge_after_turns"] == 2
+    assert payload["summary"] == second["summary"]
+    assert payload["summary_through_turn"] == 1
