@@ -1,0 +1,78 @@
+Eval grade — pack: invoiceguard · report: 2026-09-02-post-duration.jsonl
+engine 79beed0429e2 · target 761a18e9b925 · seed 42 · model openai/gpt-4o-2024-11-20 · bank 86690910c9ef246f
+
+INVARIANT BREACH — wrong-but-verified (3 occurrence(s): 3 contradicted, 0 unsupported):
+  !! AMB2 rep 1 turn 0 [contradicted]: numeric_from_gold — gold any of [78, 965] absent from answer (table) numerics [6432.0]; caption literals [] [evidence ad76d1dc9008176c]
+  !! AMB2 rep 2 turn 0 [contradicted]: numeric_from_gold — gold any of [78, 965] absent from answer (table) numerics [5199.0]; caption literals [] [evidence bbe001d87b48688c]
+  !! AMB2 rep 3 turn 0 [contradicted]: numeric_from_gold — gold any of [78, 965] absent from answer (table) numerics [5199.0]; caption literals [] [evidence 38e1a59be02fa6cc]
+  documented WBV misses (breach: false, threshold-gated): 5 — W2 ×5
+
+[   ok] AMB1       5/5  threshold 1.00
+[ FAIL] AMB2       2/5  threshold 1.00  failures: numeric_from_gold
+[   ok] HN-DIDRUN  5/5  threshold 0.80
+[   ok] HN-ERRORS  5/5  threshold 1.00
+[   ok] ZT-CR147   5/5  threshold 1.00
+[   ok] FO-EXCEPT  5/5  threshold 1.00
+[   ok] MT1        5/5  threshold 0.80
+[   ok] MT2        5/5  threshold 1.00
+[   ok] MT3        5/5  threshold 1.00
+[ FAIL] W1         0/5  threshold 0.60  failures: exit(2 not in [0]), numeric_from_gold
+[XFAIL] W2         0/5  threshold 0.60 (ASSOC)  failures: numeric_from_gold
+[   ok] W3         5/5  threshold 0.80
+[   ok] W5         5/5  threshold 0.60
+[   ok] W6         5/5  threshold 0.60
+[   ok] PLAY-R1    5/5  threshold 0.80
+[   ok] PLAY-R3    5/5  threshold 0.80
+[   ok] PLAY-R4    5/5  threshold 0.80
+[   ok] PLAY-R6    5/5  threshold 0.80
+[XFAIL] W4         2/5  threshold 0.80 (ASSOC)  reached 5/5  failures: contains
+[   ok] W-A        5/5  threshold 0.60
+[   ok] W-B        5/5  threshold 0.60
+[   ok] W-C        5/5  threshold 0.80
+[   ok] R-A        5/5  threshold 0.60
+[   ok] F1         5/5  threshold 0.60
+[   ok] P-L3Q      5/5  threshold 1.00
+[   ok] REC-SQL    4/5  threshold 0.60  failures: retry_count
+[   ok] REC-CKG    5/5  threshold 0.60
+[   ok] RT-fires   5/5  threshold 1.00
+[   ok] B1         5/5  threshold 1.00
+[   ok] B2         4/5  threshold 0.80  failures: exit(3 not in [0])
+[   ok] B3         5/5  threshold 1.00
+[   ok] B4         5/5  threshold 1.00
+[   ok] B5         5/5  threshold 1.00
+[   ok] B6         5/5  threshold 1.00
+[   ok] C1         5/5  threshold 1.00
+[   ok] C1b        5/5  threshold 1.00
+[   ok] C2         5/5  threshold 0.80
+[   ok] C3         5/5  threshold 1.00
+[   ok] C4         5/5  threshold 1.00
+[   ok] C5         5/5  threshold 1.00
+[   ok] S2         5/5  threshold 0.80
+[   ok] S3         5/5  threshold 0.80
+[   ok] S4         5/5  threshold 1.00
+[   ok] S5         5/5  threshold 0.60
+[   ok] S6         5/5  threshold 0.60
+[   ok] S7         5/5  threshold 0.80
+[   ok] NP1        5/5  threshold 1.00
+[   ok] NP2        5/5  threshold 1.00
+[   ok] NP3        5/5  threshold 1.00
+[   ok] NP4        5/5  threshold 1.00
+[   ok] NP5        5/5  threshold 1.00
+[   ok] NP6        5/5  threshold 0.60
+[   ok] NP7        5/5  threshold 1.00
+[   ok] R1         5/5  threshold 1.00
+[   ok] R2         5/5  threshold 0.80
+[   ok] A1         5/5  threshold 1.00
+[   ok] SEN-MONTH  5/5  threshold 1.00
+[   ok] U5         5/5  threshold 0.80
+[   ok] U6         5/5  threshold 0.80
+[   ok] U-WHO      5/5  threshold 0.80
+[   ok] U-META     5/5  threshold 0.80
+
+Route pairs (first-decision tool must agree):
+  rule_metric [RT-fires, U5, U6]: run_sql ×15 — consistent
+
+Xfail ledger:
+  ASSOC: W2, W4 (kept until association verification)
+
+RESULT: FAIL (INVARIANT BREACH)
