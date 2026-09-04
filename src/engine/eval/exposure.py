@@ -25,26 +25,63 @@ A work store's conversation is measured the same way (Polish Pass): the
 browser's turns log the same evidence bundles a report inlines, so the
 statements a manager typed face today's guards exactly like a bank row's.
 Each turn's substrate_versions must name manifests this world has.
+
+The Backlog Pass made the unit of replay the turn, not the statement:
+the key lint grounds a literal against what the conversation had shown
+before it — every earlier question, every key an earlier result or
+filter carried, the statement's own grounding — and the anchor check
+reads a follow-up's answer against the entity a prior turn's evidence
+established. So the walk keeps one accumulator per conversation (a
+report's row and rep, or a work store's conversation), in turn order,
+and a turn with no statement at all (turn 7 of the 30-turn session was
+a docs search) still faces the anchor check. Old records carry no
+declared about, so what the replay measures there is the fallback
+readings — the SQL filter and the prose.
 """
 
 from collections import Counter
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from pydantic import BaseModel, ConfigDict
 
 from engine.config.models import PlausibilitySettings, ToolName
 from engine.eval.models import RunRecord, RunReportHeader
+from engine.harness.outcomes import AnswerOutcome, TurnOutcome, loads_outcome
 from engine.ports.work_store import WorkStorePort
 from engine.substrates.models import DictionaryMap, DictionaryRow, StatsRow
+from engine.tools.entities import (
+    EntityCatalog,
+    anaphor_kind,
+    harvest_turn_anchors,
+    known_values,
+)
 from engine.tools.enum_lint import lint_enum_literals
-from engine.tools.envelope import RunSqlOutput, ToolInvocation, loads_turn_evidence
+from engine.tools.envelope import (
+    KnownKey,
+    RunSqlEvidence,
+    RunSqlOutput,
+    ToolInvocation,
+    TurnAnchors,
+    loads_turn_evidence,
+)
 from engine.tools.interval_lint import lint_interval_arithmetic
+from engine.tools.key_lint import lint_placeholders, lint_ungrounded_keys
+from engine.tools.run_sql import fenced_block
 from engine.tools.sql_lint import lint_fan_out
+from engine.verifier.anchor import check_anchor
 from engine.verifier.checks.base import PlausibilityContext
 from engine.verifier.checks.run_sql import RunSqlCheck
+from engine.verifier.models import DraftAnswer
 
-LINT_CHECKS = ("lint.fan_out", "lint.enum_literal", "lint.interval_arithmetic")
+LINT_CHECKS = (
+    "lint.fan_out",
+    "lint.enum_literal",
+    "lint.interval_arithmetic",
+    "lint.placeholder",
+    "lint.ungrounded_key",
+)
+ANCHOR_CHECKS = ("anchor.entity_mismatch",)
 
 
 class ExposureError(Exception):
@@ -58,13 +95,16 @@ class ExposureHit(BaseModel):
     row_id: str
     rep: int
     turn_index: int
+    # -1 for a turn-level hit (the anchor check belongs to no statement).
     invocation_index: int
     # run_sql.<check> for a plausibility finding; lint.<name> for a
-    # lint challenge the statement would draw today.
+    # lint challenge the statement would draw today; anchor.<check>
+    # for the turn's answer read against the conversation.
     check: str
     severity: str  # warn | fail | challenge
     detail: str
     sql: str
+    question: str = ""  # a turn-level hit's question, for the rendering
 
 
 class ExposureReport(BaseModel):
@@ -110,6 +150,24 @@ class Statement:
     invocation: ToolInvocation
 
 
+@dataclass(frozen=True)
+class Turn:
+    """One turn with its attribution and what the conversation-level
+    checks read (Backlog Pass): the question as the user asked it, the
+    outcome, every invocation in order, the summary the turn began
+    with, and the engine's turn number for "turn N established"."""
+
+    row_id: str
+    rep: int
+    turn_index: int
+    question: str
+    outcome: TurnOutcome | None
+    invocations: tuple[ToolInvocation, ...]
+    summary_before: str = ""
+    engine_turn: int = 0
+    first_index: int = 0  # the index of invocations[0], for a lone statement
+
+
 def _executed(invocations: Iterable[ToolInvocation]) -> Iterator[tuple[int, ToolInvocation]]:
     for index, invocation in enumerate(invocations):
         if invocation.tool == ToolName.RUN_SQL and isinstance(
@@ -118,27 +176,49 @@ def _executed(invocations: Iterable[ToolInvocation]) -> Iterator[tuple[int, Tool
             yield index, invocation
 
 
+def report_turns(records: Iterable[RunRecord]) -> Iterator[Turn]:
+    """Every turn a report's records carry, in order, each with the
+    summary the previous turn of its rep ended with."""
+    for record in records:
+        summary = ""
+        for turn in record.turns:
+            invocations = (
+                tuple(loads_turn_evidence(turn.evidence_payload))
+                if turn.evidence_payload
+                else ()
+            )
+            yield Turn(
+                row_id=record.row_id,
+                rep=record.rep,
+                turn_index=turn.turn_index,
+                question=turn.question,
+                outcome=turn.outcome,
+                invocations=invocations,
+                summary_before=summary,
+                engine_turn=turn.engine_turn or turn.turn_index + 1,
+            )
+            summary = turn.summary
+
+
 def report_statements(records: Iterable[RunRecord]) -> Iterator[Statement]:
     """Every executed run_sql statement a report's records carry."""
-    for record in records:
-        for turn in record.turns:
-            if not turn.evidence_payload:
-                continue
-            for index, invocation in _executed(loads_turn_evidence(turn.evidence_payload)):
-                yield Statement(record.row_id, record.rep, turn.turn_index, index, invocation)
+    for turn in report_turns(records):
+        for index, invocation in _executed(turn.invocations):
+            yield Statement(turn.row_id, turn.rep, turn.turn_index, index, invocation)
 
 
-def work_store_statements(
+def work_store_turns(
     store: WorkStorePort,
     conversation_ids: Iterable[int],
     world_manifests: dict[str, str],
-) -> list[Statement]:
-    """Every executed run_sql statement the named conversations logged —
-    the browser's turns, measured like a report. A turn whose
-    substrate_versions name a manifest this world does not have is
-    refused, exactly as a report from another world is."""
+) -> list[Turn]:
+    """Every turn the named conversations logged — the browser's turns,
+    measured like a report's. A turn whose substrate_versions name a
+    manifest this world does not have is refused, exactly as a report
+    from another world is. The turn log carries no summary, so the
+    replay grounds on the questions and the keys alone there."""
     known = set(world_manifests.values())
-    statements: list[Statement] = []
+    turns: list[Turn] = []
     for conversation_id in conversation_ids:
         if store.get_conversation(conversation_id) is None:
             raise ExposureError(
@@ -153,30 +233,72 @@ def work_store_statements(
                     "this world does not have — the bounds would read stats "
                     "the statements never ran against."
                 )
-            if not entry.evidence_bundle_ref:
-                continue
-            payload = store.load_evidence_bundle(entry.evidence_bundle_ref)
-            if payload is None:
-                continue
-            for index, invocation in _executed(loads_turn_evidence(payload)):
-                statements.append(
-                    Statement(
-                        f"conv{conversation_id}", 1, entry.turn, index, invocation
-                    )
+            invocations: tuple[ToolInvocation, ...] = ()
+            if entry.evidence_bundle_ref:
+                payload = store.load_evidence_bundle(entry.evidence_bundle_ref)
+                if payload is not None:
+                    invocations = tuple(loads_turn_evidence(payload))
+            outcome = loads_outcome(entry.outcome) if entry.outcome else None
+            turns.append(
+                Turn(
+                    row_id=f"conv{conversation_id}",
+                    rep=1,
+                    turn_index=entry.turn,
+                    question=entry.question,
+                    outcome=outcome,
+                    invocations=invocations,
+                    engine_turn=entry.turn,
                 )
-    return statements
+            )
+    return turns
 
 
-def _statements(source: Iterable[RunRecord | Statement]) -> Iterator[Statement]:
+def work_store_statements(
+    store: WorkStorePort,
+    conversation_ids: Iterable[int],
+    world_manifests: dict[str, str],
+) -> list[Statement]:
+    """Every executed run_sql statement the named conversations logged."""
+    return [
+        Statement(turn.row_id, turn.rep, turn.turn_index, index, invocation)
+        for turn in work_store_turns(store, conversation_ids, world_manifests)
+        for index, invocation in _executed(turn.invocations)
+    ]
+
+
+def _turns(source: Iterable[RunRecord | Turn | Statement]) -> Iterator[Turn]:
     for item in source:
-        if isinstance(item, Statement):
+        if isinstance(item, Turn):
             yield item
+        elif isinstance(item, Statement):
+            # A lone statement, as the older callers hand it: no
+            # question and no outcome, so only the statement checks read it.
+            yield Turn(
+                row_id=item.row_id,
+                rep=item.rep,
+                turn_index=item.turn_index,
+                question="",
+                outcome=None,
+                invocations=(item.invocation,),
+                engine_turn=item.turn_index,
+                first_index=item.invocation_index,
+            )
         else:
-            yield from report_statements([item])
+            yield from report_turns([item])
+
+
+@dataclass
+class _Thread:
+    """One conversation's accumulator across its turns: the user's
+    words so far, every turn's anchors, every key seen."""
+
+    texts: list[str] = field(default_factory=list)
+    prior: list[TurnAnchors] = field(default_factory=list)
+    keys: list[KnownKey] = field(default_factory=list)
 
 
 def expose(
-    records: Iterable[RunRecord | Statement],
+    records: Iterable[RunRecord | Turn | Statement],
     *,
     stats: list[StatsRow],
     dictionary: list[DictionaryRow],
@@ -185,49 +307,101 @@ def expose(
     checks: Iterable[str] | None = None,
     report_path: str | None = None,
 ) -> ExposureReport:
-    """Every executed run_sql statement in the records (or the
-    already-attributed statements), under today's guards. `checks`
+    """Every turn in the records (or the already-attributed turns or
+    statements), under today's guards: each executed run_sql statement
+    faces the plausibility suite and the five lints, with the key lint
+    grounded on what its conversation had shown; each answered turn
+    faces the anchor check against the turns before it. `checks`
     narrows the hits to the named checks."""
     wanted = list(checks or [])
     keep = set(wanted)
     context = PlausibilityContext(stats=stats, settings=settings)
     verifier_check = RunSqlCheck()
+    catalog = EntityCatalog.from_substrates(dictionary, dictionary_map)
+    threads: dict[tuple[str, int], _Thread] = {}
     hits: list[ExposureHit] = []
     statements = 0
-    for statement in _statements(records):
-        invocation = statement.invocation
-        output = invocation.output
-        assert isinstance(output, RunSqlOutput)
-        statements += 1
-        found: list[tuple[str, str, str]] = [
-            (finding.check, finding.severity, finding.detail)
-            for finding in verifier_check.plausibility(invocation, context)
-        ]
-        for name, reason in (
-            ("lint.fan_out", lint_fan_out(output.sql, dictionary, dictionary_map)),
-            ("lint.enum_literal", lint_enum_literals(output.sql, dictionary)),
-            (
-                "lint.interval_arithmetic",
-                lint_interval_arithmetic(output.sql, dictionary),
-            ),
-        ):
-            if reason is not None:
-                found.append((name, "challenge", reason))
-        for check, severity, detail in found:
-            if keep and check not in keep:
-                continue
-            hits.append(
-                ExposureHit(
-                    row_id=statement.row_id,
-                    rep=statement.rep,
-                    turn_index=statement.turn_index,
-                    invocation_index=statement.invocation_index,
-                    check=check,
-                    severity=severity,
-                    detail=detail,
-                    sql=output.sql,
-                )
+
+    def hit(turn: Turn, index: int, check: str, severity: str, detail: str, sql: str) -> None:
+        if keep and check not in keep:
+            return
+        hits.append(
+            ExposureHit(
+                row_id=turn.row_id,
+                rep=turn.rep,
+                turn_index=turn.turn_index,
+                invocation_index=index,
+                check=check,
+                severity=severity,
+                detail=detail,
+                sql=sql,
+                question=turn.question if index < 0 else "",
             )
+        )
+
+    for turn in _turns(records):
+        thread = threads.setdefault((turn.row_id, turn.rep), _Thread())
+        texts = [*thread.texts, turn.question]
+        if turn.summary_before:
+            texts.append(turn.summary_before)
+        seen_this_turn: list[KnownKey] = []
+        for position, invocation in _executed(turn.invocations):
+            output = invocation.output
+            assert isinstance(output, RunSqlOutput)
+            statements += 1
+            index = turn.first_index + position
+            for finding in verifier_check.plausibility(invocation, context):
+                hit(turn, index, finding.check, finding.severity, finding.detail, output.sql)
+            evidence = invocation.evidence
+            grounding = evidence.grounding_prompt if isinstance(evidence, RunSqlEvidence) else ""
+            raw = (
+                evidence.attempts[-1].raw_response
+                if isinstance(evidence, RunSqlEvidence) and evidence.attempts
+                else output.sql
+            )
+            known = known_values(texts, [*thread.keys, *seen_this_turn], grounding)
+            for name, reason in (
+                ("lint.fan_out", lint_fan_out(output.sql, dictionary, dictionary_map)),
+                ("lint.enum_literal", lint_enum_literals(output.sql, dictionary)),
+                ("lint.interval_arithmetic", lint_interval_arithmetic(output.sql, dictionary)),
+                ("lint.placeholder", lint_placeholders(output.sql, comment_source=fenced_block(raw))),
+                ("lint.ungrounded_key", lint_ungrounded_keys(output.sql, catalog, known)),
+            ):
+                if reason is not None:
+                    hit(turn, index, name, "challenge", reason, output.sql)
+            seen_this_turn.extend(harvest_turn_anchors([invocation], catalog).keys)
+
+        about: str | None = None
+        if isinstance(turn.outcome, AnswerOutcome) and turn.question:
+            body = turn.outcome.body
+            about = body.about or None
+            draft = (
+                DraftAnswer(kind="table_passthrough", text=body.caption)
+                if body.kind == "table"
+                else DraftAnswer(kind="prose", text=body.text)
+            )
+            finding = check_anchor(
+                question=turn.question,
+                about=about,
+                draft=draft,
+                evidence=list(turn.invocations),
+                prior=thread.prior,
+                catalog=catalog,
+            )
+            if finding is not None:
+                hit(turn, -1, finding.check, finding.severity, finding.detail, "")
+
+        anchors = harvest_turn_anchors(
+            list(turn.invocations),
+            catalog,
+            about=about,
+            question_kind=anaphor_kind(turn.question, catalog) if turn.question else None,
+            turn=turn.engine_turn or turn.turn_index,
+        )
+        thread.prior.append(anchors)
+        thread.keys.extend(anchors.keys)
+        if turn.question:
+            thread.texts.append(turn.question)
     return ExposureReport(
         report_path=report_path, statements=statements, checks=wanted, hits=hits
     )
@@ -256,12 +430,15 @@ def render_exposure(report: ExposureReport, *, sql_chars: int = 160) -> str:
         lines.append("")
         lines.append(f"{check}:")
         for hit in hits:
-            sql = " ".join(hit.sql.split())
-            if len(sql) > sql_chars:
-                sql = sql[: sql_chars - 1] + "…"
             lines.append(
                 f"  {hit.row_id} rep {hit.rep} turn {hit.turn_index} "
                 f"[{hit.severity}]: {hit.detail}"
             )
-            lines.append(f"    {sql}")
+            if hit.sql:
+                sql = " ".join(hit.sql.split())
+                if len(sql) > sql_chars:
+                    sql = sql[: sql_chars - 1] + "…"
+                lines.append(f"    {sql}")
+            elif hit.question:
+                lines.append(f"    (question: {hit.question})")
     return "\n".join(lines) + "\n"

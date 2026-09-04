@@ -308,8 +308,9 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         dest="checks",
         metavar="NAME",
-        help="Only this check (repeatable): run_sql.<finding> or "
-        "lint.fan_out / lint.enum_literal / lint.interval_arithmetic. "
+        help="Only this check (repeatable): run_sql.<finding>, "
+        "lint.fan_out / lint.enum_literal / lint.interval_arithmetic / "
+        "lint.placeholder / lint.ungrounded_key, or anchor.entity_mismatch. "
         "A requested check with no hits is listed at zero.",
     )
     eval_exposure.add_argument(
@@ -706,7 +707,7 @@ def _eval_exposure(args) -> int:
         check_world,
         expose,
         render_exposure,
-        work_store_statements,
+        work_store_turns,
     )
     from engine.eval.grade import pack_world_manifests
     from engine.eval.runner import RunnerError, load_report
@@ -730,7 +731,7 @@ def _eval_exposure(args) -> int:
         if args.work_store:
             work_store = build_port(pack, PortName.WORK_STORE)
             work_store.ensure_schema()
-            source = work_store_statements(work_store, args.conversations, world)
+            source = work_store_turns(work_store, args.conversations, world)
             label = "work store · conversation " + ", ".join(
                 str(c) for c in args.conversations
             )

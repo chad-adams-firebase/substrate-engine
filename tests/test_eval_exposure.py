@@ -13,7 +13,7 @@ from engine.config.models import PlausibilitySettings
 from engine.eval.exposure import ExposureError, check_world, expose, render_exposure
 from engine.eval.models import RunRecord, RunReportHeader, TurnRecord
 from engine.substrates.models import DictionaryMap, DocProvenance
-from engine.tools.envelope import dumps_turn_evidence
+from engine.tools.envelope import RunSqlEvidence, RunSqlOutput, SqlAttempt, Table, ToolInvocation, dumps_turn_evidence
 from tests.test_tool_enum_lint import DICTIONARY as ENUM_DICTIONARY
 from tests.test_tool_enum_lint import R_A
 from tests.verifier_support import sql_invocation, stats_row
@@ -21,6 +21,8 @@ from tests.verifier_support import sql_invocation, stats_row
 ROOT = Path(__file__).resolve().parents[1]
 POST_DURATION = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-02-post-duration.jsonl"
 POST_BLOCK4 = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-block4.jsonl"
+POST_CLOSE = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-close.jsonl"
+PACK = ROOT / "packs" / "invoiceguard"
 
 EMPTY_MAP = DictionaryMap(
     provenance=DocProvenance(source="machine", confidence=0.5, needs_validation=True),
@@ -313,3 +315,159 @@ def test_the_post_block4_report_exposes_exactly_the_s2_line_grain_statements():
     hidden = "Fan-out check: COUNT(*) reads flagged_lines, whose rows are invoice_lines"
     assert [h.detail.startswith(hidden) for h in report.hits] == [False, True, False, True]
     assert all("EXISTS rather than a LEFT JOIN" in h.detail for h in report.hits)
+
+
+# --- Backlog Pass: the turn is the unit, and the conversation grounds it ---
+
+
+def _conversation(row_id: str, turns: list[tuple[str, object, list]]) -> RunRecord:
+    """A rep of `turns`: (question, outcome, invocations) each."""
+    return RunRecord(
+        row_id=row_id,
+        rep=1,
+        started_at=datetime.now(UTC),
+        turns=[
+            TurnRecord(
+                turn_index=index,
+                engine_turn=index + 1,
+                question=question,
+                outcome=outcome,
+                exit_equiv=0,
+                evidence_payload=dumps_turn_evidence(list(invocations)),
+            )
+            for index, (question, outcome, invocations) in enumerate(turns)
+        ],
+    )
+
+
+def _pack_substrates():
+    from engine.substrates.jsonl import read_rows
+    from engine.substrates.models import DictionaryRow, StatsRow
+    from engine.substrates.pack_data import load_dictionary_map
+
+    return (
+        read_rows(PACK / "substrates" / "univariate_stats.jsonl", StatsRow),
+        read_rows(PACK / "substrates" / "dictionary.jsonl", DictionaryRow),
+        load_dictionary_map(PACK / "dictionary_map.yaml"),
+    )
+
+
+def _table_outcome(invocation, about=""):
+    from engine.harness.outcomes import AnswerOutcome, TableAnswer
+
+    return AnswerOutcome(
+        body=TableAnswer(table=invocation.output.table, caption=invocation.output.sql, about=about),
+        verification="verified",
+    )
+
+
+def test_the_sessions_turn_7_is_exposed_by_the_anchor_check_with_no_statement():
+    """Turn 6 established line_note; turn 7 searched the docs and wrote
+    about new_supplier. No run_sql statement at turn 7 — the turn-level
+    arm reads the answer against the turn before it."""
+    from engine.harness.outcomes import AnswerOutcome, MarkdownAnswer
+    from tests.test_tool_entities import T6
+    from tests.test_verifier_anchor import TURN_7_TEXT
+
+    stats, dictionary, dictionary_map = _pack_substrates()
+    record = _conversation("SESSION", [
+        ("Which rule fires most often?", _table_outcome(T6), [T6]),
+        ("What does that rule check?", AnswerOutcome(body=MarkdownAnswer(text=TURN_7_TEXT), verification="verified"), []),
+    ])
+    report = expose(
+        [record], stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(), checks=["anchor.entity_mismatch", "lint.ungrounded_key", "lint.placeholder"],
+    )
+    assert report.statements == 1
+    assert [(h.turn_index, h.invocation_index, h.check, h.severity) for h in report.hits] == [
+        (1, -1, "anchor.entity_mismatch", "warn")
+    ]
+    assert "turn 1's evidence established `line_note`" in report.hits[0].detail
+    assert report.counts() == {
+        "anchor.entity_mismatch": 1, "lint.ungrounded_key": 0, "lint.placeholder": 0,
+    }
+    text = render_exposure(report)
+    assert "SESSION rep 1 turn 1 [warn]:" in text
+    assert "(question: What does that rule check?)" in text
+
+
+def test_the_sessions_turn_20_is_exposed_by_both_key_lints_and_grounded_by_turn_19():
+    """Turn 19 showed INV-00002 and no id; turn 20 bound 123 with the
+    comment. Both lints fire on the statement; the anchor check is
+    silent (invoices.id is a column the anchor never carried)."""
+    from tests.test_tool_entities import T19
+    from tests.test_tool_key_lint import T20_PLACEHOLDER_ATTEMPT
+
+    stats, dictionary, dictionary_map = _pack_substrates()
+    rows = [
+        {"from_status": None, "to_status": "RECEIVED", "actor": "invoice-parse", "transition_time": "2026-03-05 08:00:00"},
+        {"from_status": "RECEIVED", "to_status": "READY", "actor": "system.rollup", "transition_time": "2026-03-05 09:00:00"},
+        {"from_status": "READY", "to_status": "LAPSED", "actor": "system.stale-sweep", "transition_time": "2026-03-12 18:00:00"},
+    ]
+    t20 = ToolInvocation(
+        tool="run_sql", arguments={"question": "history of the invoice from the previous query"}, status="ok",
+        output=RunSqlOutput(
+            sql=T20_PLACEHOLDER_ATTEMPT,
+            table=Table(columns=list(rows[0]), rows=rows, total_row_count=3),
+        ),
+        evidence=RunSqlEvidence(grounding_prompt="", attempts=[
+            SqlAttempt(raw_response=f"```sql\n{T20_PLACEHOLDER_ATTEMPT}\n```", sql=T20_PLACEHOLDER_ATTEMPT, row_count=3),
+        ]),
+    )
+    record = _conversation("SESSION", [
+        ("Show me an example invoice for it.", _table_outcome(T19), [T19]),
+        ("What was that invoice's history?", _table_outcome(t20), [t20]),
+    ])
+    report = expose(
+        [record], stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(),
+        checks=["lint.placeholder", "lint.ungrounded_key", "anchor.entity_mismatch"],
+    )
+    assert report.statements == 2
+    assert [(h.turn_index, h.invocation_index, h.check) for h in report.hits] == [
+        (1, 0, "lint.placeholder"),
+        (1, 0, "lint.ungrounded_key"),
+    ]
+    assert "Replace 123 with the actual invoice ID" in report.hits[0].detail
+    assert "`invoice_history.invoice_id = 123` — 123 appears in no result" in report.hits[1].detail
+    # The same statement after turn 19 had shown the id is grounded.
+    shown = ToolInvocation(
+        tool="run_sql", arguments={"question": "q"}, status="ok",
+        output=RunSqlOutput(sql="SELECT i.id AS invoice_id FROM invoices i ORDER BY i.id LIMIT 1",
+                            table=Table(columns=["invoice_id"], rows=[{"invoice_id": 123}], total_row_count=1)),
+    )
+    grounded = expose(
+        [_conversation("SESSION", [("an invoice", _table_outcome(shown), [shown]),
+                                    ("What was that invoice's history?", _table_outcome(t20), [t20])])],
+        stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(), checks=["lint.ungrounded_key"],
+    )
+    assert grounded.counts() == {"lint.ungrounded_key": 0}
+
+
+@pytest.mark.skipif(not POST_CLOSE.is_file(), reason="the committed report is absent")
+def test_the_post_close_report_is_clean_under_the_backlog_pass_checks():
+    """The baseline the Backlog Pass was measured against before it
+    landed: 235 executed statements, no comment, no literal id filter,
+    no follow-up answered about another entity — zero hits, all three."""
+    import json
+
+    from engine.eval.grade import pack_world_manifests
+    from engine.eval.models import RunRecord, RunReportHeader
+
+    stats, dictionary, dictionary_map = _pack_substrates()
+    lines = POST_CLOSE.read_text(encoding="utf-8").splitlines()
+    header = RunReportHeader.model_validate(json.loads(lines[0]))
+    check_world(header, pack_world_manifests(PACK))
+    records = [RunRecord.model_validate(json.loads(line)) for line in lines[1:] if line.strip()]
+    report = expose(
+        records, stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(),
+        checks=["lint.placeholder", "lint.ungrounded_key", "anchor.entity_mismatch"],
+    )
+    assert report.statements == 235
+    assert report.counts() == {
+        "lint.placeholder": 0,
+        "lint.ungrounded_key": 0,
+        "anchor.entity_mismatch": 0,
+    }
