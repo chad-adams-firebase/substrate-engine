@@ -16,6 +16,7 @@ from engine.runtime.harness import build_verifier
 from engine.runtime.tools import (
     resolve_data_terms,
     resolve_definitional_terms,
+    resolve_entity_catalog,
     resolve_interpretation_terms,
     resolve_pack_coverage,
 )
@@ -125,6 +126,7 @@ def build_ask_session(
             inline_value_max_chars=pack.config.harness.inline_value_max_chars,
         ),
         settings=pack.config.harness,
+        catalog=resolve_entity_catalog(pack, ports),
         summarizer_prompt=render_summarizer_prompt(app_name=pack.config.name),
         router_prompt=render_router_prompt(
             app_name=pack.config.name,
@@ -156,3 +158,13 @@ def tool_call(name: str, arguments: dict | None = None) -> LLMResponse:
         tool_calls=[ToolCall(name=name, arguments=arguments or {})],
         model="scripted",
     )
+
+
+def checkpoint_history(session, conversation_id: int) -> list:
+    """The HistoryTurn records a conversation's checkpoint holds — the
+    graph.get_state read the backfill verb uses (cli._store_backfill_
+    questions), for tests that pin what a turn left on the history."""
+    snapshot = session._graph.get_state(
+        {"configurable": {"thread_id": str(conversation_id)}}
+    )
+    return list((snapshot.values or {}).get("history", []))

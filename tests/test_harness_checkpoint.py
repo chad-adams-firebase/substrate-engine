@@ -93,6 +93,7 @@ def test_every_checkpointed_engine_type_survives_the_msgpack_allowlist():
         TurnState,
     )
     from engine.ports.types import Message, ToolCall
+    from engine.tools.envelope import Anchor, KnownKey, TurnAnchors
     from engine.verifier.models import (
         AttemptRecord,
         ClaimRecord,
@@ -120,7 +121,16 @@ def test_every_checkpointed_engine_type_survives_the_msgpack_allowlist():
         detail="d",
     )
     state = TurnState(
-        history=[HistoryTurn(turn=1, question="q", answer="146 rows.", kind="prose")],
+        history=[
+            HistoryTurn(
+                turn=1, question="q", answer="146 rows.", kind="prose",
+                anchors=TurnAnchors(
+                    turn=1,
+                    entities=[Anchor(kind="invoice", column="invoices.id", value="3", source="cell")],
+                    keys=[KnownKey(column="invoices.id", value="3")],
+                ),
+            )
+        ],
         turn=1,
         summary="In turn 1 the user asked for the row count (see turn 1).",
         summary_through_turn=1,

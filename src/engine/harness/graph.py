@@ -63,6 +63,8 @@ from engine.harness.tables import caption_for, declared_readings, project_table
 from engine.harness.verifier_protocol import VerifierProtocol
 from engine.ports.llm import LLMPort
 from engine.ports.types import Message
+from engine.tools.entities import EntityCatalog, anaphor_kind, harvest_turn_anchors
+from engine.tools.envelope import TurnAnchors, TurnContext
 from engine.tools.registry import ToolRegistry
 from engine.verifier.models import DraftAnswer
 from engine.verifier.verdict import finalize as finalize_verdict
@@ -80,12 +82,18 @@ class GraphDeps:
         settings: HarnessSettings,
         router_prompt: str,
         summarizer_prompt: str,
+        catalog: EntityCatalog | None = None,
     ) -> None:
         self.llm = llm
         self.registry = registry
         self.verifier = verifier
         self.drafter = drafter
         self.settings = settings
+        # The pack's entity kinds (Backlog Pass): what a turn's evidence
+        # establishes is harvested with it at finalize, and what the
+        # conversation has shown reaches run_sql through it. None means
+        # the pack declares none, and every consumer is silent.
+        self.catalog = catalog
         self.router_prompt = router_prompt
         self.summarizer_prompt = summarizer_prompt
         self.events: EventLog = EventLog()
@@ -137,6 +145,30 @@ def _fallback_table(evidence, failures):
         if table is not None:
             return index, table, caption_for(invocation.output)
     return None
+
+
+def turn_context(state: TurnState, catalog: EntityCatalog | None) -> TurnContext:
+    """What the conversation has put in front of the model, for the
+    tools of this turn (Backlog Pass): the user's own words — every
+    history question, this question, the running summary — the most
+    recent turn that established an entity, and every key seen so far,
+    this turn's earlier evidence included."""
+    texts = [record.question for record in state.history] + [state.question]
+    if state.summary:
+        texts.append(state.summary)
+    anchors: list = []
+    anchors_turn = 0
+    for record in reversed(state.history):
+        keyed = [a for a in record.anchors.entities if a.column]
+        if keyed:
+            anchors, anchors_turn = keyed, record.anchors.turn or record.turn
+            break
+    known = [key for record in state.history for key in record.anchors.keys]
+    if catalog is not None and state.evidence:
+        known += harvest_turn_anchors(state.evidence, catalog).keys
+    return TurnContext(
+        texts=texts, anchors=anchors, anchors_turn=anchors_turn, known_keys=known
+    )
 
 
 def build_graph(deps: GraphDeps, checkpointer=None):
@@ -249,6 +281,7 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             state.decision.selections,
             evidence_so_far=len(state.evidence),
             events=deps.events,
+            context=turn_context(state, deps.catalog),
         )
         invocations = [r.invocation for r in results if r.invocation is not None]
         # The transcript invariant: route's assistant tool-call message
@@ -297,7 +330,7 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                     "as written",
                 )
                 return {
-                    "draft": MarkdownAnswer(text=resolution.text),
+                    "draft": MarkdownAnswer(text=resolution.text, about=state.decision.about or ""),
                     "draft_raw": result.raw,
                     "injected_spans": resolution.injected_spans,
                     "draft_feedback": [],
@@ -319,7 +352,9 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                         f" — returning evidence e{index} as a table",
                     )
                     return {
-                        "draft": TableAnswer(table=table, caption=caption),
+                        "draft": TableAnswer(
+                            table=table, caption=caption, about=state.decision.about or ""
+                        ),
                         "draft_feedback": [],
                     }
                 deps.events.emit(
@@ -380,7 +415,7 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             }
         deps.events.emit("draft", "finish", "draft ready")
         return {
-            "draft": MarkdownAnswer(text=resolution.text),
+            "draft": MarkdownAnswer(text=resolution.text, about=state.decision.about or ""),
             "draft_raw": result.raw,
             "injected_spans": resolution.injected_spans,
             "draft_feedback": [],
@@ -449,6 +484,7 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 table=table,
                 caption=caption_for(output),
                 reading=reading if reading is not None and declared else "",
+                about=state.decision.about or "",
             )
         }
 
@@ -554,6 +590,22 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                     detail="finalize reached with neither a decision nor an outcome",
                 )
         deps.events.emit("finalize", "finish", outcome.kind)
+        # What this turn established (Backlog Pass): harvested from the
+        # evidence with the pack's entity kinds, the router's declared
+        # about beside it, and kept on the history for the transcript,
+        # the next turn's grounding, and the Verifier's anchor check.
+        about = outcome.body.about if isinstance(outcome, AnswerOutcome) else None
+        anchors = (
+            harvest_turn_anchors(
+                state.evidence,
+                deps.catalog,
+                about=about or None,
+                question_kind=anaphor_kind(state.question, deps.catalog),
+                turn=state.turn,
+            )
+            if deps.catalog is not None
+            else TurnAnchors(turn=state.turn)
+        )
         return {
             "outcome": outcome,
             "history": state.history
@@ -561,8 +613,9 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 HistoryTurn(
                     turn=state.turn,
                     question=state.question,
-                    answer=transcript_text(outcome),
+                    answer=transcript_text(outcome, anchors),
                     kind=kind_of_outcome(outcome),
+                    anchors=anchors,
                 )
             ],
         }

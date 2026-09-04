@@ -7,6 +7,7 @@ from engine.verifier.models import FeedbackItem, RegenerationFeedback
 from tests.harness_support import (
     StubVerifier,
     build_ask_session,
+    checkpoint_history,
     refused_result,
     retry_result,
     tool_call,
@@ -670,3 +671,109 @@ def test_a_missing_reading_is_accepted_and_an_unneeded_one_is_dropped(tool_pack)
     result = session.ask("show me the stats")
     assert result.outcome.body.kind == "table" and result.outcome.body.reading == ""
     assert all("nudging" not in event.detail for event in result.events)
+
+
+# --- Backlog Pass: a follow-up says what it is about, and the history
+# --- keeps what a turn established ------------------------------------
+
+TOP_RULE_CALL = tool_call("run_sql", {"question": "Which rule fires most often?"})
+TOP_RULE_SQL = LLMResponse(
+    content=(
+        "```sql\nSELECT f.rule_name AS rule_name, COUNT(*) AS fire_count FROM findings f "
+        "GROUP BY f.rule_name ORDER BY fire_count DESC, f.rule_name LIMIT 1\n```"
+    ),
+    model="scripted",
+)
+
+
+def test_a_table_turn_establishes_its_entity_and_the_transcript_names_it(tool_pack):
+    """Turn 6, replayed on the snapshot: the one-row rule table leaves
+    `About: rule <name>.` on the history line the router reads next
+    turn, and the anchor on the checkpoint for the Verifier."""
+    responses = [
+        TOP_RULE_CALL,
+        TOP_RULE_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("Which rule fires most often?")
+    assert result.outcome.kind == "answer" and result.outcome.body.kind == "table"
+    (row,) = result.outcome.body.table.rows
+    name = row["rule_name"]
+    history = checkpoint_history(session, result.conversation_id)
+    (record,) = history
+    assert record.answer.startswith(f"[table: About: rule {name}. SELECT f.rule_name")
+    (anchor,) = record.anchors.entities
+    assert (anchor.kind, anchor.column, anchor.value, anchor.source) == (
+        "rule", "findings.rule_name", name, "cell"
+    )
+    assert record.anchors.turn == 1 and record.anchors.keys == []
+
+
+def test_a_count_turn_establishes_nothing_and_its_transcript_is_unchanged(tool_pack):
+    responses = [
+        STATS_CALL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("show me the stats")
+    (record,) = checkpoint_history(session, result.conversation_id)
+    assert record.answer.startswith("[table: ")
+    assert "About:" not in record.answer
+    assert record.anchors.entities == []
+
+
+def test_a_declared_about_rides_to_both_shapes_and_the_checkpoint(tool_pack):
+    responses = [
+        TOP_RULE_CALL,
+        TOP_RULE_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "about": "line_note"}),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("Tell me more about that rule.")
+    assert result.outcome.body.about == "line_note"
+    (record,) = checkpoint_history(session, result.conversation_id)
+    declared = [a for a in record.anchors.entities if a.source == "declared"]
+    assert declared == [type(declared[0])(kind="rule", column="", value="line_note", source="declared")]
+
+    responses = [
+        TOP_RULE_CALL,
+        TOP_RULE_SQL,
+        tool_call("give_answer", {"shape": "prose", "about": "line_note"}),
+        LLMResponse(content="The rule that fires most is `{{e0.table.rows[0].rule_name}}`.", model="scripted"),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("Tell me more about that rule.")
+    assert result.outcome.body.kind == "markdown" and result.outcome.body.about == "line_note"
+
+
+def test_the_next_turns_tools_see_what_the_conversation_established(tool_pack):
+    """The context reaches run_sql: the second turn's SQL author is told
+    the key turn 1 carried, and the user's words ground the key lint."""
+    from engine.config.models import PortName
+
+    responses = [
+        TOP_RULE_CALL,
+        TOP_RULE_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+        tool_call("run_sql", {"question": "How many findings has that rule produced?"}),
+        LLMResponse(
+            content="```sql\nSELECT COUNT(*) AS n FROM findings f WHERE f.rule_name = 'line_note'\n```",
+            model="scripted",
+        ),
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "about": "line_note"}),
+    ]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    first = session.ask("Which rule fires most often?")
+    second = session.ask("How many findings has that rule produced?", conversation_id=first.conversation_id)
+    assert second.outcome.kind == "answer", second.outcome
+    calls = ports.get(PortName.LLM).calls
+    grounding = calls[4]["messages"][0].content  # the second turn's SQL author
+    name = first.outcome.body.table.rows[0]["rule_name"]
+    # A rule's name is the key a follow-up filters on: the grounding
+    # states it, verbatim, with the turn that established it.
+    assert "## Keys this conversation established" in grounding
+    assert f"findings.rule_name = '{name}' (rule, turn 1)" in grounding
+    # And the anchor rode into the router's history line.
+    router_messages = calls[3]["messages"]
+    assert any(m.role == "assistant" and m.content.startswith(f"[table: About: rule {name}. ") for m in router_messages)

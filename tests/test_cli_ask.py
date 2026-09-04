@@ -99,6 +99,13 @@ def test_table_answers_render_aligned_with_caption(monkeypatch, capsys, tool_pac
     assert main(["ask", "--pack", str(tool_pack), "q"]) == 0
     out = capsys.readouterr().out
     assert out.index("Reading: substantive.") < out.index("(SELECT status")
+    about = named.model_copy(
+        update={"body": named.body.model_copy(update={"about": "READY"})}
+    )
+    _patch(monkeypatch, about)
+    assert main(["ask", "--pack", str(tool_pack), "q"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("About: READY.") < out.index("Reading: substantive.")
 
 
 def test_json_flag_dumps_the_turn_result(monkeypatch, capsys, tool_pack):

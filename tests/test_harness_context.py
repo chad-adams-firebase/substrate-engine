@@ -270,3 +270,37 @@ def test_a_table_turn_that_named_its_reading_says_so_in_the_transcript():
     )
     assert transcript_text(plain) == "[table: SELECT 1]"
     assert transcript_text(named) == "[table: Reading: substantive. SELECT 1]"
+
+
+def test_a_table_turn_names_what_its_evidence_established_in_the_transcript():
+    """Backlog Pass: turn 6's line was `[table: SELECT f.rule_name …]`
+    and the router could not resolve "that rule" from it. The anchors
+    lead the line, before the reading; a declared about stands in when
+    the evidence established nothing; prose is unchanged."""
+    from engine.harness.outcomes import AnswerOutcome, MarkdownAnswer, TableAnswer
+    from engine.harness.state import anchors_text, transcript_text
+    from engine.tools.envelope import Anchor, Table, TurnAnchors
+
+    table = Table(columns=["rule_name", "fire_count"], rows=[{"rule_name": "line_note", "fire_count": 505}], total_row_count=1)
+    outcome = AnswerOutcome(body=TableAnswer(table=table, caption="SELECT 1"), verification="verified")
+    anchors = TurnAnchors(turn=6, entities=[
+        Anchor(kind="rule", column="findings.rule_name", value="line_note", source="cell"),
+    ])
+    assert anchors_text(anchors) == "About: rule line_note."
+    assert transcript_text(outcome, anchors) == "[table: About: rule line_note. SELECT 1]"
+    assert transcript_text(outcome) == "[table: SELECT 1]"
+    two = TurnAnchors(turn=22, entities=[
+        Anchor(kind="supplier", column="suppliers.code", value="RVX01", source="cell"),
+        Anchor(kind="supplier", column="suppliers.name", value="Ravenswood Extrusion", source="cell"),
+        Anchor(kind="rule", column="findings.rule_name", value="correction_ignored", source="filter"),
+        Anchor(kind="rule", column="", value="ignored", source="declared"),
+    ])
+    assert anchors_text(two) == "About: supplier RVX01 / Ravenswood Extrusion, rule correction_ignored."
+    named = AnswerOutcome(
+        body=TableAnswer(table=table, caption="SELECT 1", reading="substantive", about="line_note"),
+        verification="verified",
+    )
+    assert transcript_text(named, anchors) == "[table: About: rule line_note. Reading: substantive. SELECT 1]"
+    assert transcript_text(named, TurnAnchors()) == "[table: About: line_note. Reading: substantive. SELECT 1]"
+    prose = AnswerOutcome(body=MarkdownAnswer(text="It checks notes.", about="line_note"), verification="verified")
+    assert transcript_text(prose, anchors) == "It checks notes."

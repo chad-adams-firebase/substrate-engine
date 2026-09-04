@@ -18,7 +18,7 @@ import math
 from pydantic import BaseModel, ConfigDict
 
 from engine.harness.events import StatusEvent
-from engine.harness.outcomes import TurnOutcome, loads_outcome, reading_line
+from engine.harness.outcomes import TurnOutcome, loads_outcome, about_line, reading_line
 from engine.harness.render import render_table_text
 from engine.ports.types import Conversation, TurnLogEntry
 
@@ -89,12 +89,16 @@ def render_outcome_text(outcome: TurnOutcome) -> str:
         parts.append(UNVERIFIED_BADGE)
     if outcome.body.kind == "table":
         parts.append(render_table_text(outcome.body.table))
+        if about_line(outcome.body):
+            parts.append(about_line(outcome.body))
         if reading_line(outcome.body):
             parts.append(reading_line(outcome.body))
         if outcome.body.caption:
             parts.append(f"({outcome.body.caption})")
     else:
         parts.append(outcome.body.text)
+        if about_line(outcome.body):
+            parts.append(about_line(outcome.body))
     return "\n".join(parts)
 
 

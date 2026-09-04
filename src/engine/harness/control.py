@@ -49,6 +49,20 @@ class GiveAnswerArgs(BaseModel):
         ),
     )
 
+    # The entity a follow-up answer is about (Backlog Pass): the 30-turn
+    # session's turn 7 answered "that rule" with a rule the previous
+    # turn never named. Declared by the router, checked by the Verifier
+    # against the entity the anchor turn's evidence carried; a missing
+    # declaration is accepted, and the check reads the answer instead.
+    about: str | None = Field(
+        default=None,
+        description=(
+            "When the question refers back to an entity ('that rule', "
+            "'this invoice', 'the supplier above'), the entity this answer "
+            "is about, spelled as the evidence spells it."
+        ),
+    )
+
     @model_validator(mode="after")
     def _table_needs_an_index(self) -> "GiveAnswerArgs":
         if self.shape == "table" and self.evidence_index is None:
@@ -88,7 +102,10 @@ _CONTROL_DESCRIPTIONS = {
         "evidence_index=N returns that tool result directly as a table, "
         "untouched; shape='prose' drafts a grounded explanation. When "
         "the chosen run_sql result lists readings, also pass reading="
-        "<one of them>: the reading its SQL computed, exactly as listed."
+        "<one of them>: the reading its SQL computed, exactly as listed. "
+        "When the question refers back to an entity ('that rule', 'this "
+        "invoice'), also pass about=<that entity>, spelled as the "
+        "evidence spells it."
     ),
     "refuse": (
         "The question is out of scope, asks for action rather than "
@@ -208,6 +225,7 @@ def parse_route(response: LLMResponse) -> RouteDecision:
             answer_shape=args.shape,
             evidence_index=args.evidence_index,
             reading=args.reading,
+            about=args.about,
             parsed_from_text=parsed_from_text,
         )
     if isinstance(args, RefuseArgs):

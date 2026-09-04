@@ -21,6 +21,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from engine.harness.outcomes import (
+    about_line,
     reading_line,
     AnswerBody,
     AnswerOutcome,
@@ -30,7 +31,7 @@ from engine.harness.outcomes import (
     TurnOutcome,
 )
 from engine.ports.types import Message
-from engine.tools.envelope import ToolInvocation
+from engine.tools.envelope import ToolInvocation, TurnAnchors
 from engine.verifier.models import (
     AttemptRecord,
     InjectedSpan,
@@ -56,18 +57,51 @@ class HistoryTurn(BaseModel):
     question: str
     answer: str
     kind: HistoryKind
+    # What the turn's evidence established (Backlog Pass): the
+    # determinate entities — for the transcript, the run_sql grounding,
+    # and the Verifier's anchor check on a later "that rule" — and
+    # every key value seen, for the key lint. A checkpoint written
+    # before this field loads with none, which is silent everywhere.
+    anchors: TurnAnchors = TurnAnchors()
 
 
-def transcript_text(outcome: TurnOutcome) -> str:
-    """The answer as the history keeps it. A table contributes its
+def anchors_text(anchors: TurnAnchors | None) -> str:
+    """The entities a turn established, as the transcript names them:
+    "About: rule line_note." — one kind per entry, every column's
+    value the evidence carried for it, keys and names alike. "" when
+    the turn established none. Strings only, never a figure, so the
+    summary's figure grammar has nothing to scrub here."""
+    if anchors is None:
+        return ""
+    by_kind: dict[str, list[str]] = {}
+    for anchor in anchors.entities:
+        if anchor.source == "declared" or not anchor.column:
+            continue
+        values = by_kind.setdefault(anchor.kind, [])
+        if anchor.value not in values:
+            values.append(anchor.value)
+    if not by_kind:
+        return ""
+    entries = ", ".join(f"{kind} {' / '.join(values)}" for kind, values in by_kind.items())
+    return f"About: {entries}."
+
+
+def transcript_text(outcome: TurnOutcome, anchors: TurnAnchors | None = None) -> str:
+    """The answer as the history keeps it. A table contributes what its
+    evidence established (the router could not resolve "that rule"
+    from turn 6's line `[table: SELECT f.rule_name … LIMIT 1]` — the
+    cell never entered history; Backlog Pass), its reading, and its
     caption — the SQL that produced it, which names the window, the
     grouping and the columns a follow-up resolves against — never its
-    cells; the other outcomes contribute their message text."""
+    other cells; prose contributes its text, which names what it is
+    about; the other outcomes contribute their message text."""
     if isinstance(outcome, AnswerOutcome):
         if isinstance(outcome.body, TableAnswer):
+            about = anchors_text(anchors) or about_line(outcome.body)
             line = reading_line(outcome.body)
             caption = outcome.body.caption or "result set"
-            return f"[table: {line + ' ' if line else ''}{caption}]"
+            prefix = " ".join(part for part in (about, line) if part)
+            return f"[table: {prefix + ' ' if prefix else ''}{caption}]"
         return outcome.body.text
     if isinstance(outcome, RefuseOutcome):
         return f"[refused: {outcome.reason}]"
@@ -161,6 +195,7 @@ class RouteDecision(BaseModel):
     answer_shape: Literal["prose", "table"] = "prose"
     evidence_index: int | None = None
     reading: str | None = None  # the reading a table answer names
+    about: str | None = None  # the entity a follow-up answer is about
     reason: str = ""  # refuse / escalate
     question: str = ""  # clarify
     what_would_work: str = ""  # refuse

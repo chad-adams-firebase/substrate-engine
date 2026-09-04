@@ -96,6 +96,13 @@ def test_answers_render_as_bodies_not_cards():
     )
     named_lines = render_outcome_text(named).splitlines()
     assert named_lines[-2:] == ["Reading: substantive.", "(SELECT ...)"]
+    # Backlog Pass: the declared entity, before the reading.
+    about = named.model_copy(
+        update={"body": named.body.model_copy(update={"about": "line_note"})}
+    )
+    assert render_outcome_text(about).splitlines()[-3:] == [
+        "About: line_note.", "Reading: substantive.", "(SELECT ...)",
+    ]
 
 
 def test_the_page_repeats_the_card_vocabulary_verbatim():
@@ -312,3 +319,4 @@ def test_a_legacy_turn_gets_its_chip_from_the_trail():
 def test_the_page_renders_the_reading_line_the_text_surfaces_print():
     script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert '"Reading: " + outcome.body.reading + "."' in script
+    assert script.count('"About: " + outcome.body.about + "."') == 2  # table and prose

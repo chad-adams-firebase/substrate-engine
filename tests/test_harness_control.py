@@ -182,3 +182,23 @@ def test_text_form_calls_still_validate_and_prose_still_nudges():
         with pytest.raises(RouteProtocolViolation) as info:
             parse_route(_response(content=content))
         assert info.value.raw_response == content
+
+
+def test_give_answer_carries_the_entity_a_follow_up_is_about():
+    """Backlog Pass: the router declares what a follow-up answer is
+    about; the decision carries it; the spec tells the router when."""
+    from engine.harness.control import GiveAnswerArgs, control_specs, parse_route
+    from engine.ports.types import LLMResponse, ToolCall
+
+    args = GiveAnswerArgs(shape="prose", about="line_note")
+    assert args.about == "line_note"
+    assert GiveAnswerArgs().about is None
+    decision = parse_route(
+        LLMResponse(content="", model="scripted", tool_calls=[
+            ToolCall(id="c", name="give_answer", arguments={"shape": "table", "evidence_index": 0, "about": "INV-00426"})
+        ])
+    )
+    assert decision.kind == "answer" and decision.about == "INV-00426"
+    spec = next(s for s in control_specs() if s.name == "give_answer")
+    assert "about=<that entity>" in spec.description
+    assert "refers back to an entity" in spec.input_schema["properties"]["about"]["description"]

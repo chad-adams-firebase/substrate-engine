@@ -82,6 +82,13 @@ def test_flatten_answer_shapes():
         update={"body": table.body.model_copy(update={"reading": "closed-invoice opportunity"})}
     )
     assert answer_caption(named) == "Reading: closed-invoice opportunity.\nSELECT ..."
+    # Backlog Pass: the About line leads the pool, on either shape.
+    about = named.model_copy(update={"body": named.body.model_copy(update={"about": "RVX01"})})
+    assert answer_caption(about) == "About: RVX01.\nReading: closed-invoice opportunity.\nSELECT ..."
+    prose_about = prose.model_copy(update={"body": prose.body.model_copy(update={"about": "line_note"})})
+    assert answer_caption(prose) == ""
+    assert answer_caption(prose_about) == "About: line_note."
+    assert "About: line_note." in flatten_answer(prose_about)
     assert "closed-invoice" in flatten_answer(named)
     assert answer_body(named) == "supplier n\nRVX01 257"
     assert answer_envelope(table) == "table"

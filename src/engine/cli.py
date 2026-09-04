@@ -798,7 +798,7 @@ def _ask(
 ) -> int:
     import json
 
-    from engine.harness.outcomes import exit_code_of, reading_line
+    from engine.harness.outcomes import exit_code_of, about_line, reading_line
     from engine.harness.session import UnknownConversationError
 
     session, ports = _build_session(pack_dir, _print_status)
@@ -826,12 +826,16 @@ def _ask(
             from engine.harness.render import render_table_text
 
             print(render_table_text(outcome.body.table))
+            if about_line(outcome.body):
+                print(f"\n{about_line(outcome.body)}")
             if reading_line(outcome.body):
                 print(f"\n{reading_line(outcome.body)}")
             if outcome.body.caption:
                 print(f"\n({outcome.body.caption})")
         else:
             print(outcome.body.text)
+            if about_line(outcome.body):
+                print(f"\n{about_line(outcome.body)}")
     elif outcome.kind == "refuse":
         print(f"REFUSED: {outcome.reason}")
         if outcome.what_would_work:

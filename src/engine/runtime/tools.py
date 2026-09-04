@@ -223,6 +223,23 @@ def resolve_interpretation_terms(
     return "\n".join(lines) or None
 
 
+def resolve_entity_catalog(pack: LoadedPack, ports: ResolvedPorts):
+    """The pack's entity kinds resolved against its dictionary (Backlog
+    Pass) — the harness harvests a turn's anchors with it and the
+    Verifier reads a follow-up's question with it. None when the pack
+    has no substrate store or no map: every consumer is silent then."""
+    from engine.ports.substrate_store import SubstrateStoreError
+    from engine.tools.entities import EntityCatalog
+
+    if PortName.SUBSTRATE_STORE not in set(ports.configured()):
+        return None
+    store = ports.get(PortName.SUBSTRATE_STORE)
+    try:
+        return EntityCatalog.from_substrates(store.dictionary(), store.dictionary_map())
+    except SubstrateStoreError:
+        return None
+
+
 def build_tools(pack: LoadedPack, ports: ResolvedPorts) -> ToolRegistry:
     _validate(pack, ports)
     settings = pack.config.tool_settings

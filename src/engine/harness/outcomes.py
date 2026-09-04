@@ -19,6 +19,11 @@ class MarkdownAnswer(BaseModel):
     kind: Literal["markdown"] = "markdown"
     # Placeholder-resolved final text — exactly what the Verifier saw.
     text: str
+    # The entity the router said this answer is about when the question
+    # referred back to one — "that rule" (Backlog Pass); "" otherwise.
+    # The Verifier checks it against the entity the anchor turn's
+    # evidence carried; every surface renders it as one sentence.
+    about: str = ""
 
 
 class TableAnswer(BaseModel):
@@ -35,12 +40,22 @@ class TableAnswer(BaseModel):
     # question named no metric with readings or the router named none.
     # Every surface renders it as one sentence above the caption.
     reading: str = ""
+    # As on MarkdownAnswer: the entity the router declared the answer is
+    # about, when the question referred back to one.
+    about: str = ""
 
 
 def reading_line(answer: TableAnswer) -> str:
     """The sentence a table answer's reading renders as, on every
     surface, or "" when it named none."""
     return f"Reading: {answer.reading}." if answer.reading else ""
+
+
+def about_line(answer: "MarkdownAnswer | TableAnswer") -> str:
+    """The sentence an answer's declared entity renders as, on every
+    surface — before the reading, where there is one — or "" when the
+    router declared none (Backlog Pass)."""
+    return f"About: {answer.about}." if answer.about else ""
 
 
 AnswerBody = Annotated[MarkdownAnswer | TableAnswer, Field(discriminator="kind")]

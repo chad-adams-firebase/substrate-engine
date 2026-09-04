@@ -191,11 +191,18 @@
       if (outcome.body.kind === "table") {
         // The reading the answer named, one sentence above the SQL —
         // the same line the text surfaces print (outcomes.reading_line).
+        // The entity the answer declared it is about (Backlog Pass),
+        // before the reading — the same lines the text surfaces print
+        // (outcomes.about_line, outcomes.reading_line).
+        const aboutLine = outcome.body.about ? "About: " + outcome.body.about + "." : "";
         const readingLine = outcome.body.reading ? "Reading: " + outcome.body.reading + "." : "";
-        const caption = [readingLine, outcome.body.caption].filter(Boolean).join("\n");
+        const caption = [aboutLine, readingLine, outcome.body.caption].filter(Boolean).join("\n");
         box.appendChild(renderTable(outcome.body.table, caption));
       }
-      else box.appendChild(renderMarkdown(outcome.body.text));
+      else {
+        box.appendChild(renderMarkdown(outcome.body.text));
+        if (outcome.body.about) box.appendChild(el("div", "caption", "About: " + outcome.body.about + "."));
+      }
       return box;
     }
     // Cards speak to the person who asked: reason and remedy, in the

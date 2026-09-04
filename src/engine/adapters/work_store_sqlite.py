@@ -450,7 +450,7 @@ class SqliteWorkStore:
             TurnState,
         )
         from engine.ports.types import Message, ToolCall
-        from engine.tools.envelope import ToolInvocation
+        from engine.tools.envelope import Anchor, KnownKey, ToolInvocation, TurnAnchors
         from engine.verifier.models import (
             AttemptRecord,
             InjectedSpan,
@@ -463,6 +463,9 @@ class SqliteWorkStore:
                 Message,
                 ToolCall,  # nested in the scratch messages' tool_calls
                 HistoryTurn,
+                TurnAnchors,  # nested in HistoryTurn (Backlog Pass)
+                Anchor,
+                KnownKey,
                 ToolName,
                 SubstrateName,
                 ToolInvocation,

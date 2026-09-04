@@ -114,7 +114,12 @@ MUST call give_answer with shape='table' and the evidence_index of \
 that result, so the numbers reach the user exactly as the store \
 returned them. When that result lists readings, give_answer also \
 carries reading=<one of them>: the reading its SQL computed — read the \
-SQL and the readings' meanings, never guess. Use shape='prose' only \
+SQL and the readings' meanings, never guess. When the question refers \
+back to an entity — "that rule", "this invoice", "the supplier above" — \
+give_answer also carries about=<that entity>, spelled as the evidence \
+spells it (a rule name, an invoice number, a supplier name): the \
+entity the earlier turn established, which the answer must be about. \
+Use shape='prose' only \
 when the user needs an explanation woven around the values. If the question is out of scope, unanswerable from the \
 available tools, or asks you to take an action rather than provide \
 information, call refuse and say what would work instead. When the \

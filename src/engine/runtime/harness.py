@@ -18,6 +18,7 @@ from engine.runtime.container import ResolvedPorts
 from engine.runtime.tools import (
     resolve_data_terms,
     resolve_definitional_terms,
+    resolve_entity_catalog,
     resolve_interpretation_terms,
     resolve_pack_coverage,
 )
@@ -57,6 +58,7 @@ def build_harness(
             inline_value_max_chars=pack.config.harness.inline_value_max_chars,
         ),
         settings=pack.config.harness,
+        catalog=resolve_entity_catalog(pack, ports),
         summarizer_prompt=render_summarizer_prompt(app_name=pack.config.name),
         router_prompt=render_router_prompt(
             app_name=pack.config.name,

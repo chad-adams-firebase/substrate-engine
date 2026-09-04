@@ -193,6 +193,8 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     assert "MUST call give_answer with shape='table'" in prompt
     # Close Pass: a table answer over a metric with readings names one.
     assert "give_answer also carries reading=<one of them>" in prompt
+    # Backlog Pass: and the entity a follow-up is about.
+    assert "give_answer also carries about=<that entity>" in prompt
     # Fail-closed is a correct outcome, and the loop is bounded.
     assert "Refusing is a correct outcome" in prompt
     assert "at most 6 steps" in prompt
