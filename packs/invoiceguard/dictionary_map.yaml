@@ -633,6 +633,18 @@ join_paths:
   - name: invoices_to_history
     steps:
       - {from_table: invoices, from_column: id, to_table: invoice_history, to_column: invoice_id}
+    # One row per invoice under any of these filters (Close Pass):
+    # executed against the world by `engine eval grade --check-gold`,
+    # so the fact is a tripwire, not a coincidence of the fixture.
+    one_to_one_when:
+      - {column: invoice_history.to_status, values: [CLOSED, NO_REVIEW_NEEDED]}
+      - {column: invoice_history.to_status, values: [RECEIVED]}
+      - {column: invoice_history.from_status, values: [RECEIVED]}
+    notes: >-
+      One row per invoice under any of these filters: an invoice is
+      received once (its creation transition; a resubmission is a new
+      invoice) and reaches one terminal status once. Unfiltered,
+      several transitions share one invoice.
   - name: suppliers_to_contracts
     steps:
       - {from_table: suppliers, from_column: id, to_table: contracts, to_column: supplier_id}

@@ -4,6 +4,7 @@ Every shape the baseline produced is pinned here — the one that
 breached and the correct ones that must not draw a false repair."""
 
 from engine.substrates.models import (
+    CardinalityCondition,
     DictionaryMap,
     DictionaryRow,
     DocProvenance,
@@ -35,8 +36,11 @@ DICTIONARY = [
     column("compliance_rules", "compliance_report_id", fk="compliance_reports.id"),
     column("finding_feedback", "id", pk=True),
     column("finding_feedback", "finding_id", fk="findings.id"),
+    column("invoice_history", "id", pk=True),
     column("invoice_history", "invoice_id", fk="invoices.id"),
     column("invoice_history", "actor"),
+    column("invoice_history", "to_status"),
+    column("invoice_history", "from_status"),
     column("users", "short_name"),
 ]
 
@@ -61,7 +65,36 @@ MAP = DictionaryMap(
                          to_column="compliance_report_id"),
             ],
         ),
+        # The pack's declaration (Close Pass): one history row per
+        # invoice under a terminal status, and for the received
+        # transition — executed against the world by --check-gold.
+        JoinPath(
+            name="invoices_to_history",
+            steps=[JoinStep(from_table="invoices", from_column="id",
+                            to_table="invoice_history", to_column="invoice_id")],
+            one_to_one_when=[
+                CardinalityCondition(
+                    column="invoice_history.to_status",
+                    values=["CLOSED", "NO_REVIEW_NEEDED"],
+                ),
+                CardinalityCondition(column="invoice_history.to_status", values=["RECEIVED"]),
+                CardinalityCondition(column="invoice_history.from_status", values=["RECEIVED"]),
+            ],
+        ),
     ],
+)
+
+# The same map without the received-once conditions: what the history
+# self-join draws when nothing vouches for its two sides.
+MAP_WITHOUT_RECEIVED = MAP.model_copy(
+    update={
+        "join_paths": [
+            path.model_copy(update={"one_to_one_when": path.one_to_one_when[:1]})
+            if path.name == "invoices_to_history"
+            else path
+            for path in MAP.join_paths
+        ]
+    }
 )
 
 MT2_FANOUT = """
@@ -603,3 +636,118 @@ def test_an_indicator_over_a_correlated_subquery_counts_the_row_grain():
     FROM findings f JOIN invoices i ON f.invoice_id = i.id
     """
     assert lint_fan_out(sql, DICTIONARY, MAP) is None
+
+
+# --- Close Pass: cardinality under a declared filter -------------------
+
+# W-F attempt 2 / U-WHO reps 2-4 (post-Block-4): the sum inside the CTE
+# body reads invoices across the history join, which fans in general
+# and is one row per invoice under the terminal-status filter.
+WF_CLOSED_SAVINGS = """
+WITH auditor_savings AS (
+  SELECT ih.actor AS auditor, SUM(COALESCE(i.opportunity, 0)) AS realized_savings
+  FROM invoice_history ih JOIN invoices i ON i.id = ih.invoice_id
+  WHERE ih.to_status IN ('CLOSED', 'NO_REVIEW_NEEDED') GROUP BY ih.actor
+)
+SELECT u.short_name AS auditor, a.realized_savings
+FROM auditor_savings a JOIN users u ON u.short_name = a.auditor
+WHERE u.role = 'auditor' ORDER BY a.realized_savings DESC
+"""
+WF_UNFILTERED = """
+SELECT ih.actor AS auditor, SUM(COALESCE(i.opportunity, 0)) AS realized_savings
+FROM invoice_history ih JOIN invoices i ON i.id = ih.invoice_id
+GROUP BY ih.actor ORDER BY realized_savings DESC
+"""
+# AMB1 attempt 1: the filter stands in the LEFT JOIN's own ON.
+AMB1_ATTEMPT_1_FILTER_IN_ON = """
+SELECT DATE(i.received_at) AS received_date, COUNT(*) AS unreviewed_invoices
+FROM invoices i
+LEFT JOIN invoice_history ih ON i.id = ih.invoice_id AND ih.to_status IN ('CLOSED', 'NO_REVIEW_NEEDED')
+WHERE ih.id IS NULL
+GROUP BY DATE(i.received_at) ORDER BY received_date
+"""
+HISTORY_FILTER_OUTSIDE_SET = WF_UNFILTERED.replace(
+    "GROUP BY ih.actor", "WHERE ih.to_status = 'CLAIMED' GROUP BY ih.actor"
+)
+HISTORY_FILTER_NOT_IN = WF_UNFILTERED.replace(
+    "GROUP BY ih.actor",
+    "WHERE ih.to_status NOT IN ('CLOSED', 'NO_REVIEW_NEEDED') GROUP BY ih.actor",
+)
+HISTORY_FILTER_WITH_TOP_LEVEL_OR = WF_UNFILTERED.replace(
+    "GROUP BY ih.actor",
+    "WHERE ih.to_status = 'CLOSED' OR ih.actor = 'nova' GROUP BY ih.actor",
+)
+HISTORY_FILTER_SUBSET = WF_UNFILTERED.replace(
+    "GROUP BY ih.actor", "WHERE ih.to_status = 'CLOSED' GROUP BY ih.actor"
+)
+# Two history aliases, the filter on one: the other step still fans.
+HISTORY_FILTER_ON_THE_OTHER_ALIAS = """
+SELECT a.actor AS closer, SUM(COALESCE(i.opportunity, 0)) AS closed_opportunity
+FROM invoices i
+JOIN invoice_history a ON a.invoice_id = i.id
+JOIN invoice_history b ON b.invoice_id = i.id
+WHERE a.to_status = 'CLOSED'
+GROUP BY a.actor
+"""
+# The body written without an alias: the bare column resolves through
+# the dictionary when one in-scope table owns it (AMB1 rep 3's shape).
+HISTORY_FILTER_UNQUALIFIED = """
+SELECT actor AS auditor, SUM(COALESCE(i.opportunity, 0)) AS realized_savings
+FROM invoice_history JOIN invoices i ON i.id = invoice_history.invoice_id
+WHERE to_status IN ('CLOSED', 'NO_REVIEW_NEEDED') GROUP BY actor
+"""
+# W3's flat self-join: two rows of one invoice's history, each vouched
+# one-per-invoice by its own filter (received once, left RECEIVED once).
+W3_SELF_JOIN = """
+SELECT AVG(DATE_DIFF('second', r.at, rr.at)) / 3600.0 AS avg_hours_to_ready
+FROM invoice_history r JOIN invoice_history rr ON r.invoice_id = rr.invoice_id
+WHERE r.to_status = 'RECEIVED' AND rr.from_status = 'RECEIVED' AND rr.to_status = 'READY'
+"""
+AVG_OVER_A_TERMINAL_LEFT_JOIN = """
+SELECT AVG(ih.duration) AS avg_duration
+FROM invoices i
+LEFT JOIN invoice_history ih ON ih.invoice_id = i.id AND ih.to_status = 'CLOSED'
+"""
+
+
+def test_a_declared_filter_makes_the_history_join_one_to_one():
+    """W-F ×5 and U-WHO ×3 on the post-Block-4 report: the terminal
+    status leaves one history row per invoice, so the sum over invoices
+    cannot fan — a fact the pack declares and --check-gold executes."""
+    assert lint_fan_out(WF_CLOSED_SAVINGS, DICTIONARY, MAP) is None
+    assert lint_fan_out(AMB1_ATTEMPT_1_FILTER_IN_ON, DICTIONARY, MAP) is None
+    assert lint_fan_out(HISTORY_FILTER_SUBSET, DICTIONARY, MAP) is None
+    assert lint_fan_out(HISTORY_FILTER_UNQUALIFIED, DICTIONARY, MAP) is None
+    reason = lint_fan_out(WF_UNFILTERED, DICTIONARY, MAP)
+    assert reason is not None
+    assert "invoice_history.invoice_id is a foreign key" in reason
+
+
+def test_a_filter_the_declaration_does_not_cover_still_fans():
+    for sql in (
+        HISTORY_FILTER_OUTSIDE_SET,
+        HISTORY_FILTER_NOT_IN,
+        HISTORY_FILTER_WITH_TOP_LEVEL_OR,
+        HISTORY_FILTER_ON_THE_OTHER_ALIAS,
+    ):
+        reason = lint_fan_out(sql, DICTIONARY, MAP)
+        assert reason is not None, sql
+        assert "reads invoices" in reason
+
+
+def test_a_self_join_vouched_on_both_sides_is_one_to_one():
+    """W3's shape: both columns are foreign keys with the same target,
+    and each alias's filter leaves one row per invoice — with the
+    received-once conditions declared the join is one-to-one; without
+    them it is the shared-target fan it always was."""
+    assert lint_fan_out(W3_SELF_JOIN, DICTIONARY, MAP) is None
+    reason = lint_fan_out(W3_SELF_JOIN, DICTIONARY, MAP_WITHOUT_RECEIVED)
+    assert reason is not None
+    assert "both columns are foreign keys with the same target" in reason
+
+
+def test_avg_over_a_conditionally_one_to_one_left_join_is_exempt():
+    """The NULL-semantics check exempts a declared one_to_one join
+    (U5's precedent); a join one-to-one under its own ON filter is the
+    same shape."""
+    assert lint_fan_out(AVG_OVER_A_TERMINAL_LEFT_JOIN, DICTIONARY, MAP) is None

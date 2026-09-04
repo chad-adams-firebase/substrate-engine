@@ -36,8 +36,15 @@ the FROM table, which keeps a lookup chain from the from-side
 AVG(DISTINCT) are read like plain aggregates and, when they fire, are
 named as the band-aid they are (the play pass's W7): DISTINCT inside
 SUM/AVG silently drops repeated values. Exempt: joins the Dictionary
-Map declares one_to_one, and COUNT(DISTINCT ...). Comma-separated FROM
-lists escape the check (the model does not write them).
+Map declares one_to_one — always, or under a filter the scope applies
+(one_to_one_when, the Close Pass: invoice_history -> invoices fans in
+general and is one row per invoice under a terminal status, which the
+lint cannot infer from SQL and the pack declares; the scope's WHERE or
+the step's own ON must restrict the declared column to the declared
+values, with no top-level OR, and a self-join whose two sides are each
+vouched that way is one-to-one) — and COUNT(DISTINCT ...).
+Comma-separated FROM lists escape the check (the model does not write
+them).
 
 The challenge names the aggregate, the table it reads, and the step
 that repeats it — never a destination (the guard pass's principle:
@@ -71,15 +78,19 @@ executed attempt, which the Verifier turns into a plausibility warn.
 """
 
 import re
+from dataclasses import dataclass
 
 from engine.substrates.models import DictionaryMap, DictionaryRow
 from engine.tools.sql_scopes import (
     KEYWORDS,
+    QueryScope,
     from_table_of,
+    literals_between,
     original_fragment,
+    scope_tree,
     select_list_of,
-    split_scopes,
     table_aliases,
+    table_references,
 )
 
 _JOIN_ON = re.compile(
@@ -204,30 +215,231 @@ def _tables_read(
         tables.add(owners.pop() if len(owners) == 1 else "?")
     return tables
 
+@dataclass(frozen=True)
+class _Condition:
+    """A declared one_to_one_when, split for the lint: the table and
+    column the filter reads, and the values under which the path is
+    one row per key."""
+
+    table: str
+    column: str
+    values: frozenset[str]
+
+
+@dataclass
+class _Context:
+    """What one lint_fan_out call reads from the dictionary and the
+    map, built once: foreign keys, primary keys, columns per table, the
+    column pairs declared one-to-one, and the ones declared one-to-one
+    under a filter."""
+
+    sql: str
+    fk_of: dict[tuple[str, str], str]
+    pk: set[tuple[str, str]]
+    columns_of: dict[str, set[str]]
+    one_to_one: set[frozenset[tuple[str, str]]]
+    conditional: dict[frozenset[tuple[str, str]], list[_Condition]]
+
+
+def _context(
+    sql: str, dictionary: list[DictionaryRow], dictionary_map: DictionaryMap
+) -> _Context:
+    fk_of: dict[tuple[str, str], str] = {
+        (row.table_name.lower(), row.column_name.lower()): row.fk_target.lower()
+        for row in dictionary
+        if row.fk_target and row.column_name
+    }
+    pk = {
+        (row.table_name.lower(), row.column_name.lower())
+        for row in dictionary
+        if row.is_primary_key and row.column_name
+    }
+    columns_of: dict[str, set[str]] = {}
+    for row in dictionary:
+        if row.column_name:
+            columns_of.setdefault(row.table_name.lower(), set()).add(
+                row.column_name.lower()
+            )
+    one_to_one: set[frozenset[tuple[str, str]]] = set()
+    conditional: dict[frozenset[tuple[str, str]], list[_Condition]] = {}
+    for path in dictionary_map.join_paths:
+        conditions = [
+            _Condition(
+                table=condition.table.lower(),
+                column=condition.column_name.lower(),
+                values=frozenset(condition.values),
+            )
+            for condition in path.one_to_one_when
+        ]
+        for step in path.steps:
+            pair = frozenset(
+                {
+                    (step.from_table.lower(), step.from_column.lower()),
+                    (step.to_table.lower(), step.to_column.lower()),
+                }
+            )
+            if path.cardinality == "one_to_one":
+                one_to_one.add(pair)
+            for condition in conditions:
+                if condition.table in (step.from_table.lower(), step.to_table.lower()):
+                    conditional.setdefault(pair, []).append(condition)
+    return _Context(
+        sql=sql,
+        fk_of=fk_of,
+        pk=pk,
+        columns_of=columns_of,
+        one_to_one=one_to_one,
+        conditional=conditional,
+    )
+
+
+# The scope's WHERE clause, up to the next clause keyword; subqueries
+# are already hoisted, so an inner WHERE never appears here.
+_WHERE_REGION = re.compile(
+    r"\bwhere\b(.*?)(?=\b(?:group|order|limit|having|qualify|union|window)\b|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+# A column restricted to string literals — the literals are blanked to
+# '' in scope text and read back by index from the scope. The word
+# before IN must be the column itself, so NOT IN never reads as IN;
+# <>, != and a literal-first comparison never match.
+_EQUALS_LITERAL = re.compile(r"(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s*=\s*''")
+_IN_LITERALS = re.compile(
+    r"(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s+in\s*\(\s*''(?:\s*,\s*'')*\s*\)",
+    re.IGNORECASE,
+)
+_PAREN_OR_OR = re.compile(r"[()]|\bor\b", re.IGNORECASE)
+
+
+def _top_level_or(text: str) -> bool:
+    depth = 0
+    for match in _PAREN_OR_OR.finditer(text):
+        token = match.group()
+        if token == "(":
+            depth += 1
+        elif token == ")":
+            depth -= 1
+        elif depth == 0:
+            return True
+    return False
+
+
+def _filter_regions(scope: QueryScope, on_span: tuple[int, int]) -> list[tuple[int, int]]:
+    """Where a step's filter can stand: the step's own ON condition
+    and the scope's WHERE clause, as spans of scope.text."""
+    regions = [on_span]
+    match = _WHERE_REGION.search(scope.text)
+    if match is not None:
+        regions.append((match.start(1), match.end(1)))
+    return regions
+
+
+def _condition_satisfied(
+    scope: QueryScope,
+    regions: list[tuple[int, int]],
+    alias: str,
+    table: str,
+    aliases: dict[str, str],
+    condition: _Condition,
+    ctx: _Context,
+) -> bool:
+    """The scope restricts this alias's declared column to the declared
+    values: an equality or IN over string literals, qualified with the
+    step's own alias (or the bare table when the scope references it
+    once, or unqualified when exactly one in-scope table owns the
+    column and that table is referenced once), in a region with no
+    top-level OR, every literal within the declared set."""
+    if condition.table != table:
+        return False
+    once = sum(1 for name, _ in table_references(scope.text) if name == table) == 1
+    for start, end in regions:
+        region = scope.text[start:end]
+        if _top_level_or(region):
+            continue
+        for pattern in (_EQUALS_LITERAL, _IN_LITERALS):
+            for match in pattern.finditer(region):
+                qualifier, column = match.group(1), match.group(2).lower()
+                if column != condition.column:
+                    continue
+                if qualifier is not None:
+                    qualifier = qualifier.lower()
+                    if qualifier != alias and not (once and aliases.get(qualifier) == table):
+                        continue
+                else:
+                    owners = {
+                        name
+                        for name in set(aliases.values())
+                        if column in ctx.columns_of.get(name, set())
+                    }
+                    if owners != {table} or not once:
+                        continue
+                literals = literals_between(scope, start + match.start(), start + match.end())
+                if literals and all(value in condition.values for value in literals):
+                    return True
+    return False
+
+
+def _vouched_conditionally(
+    scope: QueryScope,
+    regions: list[tuple[int, int]],
+    pair: frozenset[tuple[str, str]],
+    sides: tuple[tuple[str, str], ...],
+    aliases: dict[str, str],
+    ctx: _Context,
+) -> bool:
+    """A one_to_one_when declared on the pair's path holds in this
+    scope for one of the sides, given as (alias, table)."""
+    return any(
+        _condition_satisfied(scope, regions, alias, table, aliases, condition, ctx)
+        for condition in ctx.conditional.get(pair, [])
+        for alias, table in sides
+    )
+
+
+def _one_to_one_step(
+    scope: QueryScope,
+    regions: list[tuple[int, int]],
+    a: str,
+    c1: str,
+    b: str,
+    c2: str,
+    aliases: dict[str, str],
+    ctx: _Context,
+) -> bool:
+    """The map vouches for this equality's shape: declared one_to_one,
+    or one_to_one_when under a filter the scope applies."""
+    a, b, c1, c2 = a.lower(), b.lower(), c1.lower(), c2.lower()
+    ta, tb = aliases.get(a, a), aliases.get(b, b)
+    pair = frozenset({(ta, c1), (tb, c2)})
+    return pair in ctx.one_to_one or _vouched_conditionally(
+        scope, regions, pair, ((a, ta), (b, tb)), aliases, ctx
+    )
+
 
 def _join_steps(
-    scope: str,
-    sql: str,
+    scope: QueryScope,
     aliases: dict[str, str],
-    fk_of: dict[tuple[str, str], str],
-    one_to_one: set[frozenset[tuple[str, str]]],
+    ctx: _Context,
 ) -> list[tuple[str, str | None, str | None, set[str], str]]:
-    """Every join step in the scope that is not declared one_to_one:
+    """Every join step in the scope the map does not vouch for:
     (kind, one, many, tables, text). kind is "one_to_many" when exactly
     one side is a foreign key to the other, else "unvouched"; text is
     the condition with its reason in parentheses."""
     steps: list[tuple[str, str | None, str | None, set[str], str]] = []
-    for joined, _, condition in _JOIN_ON.findall(scope):
-        joined = joined.lower()
+    for match in _JOIN_ON.finditer(scope.text):
+        joined = match.group(1).lower()
+        condition = match.group(3)
+        regions = _filter_regions(scope, (match.start(3), match.end(3)))
         equalities = _EQUALITY.findall(condition)
         for a, c1, b, c2 in equalities:
-            ta, tb = aliases.get(a.lower(), a.lower()), aliases.get(b.lower(), b.lower())
+            a, b = a.lower(), b.lower()
+            ta, tb = aliases.get(a, a), aliases.get(b, b)
             c1, c2 = c1.lower(), c2.lower()
             left, right = f"{ta}.{c1}", f"{tb}.{c2}"
-            if frozenset({(ta, c1), (tb, c2)}) in one_to_one:
+            if _one_to_one_step(scope, regions, a, c1, b, c2, aliases, ctx):
                 continue
-            a_fk = fk_of.get((ta, c1)) == right
-            b_fk = fk_of.get((tb, c2)) == left
+            a_fk = ctx.fk_of.get((ta, c1)) == right
+            b_fk = ctx.fk_of.get((tb, c2)) == left
             if a_fk and b_fk:
                 steps.append((
                     "unvouched", None, None, {ta, tb},
@@ -241,8 +453,19 @@ def _join_steps(
                     f"several {many} rows can share one {one} row)",
                 ))
             else:
-                shared = fk_of.get((ta, c1))
-                if shared and shared == fk_of.get((tb, c2)):
+                shared = ctx.fk_of.get((ta, c1))
+                if shared and shared == ctx.fk_of.get((tb, c2)):
+                    # Two rows of the same target's many side (W3's
+                    # history self-join): one-to-one when each side is
+                    # vouched one row per target key by its own filter.
+                    target_table, _, target_column = shared.partition(".")
+                    target = (target_table, target_column)
+                    if _vouched_conditionally(
+                        scope, regions, frozenset({(ta, c1), target}), ((a, ta),), aliases, ctx
+                    ) and _vouched_conditionally(
+                        scope, regions, frozenset({(tb, c2), target}), ((b, tb),), aliases, ctx
+                    ):
+                        continue
                     reason = (
                         "both columns are foreign keys with the same target — "
                         f"every {ta} row pairs with every {tb} row that shares it"
@@ -257,7 +480,7 @@ def _join_steps(
         # join's grain (AND-ed predicates only filter further) — so this
         # arm is reached only when FK reasoning had nothing to read.
         if not equalities and _derives_a_key(condition):
-            snippet = original_fragment(sql, condition)
+            snippet = original_fragment(ctx.sql, condition)
             tables = {joined} | {
                 aliases.get(q.lower(), q.lower())
                 for q in re.findall(r"([A-Za-z_]\w*)\s*\.", condition)
@@ -312,54 +535,33 @@ def lint_fan_out(
 ) -> str | None:
     """The reason the statement risks a join fan-out (or a LEFT JOIN
     shape that answers the wrong question), or None."""
-    fk_of: dict[tuple[str, str], str] = {
-        (row.table_name.lower(), row.column_name.lower()): row.fk_target.lower()
-        for row in dictionary
-        if row.fk_target and row.column_name
-    }
-    columns_of: dict[str, set[str]] = {}
-    for row in dictionary:
-        if row.column_name:
-            columns_of.setdefault(row.table_name.lower(), set()).add(
-                row.column_name.lower()
-            )
-    one_to_one: set[frozenset[tuple[str, str]]] = set()
-    for path in dictionary_map.join_paths:
-        if path.cardinality == "one_to_one":
-            for step in path.steps:
-                one_to_one.add(
-                    frozenset(
-                        {
-                            (step.from_table.lower(), step.from_column.lower()),
-                            (step.to_table.lower(), step.to_column.lower()),
-                        }
-                    )
-                )
+    ctx = _context(sql, dictionary, dictionary_map)
 
     fan: list[str] = []
     dead: list[str] = []
     avg_null: list[str] = []
     involved: set[str] = set()
     bandaid_seen = False
-    for scope in split_scopes(sql):
-        select_list = select_list_of(scope)
+    for scope in scope_tree(sql):
+        text = scope.text
+        select_list = select_list_of(text)
         bandaid = _DISTINCT_AGG_BANDAID.search(select_list) is not None
         plain_agg = _PLAIN_AGGREGATE.search(select_list) is not None
         any_agg = _ANY_AGGREGATE.search(select_list) is not None
         if not (plain_agg or bandaid or any_agg):
             continue
-        aliases = table_aliases(scope)
+        aliases = table_aliases(text)
 
         if plain_agg or bandaid:
             in_scope = set(aliases.values())
-            from_table = from_table_of(scope)
-            steps = _join_steps(scope, sql, aliases, fk_of, one_to_one)
+            from_table = from_table_of(text)
+            steps = _join_steps(scope, aliases, ctx)
             repeated = _repeated_tables(steps, in_scope)
             fired_here = False
             for func, argument in _aggregate_arguments(select_list):
                 if func == "count" and _DISTINCT_PREFIX.match(argument):
                     continue  # COUNT(DISTINCT x) is the sanctioned repair
-                reads = _tables_read(argument, aliases, columns_of, in_scope)
+                reads = _tables_read(argument, aliases, ctx.columns_of, in_scope)
                 if reads is None:
                     reads = {from_table} if from_table else set()
                 if "?" in reads:
@@ -381,19 +583,13 @@ def lint_fan_out(
             if bandaid and fired_here:
                 bandaid_seen = True
 
-        for match in _LEFT_JOIN_ON.finditer(scope):
+        for match in _LEFT_JOIN_ON.finditer(text):
             sub_alias, table, alias, condition = match.groups()
-            declared_one_to_one = any(
-                frozenset(
-                    {
-                        (aliases.get(a.lower(), a.lower()), c1.lower()),
-                        (aliases.get(b.lower(), b.lower()), c2.lower()),
-                    }
-                )
-                in one_to_one
+            regions = _filter_regions(scope, (match.start(4), match.end(4)))
+            if any(
+                _one_to_one_step(scope, regions, a, c1, b, c2, aliases, ctx)
                 for a, c1, b, c2 in _EQUALITY.findall(condition)
-            )
-            if declared_one_to_one:
+            ):
                 continue  # the map vouches for the join's shape
             if sub_alias:
                 qualifiers = {sub_alias.lower()}
@@ -410,11 +606,11 @@ def lint_fan_out(
             # columns are unknowable, so "referenced" cannot be judged.
             if sub_alias or not any_agg:
                 continue
-            remainder = scope[: match.start()] + scope[match.end() :]
+            remainder = text[: match.start()] + text[match.end() :]
             used_qualified = re.search(
                 rf"\b(?:{'|'.join(qualifiers)})\s*\.", remainder, re.IGNORECASE
             )
-            bare_columns = columns_of.get(table.lower(), set())
+            bare_columns = ctx.columns_of.get(table.lower(), set())
             used_bare = bare_columns and re.search(
                 rf"(?<![.\w])(?:{'|'.join(bare_columns)})\b",
                 remainder,

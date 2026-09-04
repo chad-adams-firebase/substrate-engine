@@ -101,3 +101,39 @@ def test_stats_row_minimal_shape():
         provenance=machine_provenance(),
     )
     assert row.top_values == []
+
+
+# --- Close Pass: a join path one-to-one under a declared filter ---------
+
+
+def test_a_join_path_is_one_to_one_always_or_under_a_filter_not_both():
+    from engine.substrates.models import CardinalityCondition, JoinPath, JoinStep
+
+    step = JoinStep(
+        from_table="invoices", from_column="id",
+        to_table="invoice_history", to_column="invoice_id",
+    )
+    condition = CardinalityCondition(
+        column="invoice_history.to_status", values=["CLOSED"]
+    )
+    assert JoinPath(name="p", steps=[step], one_to_one_when=[condition]).cardinality is None
+    with pytest.raises(ValidationError, match="both cardinality and one_to_one_when"):
+        JoinPath(
+            name="p", steps=[step], cardinality="one_to_one",
+            one_to_one_when=[condition],
+        )
+
+
+def test_a_cardinality_condition_names_a_qualified_column_and_some_values():
+    from engine.substrates.models import CardinalityCondition
+
+    condition = CardinalityCondition(
+        column="invoice_history.to_status", values=["CLOSED", "NO_REVIEW_NEEDED"]
+    )
+    assert (condition.table, condition.column_name) == ("invoice_history", "to_status")
+    with pytest.raises(ValidationError, match="table.column"):
+        CardinalityCondition(column="to_status", values=["CLOSED"])
+    with pytest.raises(ValidationError, match="table.column"):
+        CardinalityCondition(column="a.b.c", values=["CLOSED"])
+    with pytest.raises(ValidationError, match="at least one value"):
+        CardinalityCondition(column="invoice_history.to_status", values=[])

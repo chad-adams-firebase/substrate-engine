@@ -312,6 +312,22 @@ class ConformanceValidator:
                             f"join path {join_path.name!r}: unknown column "
                             f"{table}.{column}"
                         )
+            path_tables = {
+                table
+                for step in join_path.steps
+                for table in (step.from_table, step.to_table)
+            }
+            for condition in join_path.one_to_one_when:
+                if (condition.table, condition.column_name) not in known_columns:
+                    details.append(
+                        f"join path {join_path.name!r}: one_to_one_when names "
+                        f"unknown column {condition.column}"
+                    )
+                elif condition.table not in path_tables:
+                    details.append(
+                        f"join path {join_path.name!r}: one_to_one_when column "
+                        f"{condition.column} is not on the path's tables"
+                    )
         for rule in dictionary_map.column_formats:
             for qualified in rule.columns:
                 table, _, column = qualified.partition(".")

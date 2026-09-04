@@ -206,3 +206,32 @@ def test_dictionary_map_column_format_unknown_column_fails_naming_it(
     check = next(c for c in report.checks if "dictionary map" in c.name)
     assert check.status == "FAIL"
     assert any("invoices.opportunity_usd" in d for d in check.details)
+
+
+def test_dictionary_map_conditional_cardinality_column_must_exist_on_the_path(
+    fixture_pack, snapshot_duckdb
+):
+    """Close Pass: a one_to_one_when names a column the dictionary knows,
+    on a table the path steps through — a misspelling would leave the
+    lint vouching on nothing and --check-gold executing a bad query."""
+    add_authored_artifacts(fixture_pack)
+    corrupt_line(
+        fixture_pack / "dictionary_map.yaml",
+        "join_paths:\n",
+        "join_paths:\n"
+        "  - name: tripwire_unknown\n"
+        "    steps:\n"
+        "      - {from_table: invoices, from_column: id, to_table: findings, to_column: invoice_id}\n"
+        "    one_to_one_when:\n"
+        "      - {column: findings.rule_nam, values: [x]}\n"
+        "  - name: tripwire_off_path\n"
+        "    steps:\n"
+        "      - {from_table: invoices, from_column: id, to_table: findings, to_column: invoice_id}\n"
+        "    one_to_one_when:\n"
+        "      - {column: invoice_lines.item_code, values: [x]}\n",
+    )
+    report = make_validator(snapshot_duckdb).validate(fixture_pack, "snapshot")
+    check = next(c for c in report.checks if "dictionary map" in c.name)
+    assert check.status == "FAIL"
+    assert any("findings.rule_nam" in d and "tripwire_unknown" in d for d in check.details)
+    assert any("not on the path" in d and "tripwire_off_path" in d for d in check.details)

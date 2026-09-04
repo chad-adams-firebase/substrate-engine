@@ -644,6 +644,7 @@ def _eval_grade(args) -> int:
 
     from engine.eval.bank import BankLoadError, load_bank
     from engine.eval.gold import check_gold
+    from engine.eval.cardinality import check_pack_cardinalities
     from engine.eval.grade import GradeError, grade
     from engine.eval.report import render, render_gold_checks
     from engine.eval.runner import RunnerError, load_report
@@ -660,11 +661,18 @@ def _eval_grade(args) -> int:
 
         if args.check_gold:
             checks = check_gold(bank, world)
-            text = render_gold_checks(checks)
+            # The map's one_to_one_when declarations face the same world
+            # as the gold scripts: a lifecycle fact the lint vouches on
+            # is a tripwire here, not a coincidence of the fixture.
+            cardinalities = check_pack_cardinalities(pack_dir, world)
+            text = render_gold_checks(checks, cardinalities)
             print(text, end="")
             if args.out is not None:
                 Path(args.out).write_text(text, encoding="utf-8", newline="\n")
-            return 0 if all(c.status == "ok" for c in checks) else 3
+            healthy = all(c.status == "ok" for c in checks) and all(
+                c.status == "ok" for c in cardinalities
+            )
+            return 0 if healthy else 3
 
         if not args.report:
             raise CliError("--report is required (or pass --check-gold).")

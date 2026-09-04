@@ -3,6 +3,7 @@ by commit (the conformance validator's pattern, Brief §13). The
 invariant line comes first: a breach is the headline, never a row in
 a table."""
 
+from engine.eval.cardinality import CardinalityCheck
 from engine.eval.gold import GoldCheck
 from engine.eval.grade import GradeReport
 
@@ -160,19 +161,36 @@ def render(report: GradeReport) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_gold_checks(checks: list[GoldCheck]) -> str:
+def render_gold_checks(
+    checks: list[GoldCheck], cardinalities: list[CardinalityCheck] = []
+) -> str:
+    marks = {"ok": "ok", "rot": "ROT", "error": "ERROR"}
     lines = ["Gold check — executed scripts vs committed expectations", ""]
     for check in checks:
-        mark = {"ok": "ok", "rot": "ROT", "error": "ERROR"}[check.status]
-        lines.append(f"[{mark:>5}] {check.row_id:<10} {check.script}")
+        lines.append(f"[{marks[check.status]:>5}] {check.row_id:<10} {check.script}")
         for mismatch in check.mismatches:
             lines.append(f"        - {mismatch}")
         if check.error:
             lines.append(f"        - {check.error}")
-    rotten = sum(check.status != "ok" for check in checks)
+    if cardinalities:
+        lines.append("")
+        lines.append(
+            "Declared cardinalities — one_to_one_when, executed against the world"
+        )
+        for check in cardinalities:
+            lines.append(
+                f"[{marks[check.status]:>5}] {check.path:<24} {check.describe()}"
+            )
+            if check.status == "ok":
+                lines.append(f"        - {check.matched_rows:,} rows matched")
+            else:
+                lines.append(f"        - {check.detail}")
+    rotten = sum(check.status != "ok" for check in checks) + sum(
+        check.status != "ok" for check in cardinalities
+    )
     lines.append("")
     lines.append(
         "RESULT: "
-        + ("PASS" if rotten == 0 else f"FAIL ({rotten} script(s) rotten)")
+        + ("PASS" if rotten == 0 else f"FAIL ({rotten} check(s) rotten)")
     )
     return "\n".join(lines) + "\n"

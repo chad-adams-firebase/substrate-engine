@@ -74,9 +74,19 @@ def test_the_fan_out_challenges_keep_their_tables():
         fixtures.FLAGSHIP_ATTEMPT_1,
         fixtures.TWO_MANY_SIDES,
         fixtures.LOOKUP_SIDE_SUM,
+        fixtures.WF_UNFILTERED,
+        fixtures.HISTORY_FILTER_OUTSIDE_SET,
+        fixtures.HISTORY_FILTER_NOT_IN,
+        fixtures.HISTORY_FILTER_WITH_TOP_LEVEL_OR,
+        fixtures.HISTORY_FILTER_ON_THE_OTHER_ALIAS,
     ):
         challenge = lint_fan_out(sql, fixtures.DICTIONARY, fixtures.MAP)
         _assert_keeps_its_tables(challenge, sql, fixtures.DICTIONARY)
+    # The self-join challenged only when nothing vouches for its sides.
+    challenge = lint_fan_out(
+        fixtures.W3_SELF_JOIN, fixtures.DICTIONARY, fixtures.MAP_WITHOUT_RECEIVED
+    )
+    _assert_keeps_its_tables(challenge, fixtures.W3_SELF_JOIN, fixtures.DICTIONARY)
 
 
 def test_the_interval_challenge_names_no_table_at_all():

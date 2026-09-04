@@ -207,9 +207,12 @@ def test_the_polish_pass_silent_shapes_stay_silent(pack_map, pack_dictionary):
     scope, the browser's correct resend that used to ship [UNVERIFIED])
     and the correction_application_rate template, whose SUM(CASE WHEN
     NOT EXISTS …) reads no outer column and counts the row grain."""
-    from tests.test_tool_sql_lint import FLAGSHIP_ATTEMPT_2
+    from tests.test_tool_sql_lint import FLAGSHIP_ATTEMPT_2, WF_CLOSED_SAVINGS
 
     assert lint_fan_out(FLAGSHIP_ATTEMPT_2, pack_dictionary, pack_map) is None
+    # Close Pass: the terminal-status sum inside a CTE, vouched by the
+    # history path's declared condition.
+    assert lint_fan_out(WF_CLOSED_SAVINGS, pack_dictionary, pack_map) is None
     template = next(
         m for m in pack_map.metrics if m.name == "correction_application_rate"
     )
@@ -236,3 +239,37 @@ def test_savings_realized_reaches_recovered_opportunity(pack_map):
         "closed-invoice findings",
         "feedback-authored findings",
     ]
+
+
+# --- Close Pass: the history path is one-to-one under a declared filter --
+
+
+def test_history_join_is_conditionally_one_to_one(pack_map):
+    """invoice_history -> invoices fans in general and is one row per
+    invoice under a terminal status, and for the received transition
+    (W3's self-join): declared, never inferred, and executed against
+    the world by --check-gold so the fact stays a fact."""
+    path = next(p for p in pack_map.join_paths if p.name == "invoices_to_history")
+    assert path.cardinality is None
+    assert [(c.column, c.values) for c in path.one_to_one_when] == [
+        ("invoice_history.to_status", ["CLOSED", "NO_REVIEW_NEEDED"]),
+        ("invoice_history.to_status", ["RECEIVED"]),
+        ("invoice_history.from_status", ["RECEIVED"]),
+    ]
+    assert "received once" in path.notes
+
+
+@pytest.mark.skipif(
+    not (PACK / "app.duckdb").is_file(), reason="the pack's world is absent"
+)
+def test_declared_cardinalities_hold_in_the_world(pack_map):
+    """The tripwire, run here as well as under --check-gold: every
+    declared condition, at most one row per invoice in the world."""
+    from engine.eval.cardinality import check_declared_cardinalities
+    from engine.eval.world import World
+
+    checks = check_declared_cardinalities(pack_map, World.from_pack(PACK))
+    assert [(c.path, c.status, c.max_per_key) for c in checks] == [
+        ("invoices_to_history", "ok", 1)
+    ] * 3
+    assert all(c.matched_rows > 0 for c in checks)

@@ -328,6 +328,42 @@ class JoinStep(BaseModel):
     to_column: str
 
 
+class CardinalityCondition(BaseModel):
+    """A filter under which a join path is one row per key — a
+    lifecycle fact (an invoice reaches a terminal status once, is
+    received once) that no schema constraint carries and no lint can
+    infer from SQL, so the pack declares it (Close Pass). Consumers:
+    run_sql's fan-out lint, which treats a step as one_to_one in a
+    scope whose WHERE, or the step's own ON, restricts the column to
+    the declared values; and the eval's --check-gold, which executes
+    every declared condition against the world so a declaration never
+    quietly becomes a data coincidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    column: str  # "table.column", on one of the path's step tables
+    values: list[str]
+
+    @model_validator(mode="after")
+    def _shape(self) -> "CardinalityCondition":
+        table, dot, column = self.column.partition(".")
+        if not (table and dot and column) or "." in column:
+            raise ValueError(
+                f"column must be written table.column, got {self.column!r}"
+            )
+        if not self.values:
+            raise ValueError("values must name at least one value")
+        return self
+
+    @property
+    def table(self) -> str:
+        return self.column.partition(".")[0]
+
+    @property
+    def column_name(self) -> str:
+        return self.column.partition(".")[2]
+
+
 class JoinPath(BaseModel):
     """A vetted way to join tables — the routes that are correct, as
     opposed to the ones that merely typecheck."""
@@ -341,6 +377,19 @@ class JoinPath(BaseModel):
     # which exempts a one_to_one path from the COUNT/SUM-over-join
     # challenge. Absent means unknown, and unknown is challenged.
     cardinality: Literal["one_to_one"] | None = None
+    # One row per key under any of these filters (any-of) — the
+    # conditional form of cardinality, for a path that fans in general
+    # and not under a lifecycle filter. Exclusive with cardinality.
+    one_to_one_when: list[CardinalityCondition] = []
+
+    @model_validator(mode="after")
+    def _one_declaration(self) -> "JoinPath":
+        if self.cardinality is not None and self.one_to_one_when:
+            raise ValueError(
+                f"join path {self.name!r} declares both cardinality and "
+                "one_to_one_when; a path is one-to-one always or under a filter"
+            )
+        return self
 
 
 class Gotcha(BaseModel):
