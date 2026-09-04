@@ -46,6 +46,15 @@ byte-compares against the pack's committed substrates — the
 idempotency probe. `engine info --pack <dir>` shows what a pack
 enables and which adapter each port resolved to.
 
+The port table is in the Brief (§3). One row carries a contract a new
+adapter is most likely to get wrong: **LLMPort** sends the router loop's
+working messages as native tool messages — an assistant message with
+`tool_calls`, then exactly one `role="tool"` message per call, in
+order, each carrying the provider's call `id` — and a provider that
+rejects that sequence fails on the first multi-step turn, not the
+first. The smoke test for a new adapter is a two-tool question, never
+"hello".
+
 Machine-generated substrates under `packs/*/substrates/` are committed
 but never hand-edited; if output looks wrong, fix the generator
 (CLAUDE.md). Human knowledge goes in `packs/*/overlays/` and is never

@@ -704,3 +704,193 @@ for table answers (the caption — W-F's `contains` has nowhere to pass
 otherwise, and MT4 would not need a prose-phrased turn 1); the loop
 transcript's `Requested:`/`Tool results:` rendering; W4 under ASSOC;
 the asynchronous `update_state` summary refresh.
+
+## Close Pass (2026-09-04, after the post-Block-4 run)
+
+The last pass of Phase 5, planned against `15f6424` and the
+`2026-09-04-post-block4` report (`INVARIANT: ok`, every multi-turn
+row 5/5, MT4 proving the summarizer live). Four rows below threshold
+— AMB1 0/5, U-WHO 2/5, W-F 0/5, S2 1/5 — and B2 2/5 on router
+nudges. The exposure replay attributed fifteen fan-out challenges
+(AMB1 ×5, W-F ×5, U-WHO ×3, S2 ×2) over 237 statements; read against
+the lint's code they were three mechanisms, not one, and the pass is
+written down by them.
+
+- **The fifteen, by mechanism.** AMB1's five repaired exactly as the
+  challenge asked — the many side de-duplicated in a CTE, `SELECT
+  DISTINCT invoice_id`, joined on that key — and were challenged again
+  at the CTE join: a CTE name has no dictionary row, so the join read
+  "no foreign key relates these columns" and every table in the scope
+  was repeated. W-F's five and U-WHO's three fired **inside** the CTE
+  body on the direction rule itself: `invoices.id =
+  invoice_history.invoice_id` repeats invoices once per history row,
+  true unfiltered and false under a terminal status — the flat filtered
+  statement drew the same challenge, the CTE was incidental. S2's two
+  (reps 1/3) were two pass-through CTEs LEFT-joined on the composite
+  line key with neither side de-duplicated: the line-grain join the
+  Duration pass refused to declare `one_to_one`, in CTE clothing. And
+  the mirror image, silent: S2 reps 2/4 hid that composite LEFT JOIN in
+  a CTE with no aggregate and counted the CTE outside — 100% for a true
+  95.5%, the known gap §2 with its first live witness, caught only by
+  the saturated-rate warn.
+- **Exposure, per commit, on the post-Block-4 report (237
+  statements).** The text layer split: 15, byte-identical. The declared
+  filter: 7 (W-F ×5, U-WHO ×3 silent). The projection key: 2 (AMB1 ×5
+  silent). Grain propagation: 4 (S2 reps 2/4 added — the wrong
+  answers). Every remaining hit is S2; no clean statement was flagged
+  at any step; the four are pinned in `tests/test_eval_exposure.py` as
+  the baseline the next guard is measured against.
+- **The CTE rule, an extension of the direction rule.** The SQL text
+  layer — the scope split, table references, the select-list item
+  grammar — is `tools/sql_scopes.py`, imported by every lint and parse
+  and importing nothing (the resolver used to import the lint, so the
+  lint could not read the registry the resolver had). The walk names
+  each CTE body and derived table, records which named scopes a scope
+  can see, and keeps the literals it blanked in order, so a predicate's
+  values are read by index and never by searching the statement. A
+  scope has a grain read from its own text: a projection unique on the
+  join's columns (`DISTINCT k`, `GROUP BY k`; a primary key beside
+  other columns of its table is the key alone) is one row per key and
+  a one side, a table is on its primary key, both unique is one-to-one;
+  otherwise a plain pass-through column reads the foreign-key knowledge
+  of the column behind it — unless the scope's own joins repeat that
+  table — so a lookup or a filtered many side written as a CTE behaves
+  like its flat twin and a computed column vouches for nothing; and an
+  aggregate over a scope that is not deduplicated reads what its rows
+  are, the body's repeated tables folded through the scopes it reads in
+  turn, while a deduplicated scope propagates nothing. Derived tables
+  join the scan under their alias (they were invisible; the dead-LEFT-
+  JOIN check still skips them). One fixture moved with it: the
+  derived-table S2 repair (COALESCE) draws the fan-out check its flat
+  twin always drew, with the NULL-semantics paragraph still gone.
+- **Cardinality under a declared filter — config over code.** A join
+  path carries `one_to_one_when`, a list of `{column, values}`
+  conditions under any of which the path is one row per key, exclusive
+  with `cardinality`. The lint treats a step as one-to-one when the
+  scope's WHERE or the step's own ON restricts the declared column to
+  the declared values — `col = 'v'` or `col IN ('v', …)` on the step's
+  own alias (the bare table when referenced once; the bare column when
+  exactly one in-scope table owns it and is referenced once), every
+  literal within the set, no OR at the top level; `NOT IN`, `<>`, a
+  value outside the set, a filter on another alias, and a literal-first
+  comparison do not vouch — and a self-join whose two sides are each
+  vouched that way is one-to-one (W3's history shape). InvoiceGuard
+  declares three on `invoices_to_history`: `to_status ∈ {CLOSED,
+  NO_REVIEW_NEEDED}`, `to_status ∈ {RECEIVED}`, `from_status ∈
+  {RECEIVED}` — an invoice reaches a terminal status once and is
+  received once (a resubmission is a new invoice); the world confirms
+  every status occurs at most once per invoice. The line-grain join
+  stays undeclared: a line may carry two findings by schema, and a
+  declaration would make the lint vouch for luck (the Duration-pass
+  ruling, kept by the user's ruling here).
+- **The declared facts are executed, not trusted (user addition).**
+  `engine eval grade --check-gold` runs every declared condition
+  against the world beside the gold scripts — at most one row per key,
+  at least one row in all — and a condition the world contradicts, or
+  one no row satisfies (how a misspelled value reads), is rot. The
+  check reads the map and never a table name of its own, so a
+  production pack's lifecycle tables get the same tripwire by
+  declaring; the conformance validator refuses a condition column the
+  dictionary does not know or the path does not step through. Live:
+  1,233 / 1,983 / 1,983 rows matched, max one per invoice, PASS.
+- **The lesson, as a corollary of the challenge principle: a
+  challenge's recommended shape must be a shape every guard can
+  read.** Third instance — S2's EXISTS (the coverage pass), the EPOCH
+  unit shapes (the duration pass), and now "aggregate each side in its
+  own scope, then join the results", which met a lint that could not
+  read a scope's key. The challenge now also names the EXISTS test
+  when a LEFT JOIN is among the joins that fired (the shape a match
+  indicator should take); MT2's inner joins do not draw it. S2's lever
+  is that steer, not a declaration.
+- **The loop transcript is native tool messages (Part D, option a).**
+  The router pattern-completed the prose rendering — `Requested: …` /
+  `Tool results: …` — on B2: it role-played a tool call and fabricated
+  the result (edge ids `b8b8b8b8…`, an alphabetic sequence), and wrote
+  `give_answer` as text under the same echo; 14 nudges, four failing
+  reps at the budget. Prior calls now replay as assistant messages
+  carrying `tool_calls` and results as `role="tool"` messages, one per
+  call in order, so there is no text format to complete; nudges stay
+  user messages; the `Requested:` alternative left the text-form
+  parser, since nothing produces it. Option (b) — parse real tools from
+  text and drop a fabricated block — would have opened the closed
+  surface to text entry and left the pattern in context. **The LLMPort
+  contract grew** (user addition, recorded in the Brief's port table):
+  `Message` carries `tool_calls` and `tool_call_id`, `ToolCall` the
+  provider's `id`, and an adapter must send both shapes natively — the
+  OpenRouter adapter does; the production adapter must. The transcript
+  invariant: every assistant tool-call message is immediately followed
+  by exactly one tool message per call, in order. A provider that
+  rejects the sequence fails on the first multi-step turn, so the
+  work-side smoke test is a two-tool question, never "hello".
+- **The figure grammar (Part B).** A hyphenated token with a letter in
+  it (`SVC-4410`, `CR-147`, `INV-CRP-0001`, `INV-2026-0001`) is an
+  identifier; the digits inside are never a figure, on either side —
+  S2's item code in a folded answer had put 4410 in the figure set and
+  the summary naming the same code was scrubbed to `SVC-(see turn 4)`.
+  A signed figure (`-$1,234.00`) still harvests whole, a date and a
+  numeric range are untouched, and a figure no longer ends in a comma
+  (the scrub used to eat it).
+- **The interpretation slot (Part C).** The run_sql output carries the
+  interpretations of the metrics the question matched, names and
+  meanings, so the router sees them in the tool result and can map
+  `SUM(i.opportunity)` to a name; `give_answer` takes `reading`, the
+  decision carries it, and the table answer keeps it as a **typed
+  field** beside the caption — not text injected into the caption, so
+  the Verifier's pass-through check is untouched and no caption parser
+  exists. Every surface renders one sentence above the SQL, "Reading:
+  <name>.", and the eval's caption pool carries it, which is where
+  W-F's `contains` now has a home. Validation is the graph's: an
+  undeclared name is nudged with the valid set (counted as a nudge); a
+  missing name is accepted without a reading (user ruling) — phrase
+  matching over-reaches (U-WHO's "most productive" matches
+  `rule_savings`, whose readings are money) and a forced reading would
+  be a wrong sentence on a right table. The fallback at placeholder
+  exhaustion names none. Recorded, not built: the SQL author declaring
+  `-- reading: <name>` under the metric template, validated like a
+  lint — the follow-up if the live run shows the router omitting it.
+- **The grounding line (Part E).** U-WHO failed exactly when a money
+  column was added beside the count (3 with, 2 without); the preamble
+  says, after the who-rule that adds name columns: beyond those names,
+  answer only the columns the question asks for. Golden fixtures
+  regenerated deliberately.
+- **Fixture note.** A legacy or caption-less table turn reads `[table:
+  result set]`; a run_sql table turn reads `[table: <caption>]`, and
+  after Part C `[table: Reading: <name>. <caption>]` when the answer
+  named one.
+- **Recorded, not built.** `USING` joins stay invisible to the step
+  scan (0 live uses); a recursive CTE reads its self-reference as an
+  unknown plain table; a literal-first predicate (`'CLOSED' =
+  ih.to_status`) is not read; `_repeated_tables` dedupes siblings by
+  table name, so two aliases of one table on the same one side never
+  repeat each other (W3 reps 2/3/5's shape — silent today by that
+  hole, silent after by the declared conditions) — an alias-keyed
+  sibling rule is a rider for a later pass.
+
+Predictions for the re-run (`2026-09-04-close-pass`):
+
+| row | mechanism | prediction |
+|---|---|---|
+| AMB1 | the DISTINCT-CTE anti-join and the ON-filtered LEFT JOIN anti-join are both silent; the row's only content check passes trivially | 5/5 |
+| W-F | the CTE body's sum is vouched by the terminal condition; the caption names the reading when the router passes it | ≥ 3/5 (threshold 0.6); a rep omitting `reading` fails `contains` only |
+| U-WHO | the count shape is silent already; the money shape is vouched but names `ava`, not `nova`; the grounding line steers away from the money column | ≥ 4/5 if the line holds; the residual is the two-reading ambiguity the note records |
+| S2 | reps writing EXISTS verify; a CTE⟂CTE composite join without DISTINCT stays warn-capped; a hidden fan is a `fan_out_override` warn instead of `rate_saturated` (same exit) | ≥ 2/5; 3/5 if the EXISTS steer lands in one more rep |
+| W3 | the self-join CTEs are vouched by the received-once conditions (replay: silent) | holds 5/5 |
+| B2 | no text format to complete: the fabricated transcript shapes cannot occur; the prose-after-primer nudge likely remains, one per rep | nudges 14 → about 5; no rep exhausts the budget; ≥ 4/5 |
+| MT1–MT4, W1, W-E | history pairs unchanged; only the loop's working messages change shape | hold 5/5 |
+| whole bank | native tool results are a strong "answer in prose now" cue | watch total nudges (36) and any new budget refusal |
+| INVARIANT | no content path weakened; the lint sees more, not less | ok |
+
+Watch-for: any statement the CTE rule leaves alone that fans (the
+replay shows none beyond S2); any `fan_out_override` outside S2; any
+trail detail containing "reading not declared"; W-F reps with no
+`Reading:` line; a provider error on the tool-message sequence — a
+route failure on the first multi-step turn, so one B2 rep runs before
+the full bank; prose-after-results nudges rising on rows that were
+clean.
+
+Deferred, with reasons: the asynchronous `update_state` summary
+refresh — the synchronous cost is bounded (one LLM call every K turns,
+visible in the trail) and the one-turn-in-flight design would need a
+second in-flight operation, a design change, post-Phase-5; W4/W2 under
+ASSOC — association verification is the design item, the blocks keep;
+Table-MUST — S2's yes/no evidence stays here for the revisit.
