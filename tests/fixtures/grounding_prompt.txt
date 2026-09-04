@@ -13,6 +13,9 @@ by position.
 When the question asks who, join id columns to their
 human-readable name columns via the join paths below, so the
 result names people and suppliers rather than bare ids.
+Beyond those names, answer only the columns the question asks for;
+do not add columns it did not request (a count question returns
+the count, not a money column beside it).
 Relative windows ("last N days", "last week", "this week")
 end on the data's final day, inclusive, as a half-open range:
 column >= last_day - N + 1 days AND column < last_day + 1 day,
