@@ -17,7 +17,7 @@ from pydantic import ValidationError
 from engine.config.models import ToolName
 from engine.ports.types import ToolSpec
 from engine.tools.base import Tool
-from engine.tools.envelope import ToolInvocation
+from engine.tools.envelope import ToolInvocation, TurnContext
 
 
 class UnknownToolError(Exception):
@@ -52,7 +52,13 @@ class ToolRegistry:
             for _, tool in sorted(self._tools.items())
         ]
 
-    def invoke(self, name: ToolName | str, arguments: dict[str, Any]) -> ToolInvocation:
+    def invoke(
+        self,
+        name: ToolName | str,
+        arguments: dict[str, Any],
+        *,
+        context: TurnContext | None = None,
+    ) -> ToolInvocation:
         try:
             tool_name = ToolName(name)
         except ValueError:
@@ -75,7 +81,7 @@ class ToolRegistry:
                 error=f"Invalid arguments — {details}",
             )
         try:
-            return tool.run(params)
+            return tool.run_in_context(params, context)
         except Exception as exc:
             # Domain failures are handled inside tools with better
             # messages; this catch-all keeps a future harness alive

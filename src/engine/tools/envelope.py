@@ -340,6 +340,13 @@ class SqlAttempt(BaseModel):
     # error on every round it blocks. Never on an executed attempt: it
     # is hard — a resend that keeps the confession is blocked again.
     placeholder_lint: str | None = None
+    # The ungrounded-key challenge (Backlog Pass, the same turn 20:
+    # 123 appeared in no result, question, or grounding), recorded the
+    # same way as the other repairable lints: beside error on the
+    # blocking round, and on an EXECUTED attempt when the licensed
+    # resend still binds the key — the Verifier's
+    # run_sql.ungrounded_key_override.
+    key_lint: str | None = None
 
 
 class RunSqlEvidence(BaseModel):

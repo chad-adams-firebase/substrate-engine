@@ -7,7 +7,30 @@ shapes a comparison operator, a cast, a timestamp, or a harmless
 comment must never trip (user amendment: `<>`, `a < b`, `x <= y` are
 operators, not placeholders)."""
 
-from engine.tools.key_lint import lint_placeholders, split_comments
+from pathlib import Path
+
+import pytest
+
+from engine.substrates.jsonl import read_rows
+from engine.substrates.models import DictionaryRow
+from engine.substrates.pack_data import load_dictionary_map
+from engine.tools.entities import EntityCatalog, known_values
+from engine.tools.envelope import KnownKey
+from engine.tools.key_lint import lint_placeholders, lint_ungrounded_keys, split_comments
+
+PACK = Path(__file__).parent.parent / "packs" / "invoiceguard"
+
+
+@pytest.fixture(scope="module")
+def catalog():
+    return EntityCatalog.from_substrates(
+        read_rows(PACK / "substrates" / "dictionary.jsonl", DictionaryRow),
+        load_dictionary_map(PACK / "dictionary_map.yaml"),
+    )
+
+
+def known(*texts, keys=(), grounding=""):
+    return known_values(list(texts), list(keys), grounding)
 
 # packs/invoiceguard/work.db conversation 1, turn 20, attempts 1 and 2,
 # verbatim (2026-09-04). Attempt 1 failed to parse; attempt 2 executed
@@ -109,3 +132,67 @@ def test_split_comments_steps_over_literals_and_spans_block_comments():
     assert "'a -- not a comment'" in stripped
     assert "it''s" in stripped
     assert "multi" not in stripped and "tail" not in stripped
+
+
+# --- The ungrounded-key lint -------------------------------------------
+
+
+def test_the_recorded_literal_is_challenged_on_its_own_table(catalog):
+    """Turn 20: 123 appeared in no result, question, or grounding —
+    turn 19 had shown INV-00002 and never an id."""
+    reason = lint_ungrounded_keys(
+        T20_PLACEHOLDER_ATTEMPT, catalog,
+        known("What was that invoice's history?", keys=[KnownKey(column="invoices.invoice_number", value="INV-00002")]),
+    )
+    assert reason == (
+        "Key check: `invoice_history.invoice_id = 123` — 123 appears in no "
+        "result, question, or grounding this conversation has seen. Filter on "
+        "a key the conversation carries, or ask the user which one is meant. "
+        "If the value came from the user, resend the statement unchanged."
+    )
+
+
+def test_a_key_the_conversation_showed_passes(catalog):
+    sql = "SELECT ih.to_status AS to_status FROM invoice_history ih WHERE ih.invoice_id = 440"
+    assert lint_ungrounded_keys(sql, catalog, known(keys=[KnownKey(column="invoices.id", value="440")])) is None
+    assert lint_ungrounded_keys(sql, catalog, known("show invoice 440")) is None
+    assert lint_ungrounded_keys(sql, catalog, known(grounding="... id = 440 ...")) is None
+    assert lint_ungrounded_keys(sql, catalog, known("nothing here")) is not None
+
+
+def test_legitimate_literals_never_trip(catalog):
+    """Thresholds, dates, LIMIT, enum values, a revision, a line number:
+    not id-like. The user's own item code and rule code (S2, ZT-CR147)
+    and a name column are never challenged; casefold reads Orin as orin."""
+    for sql, texts in (
+        ("SELECT COUNT(*) AS n FROM invoices WHERE invoice_total > 100 AND revision = 1 LIMIT 5", ()),
+        ("SELECT COUNT(*) AS n FROM invoices WHERE status IN ('CLOSED', 'NO_REVIEW_NEEDED')", ()),
+        ("SELECT COUNT(*) AS n FROM invoices WHERE received_at >= DATE '2026-03-20'", ()),
+        ("SELECT COUNT(*) AS n FROM invoice_lines WHERE line_number = 3", ()),
+        ("SELECT COUNT(*) AS n FROM invoice_lines l WHERE l.item_code = 'SVC-4410'",
+         ("What share of item SVC-4410 service hours were flagged?",)),
+        ("SELECT COUNT(*) AS n FROM compliance_rules WHERE rule_code = 'CR-147'", ()),
+        ("SELECT COUNT(*) AS n FROM findings WHERE rule_name = 'duplicate_line'", ()),
+        ("SELECT COUNT(*) AS n FROM invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE s.name = 'Ravenswood Extrusion'", ()),
+        ("SELECT COUNT(*) AS n FROM users u WHERE u.short_name = 'orin'", ("How many days has Orin worked?",)),
+        ("SELECT COUNT(*) AS n FROM invoices i WHERE i.supplier_id = (SELECT id FROM suppliers WHERE code = 'RVX01')",
+         ("How many invoices from RVX01?",)),
+    ):
+        assert lint_ungrounded_keys(sql, catalog, known(*texts)) is None, sql
+
+
+def test_an_invented_natural_key_is_challenged_and_an_in_list_names_its_missing_members(catalog):
+    reason = lint_ungrounded_keys(
+        "SELECT 1 FROM invoices WHERE invoice_number = 'INV-99999'", catalog, known("the invoice")
+    )
+    assert reason is not None and "`invoices.invoice_number = 'INV-99999'`" in reason
+    reason = lint_ungrounded_keys(
+        "SELECT 1 FROM invoices i WHERE i.id IN (1, 2, 3)", catalog, known("invoices 1 and 2")
+    )
+    assert reason is not None
+    assert "`invoices.id IN (1, 2, 3)` — 3 appears in no result" in reason
+
+
+def test_the_key_challenge_licenses_a_resend(catalog):
+    reason = lint_ungrounded_keys(T20_PLACEHOLDER_ATTEMPT, catalog, known())
+    assert reason is not None and reason.endswith("resend the statement unchanged.")

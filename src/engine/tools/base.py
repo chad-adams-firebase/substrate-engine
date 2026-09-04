@@ -14,7 +14,7 @@ from typing import Any, ClassVar
 from pydantic import BaseModel
 
 from engine.config.models import SubstrateName, ToolName
-from engine.tools.envelope import ToolEvidence, ToolInvocation, ToolOutput
+from engine.tools.envelope import ToolEvidence, ToolInvocation, ToolOutput, TurnContext
 
 
 class Tool(ABC):
@@ -24,6 +24,14 @@ class Tool(ABC):
 
     @abstractmethod
     def run(self, params: BaseModel) -> ToolInvocation: ...
+
+    def run_in_context(
+        self, params: BaseModel, context: TurnContext | None
+    ) -> ToolInvocation:
+        """run(), with what the harness knows of the conversation
+        (Backlog Pass). The default ignores it: only a tool that
+        grounds on prior turns — run_sql — overrides this."""
+        return self.run(params)
 
     def ok(
         self,

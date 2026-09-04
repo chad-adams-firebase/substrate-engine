@@ -42,11 +42,13 @@ from engine.tools.envelope import (
     SqlAttempt,
     Table,
     ToolInvocation,
+    TurnContext,
 )
 from engine.tools.enum_lint import lint_enum_literals
 from engine.tools.grounding import match_metrics, render_grounding
 from engine.tools.interval_lint import lint_interval_arithmetic
-from engine.tools.key_lint import lint_placeholders
+from engine.tools.entities import EntityCatalog, known_values
+from engine.tools.key_lint import lint_placeholders, lint_ungrounded_keys
 from engine.tools.sql_lint import lint_fan_out
 
 _SQL_FENCE = re.compile(r"```(?:sql)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
@@ -164,6 +166,11 @@ class RunSql(Tool):
         self._display = display or DisplaySettings()
 
     def run(self, params: RunSqlInput) -> ToolInvocation:
+        return self.run_in_context(params, None)
+
+    def run_in_context(
+        self, params: RunSqlInput, context: TurnContext | None
+    ) -> ToolInvocation:
         if _SQL_SHAPED.search(params.question):
             # Steering error, recoverable: the router re-asks with the
             # user's question instead of its own SQL.
@@ -179,12 +186,29 @@ class RunSql(Tool):
         except SubstrateStoreError as exc:
             return self.fail(params, str(exc))
 
+        # The conversation's keys (Backlog Pass): the grounding states
+        # the key the anchor turn carried, and the key lint grounds every
+        # id-like literal against what the conversation has shown — the
+        # user's words, every key a result or filter carried, and the
+        # grounding itself. Never params.question: that is the router's
+        # paraphrase, and at turn 9 of the session it already carried
+        # the invented name. No context means direct tool use with no
+        # conversation, and the key lint has nothing to ground against.
+        anchors = [anchor for anchor in (context.anchors if context else []) if anchor.column]
         prompt = render_grounding(
             dictionary,
             dictionary_map,
             stats,
             dialect=self._settings.dialect,
             question=params.question,
+            anchors=anchors,
+            anchors_turn=context.anchors_turn if context else 0,
+        )
+        catalog = EntityCatalog.from_substrates(dictionary, dictionary_map)
+        known = (
+            known_values(context.texts, context.known_keys, prompt)
+            if context is not None
+            else None
         )
         readings = _declared_readings(match_metrics(params.question, dictionary_map))
         messages = [
@@ -205,12 +229,14 @@ class RunSql(Tool):
         fan_out_challenged = False
         enum_challenged = False
         interval_challenged = False
+        key_challenged = False
 
         for _ in range(self._settings.max_repair_attempts + 1):
             response = self._llm.complete(messages, temperature=0.0)
             sql = extract_sql(response.content)
             row_count: int | None = None
             placeholder_reason: str | None = None
+            key_reason: str | None = None
             lint_reason: str | None = None
             enum_reason: str | None = None
             interval_reason: str | None = None
@@ -227,6 +253,8 @@ class RunSql(Tool):
                     placeholder_reason = lint_placeholders(
                         sql, comment_source=fenced_block(response.content)
                     )
+                if self._settings.ungrounded_key_lint and known is not None:
+                    key_reason = lint_ungrounded_keys(sql, catalog, known)
                 if self._settings.fan_out_lint:
                     lint_reason = lint_fan_out(sql, dictionary, dictionary_map)
                 if self._settings.enum_literal_lint:
@@ -240,6 +268,9 @@ class RunSql(Tool):
                 # that keeps it is blocked again until the budget exhausts.
                 if placeholder_reason is not None:
                     blocking.append(placeholder_reason)
+                if key_reason is not None and not key_challenged:
+                    key_challenged = True
+                    blocking.append(key_reason)
                 if lint_reason is not None and not fan_out_challenged:
                     fan_out_challenged = True
                     blocking.append(lint_reason)
@@ -277,6 +308,7 @@ class RunSql(Tool):
                                 lint=lint_reason,
                                 enum_lint=enum_reason,
                                 interval_lint=interval_reason,
+                                key_lint=key_reason,
                             )
                         )
                         return self.ok(
@@ -311,6 +343,7 @@ class RunSql(Tool):
                     enum_lint=enum_reason,
                     interval_lint=interval_reason,
                     placeholder_lint=placeholder_reason,
+                    key_lint=key_reason,
                 )
             )
             messages.append(Message(role="assistant", content=response.content))

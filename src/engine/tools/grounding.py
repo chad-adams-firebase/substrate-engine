@@ -10,6 +10,7 @@ SQL everywhere, so it changes fixtures deliberately or not at all.
 import re
 
 from engine.substrates.models import CanonicalMetric, DictionaryMap, DictionaryRow, StatsRow
+from engine.tools.envelope import Anchor
 
 # Top values are shown only for genuinely enum-ish columns.
 _TOP_VALUES_MAX_DISTINCT = 12
@@ -56,6 +57,8 @@ def render_grounding(
     *,
     dialect: str,
     question: str | None = None,
+    anchors: list[Anchor] | None = None,
+    anchors_turn: int = 0,
 ) -> str:
     # Renders the full dictionary and map verbatim — right at this
     # reference pack's size; an enterprise-scale pack may need
@@ -126,6 +129,24 @@ def render_grounding(
             lines.append(f"aggregation: {metric.aggregation_sql}")
         if metric.notes:
             lines.append(f"notes: {metric.notes}")
+
+    # The keys the conversation established (Backlog Pass): a follow-up
+    # about "that invoice" filters on the key the anchor turn's evidence
+    # carried, verbatim — turn 20 of the 30-turn session had INV-00002
+    # in front of it and wrote invoice_id = 123. Rendered only when a
+    # prior turn carried one, so a first turn's prompt is unchanged.
+    keyed = [anchor for anchor in (anchors or []) if anchor.column]
+    if keyed:
+        lines.append("")
+        lines.append("## Keys this conversation established")
+        for anchor in keyed:
+            value = anchor.value if anchor.value.isdigit() else f"'{anchor.value}'"
+            where = f"turn {anchors_turn}" if anchors_turn else "an earlier turn"
+            lines.append(f"{anchor.column} = {value} ({anchor.kind}, {where})")
+        lines.append(
+            "A follow-up about that entity filters on this key, verbatim; "
+            "never on a value the conversation has not shown."
+        )
 
     lines.append("")
     lines.append("## Tables and columns")

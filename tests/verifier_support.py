@@ -42,11 +42,12 @@ def sql_invocation(
     final_lint: str | None = None,
     final_enum_lint: str | None = None,
     final_interval_lint: str | None = None,
+    final_key_lint: str | None = None,
     column_formats: dict | None = None,
 ) -> ToolInvocation:
     columns = list(rows[0].keys()) if rows else []
     evidence = None
-    lints = (final_lint, final_enum_lint, final_interval_lint)
+    lints = (final_lint, final_enum_lint, final_interval_lint, final_key_lint)
     if any(reason is not None for reason in lints):
         # The overridden-challenge shape: the executed (final, clean-
         # error) attempt still carries the lint reason(s).
@@ -56,10 +57,10 @@ def sql_invocation(
             attempts=[
                 SqlAttempt(raw_response=sql, sql=sql, error=error,
                            lint=final_lint, enum_lint=final_enum_lint,
-                           interval_lint=final_interval_lint),
+                           interval_lint=final_interval_lint, key_lint=final_key_lint),
                 SqlAttempt(raw_response=sql, sql=sql, row_count=len(rows),
                            lint=final_lint, enum_lint=final_enum_lint,
-                           interval_lint=final_interval_lint),
+                           interval_lint=final_interval_lint, key_lint=final_key_lint),
             ],
         )
     return ToolInvocation(

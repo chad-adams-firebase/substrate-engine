@@ -17,7 +17,7 @@ import re
 
 from engine.tools.enum_lint import lint_enum_literals
 from engine.tools.interval_lint import lint_interval_arithmetic
-from engine.tools.key_lint import lint_placeholders
+from engine.tools.key_lint import lint_placeholders, lint_ungrounded_keys
 from engine.tools.sql_lint import lint_fan_out
 from tests import test_tool_enum_lint as enum_fixtures
 from tests import test_tool_interval_lint as interval_fixtures
@@ -134,3 +134,21 @@ def test_the_placeholder_challenge_names_no_table_at_all():
         assert challenge is not None
         assert tables_named(challenge, _tables(enum_fixtures.DICTIONARY)) == set()
         assert "resend" not in challenge
+
+
+def test_the_key_challenge_names_only_the_queried_table():
+    """Backlog Pass: `invoice_history.invoice_id = 123` is the statement's
+    own table; the key's target (invoices.id) is never named, so the
+    challenge cannot read as "query invoices instead"."""
+    from engine.substrates.jsonl import read_rows
+    from engine.substrates.models import DictionaryRow
+    from engine.substrates.pack_data import load_dictionary_map
+    from engine.tools.entities import EntityCatalog
+    from pathlib import Path
+
+    pack = Path(__file__).parent.parent / "packs" / "invoiceguard"
+    dictionary = read_rows(pack / "substrates" / "dictionary.jsonl", DictionaryRow)
+    catalog = EntityCatalog.from_substrates(dictionary, load_dictionary_map(pack / "dictionary_map.yaml"))
+    challenge = lint_ungrounded_keys(key_fixtures.T20_PLACEHOLDER_ATTEMPT, catalog, set())
+    _assert_keeps_its_tables(challenge, key_fixtures.T20_PLACEHOLDER_ATTEMPT, dictionary)
+    assert "invoices.id" not in challenge

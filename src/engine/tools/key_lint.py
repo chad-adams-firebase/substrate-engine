@@ -11,13 +11,24 @@ a value belongs (`:invoice_id`, `?`, `$1`, `{{…}}`, `<id>`). A HARD
 challenge: run_sql blocks on it every time it fires, with no license
 to resend unchanged, because the comment is the model's own confession.
 
+lint_ungrounded_keys — an equality or IN predicate binding an id-like
+column (a dictionary primary or foreign key, or a map-declared key
+column; never a name column) to a literal that appears in no result,
+question, or grounding the conversation has put in front of the model.
+A normal challenge: one repair round, then the licensed resend executes
+and the Verifier's run_sql.ungrounded_key_override takes the badge.
+
 Both lints follow the challenge principle: they name what is wrong
 with this statement and never a table — not even the one queried.
 """
 
 import re
+from typing import TYPE_CHECKING
 
 from engine.tools.sql_scopes import STRING_LITERAL
+
+if TYPE_CHECKING:  # entities imports this module; the lint takes its catalog by duck type
+    from engine.tools.entities import EntityCatalog
 
 # The vocabulary of a model telling itself a value is invented.
 _ADMISSION = re.compile(
@@ -116,3 +127,46 @@ def lint_placeholders(sql: str, *, comment_source: str | None = None) -> str | N
             "user which one is meant."
         )
     return " ".join(reasons) or None
+
+
+def _spell(value: str) -> str:
+    return value if value.isdigit() else f"'{value}'"
+
+
+def lint_ungrounded_keys(
+    sql: str, catalog: "EntityCatalog", known: set[str]
+) -> str | None:
+    """The reason a statement binds an id-like column to a value the
+    conversation never showed, or None. known is the casefolded value
+    set from tools.entities.known_values — the user's words, every key
+    a result or filter carried, and the grounding text. The challenge
+    names the predicate as written, on the table the statement already
+    queries, and nothing else (the challenge principle)."""
+    from engine.tools.entities import equality_literals
+
+    ungrounded: list[str] = []
+    for literal in equality_literals(sql, catalog):
+        if not literal.id_like:
+            continue
+        missing = [v for v in literal.values if v.casefold() not in known]
+        if not missing:
+            continue
+        qualified = f"{literal.table}.{literal.column}"
+        if len(literal.values) == 1:
+            predicate = f"`{qualified} = {_spell(literal.values[0])}`"
+        else:
+            listed = ", ".join(_spell(v) for v in literal.values)
+            predicate = f"`{qualified} IN ({listed})`"
+        values = ", ".join(_spell(v) for v in missing)
+        verb = "appears" if len(missing) == 1 else "appear"
+        ungrounded.append(
+            f"Key check: {predicate} — {values} {verb} in no result, question, "
+            "or grounding this conversation has seen."
+        )
+    if not ungrounded:
+        return None
+    return " ".join(ungrounded) + (
+        " Filter on a key the conversation carries, or ask the user which "
+        "one is meant. If the value came from the user, resend the "
+        "statement unchanged."
+    )

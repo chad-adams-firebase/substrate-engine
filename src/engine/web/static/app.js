@@ -741,7 +741,7 @@
   // a challenge stopped it before execution, executed when it ran, and
   // an executed attempt that still carries a challenge is an override
   // — the licensed resend the Verifier warns on.
-  const LINT_KINDS = [["lint", "Fan-out check"], ["enum_lint", "Enum check"], ["interval_lint", "Interval check"]];
+  const LINT_KINDS = [["lint", "Fan-out check"], ["enum_lint", "Enum check"], ["interval_lint", "Interval check"], ["placeholder_lint", "Placeholder check"], ["key_lint", "Key check"]];
   function attemptOutcome(attempt) {
     const challenged = LINT_KINDS.some(([key]) => attempt[key]);
     const executed = attempt.row_count !== null && attempt.row_count !== undefined;

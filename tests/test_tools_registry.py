@@ -127,3 +127,19 @@ def test_registry_catch_all_converts_crashes_to_error_envelopes(tool_pack):
     invocation = tools.invoke("run_sql", {"question": "x"})
     assert invocation.status == "error"
     assert "boom" in invocation.error
+
+
+def test_invoke_hands_the_context_to_the_tool_and_others_ignore_it(tool_pack):
+    """Backlog Pass: run_in_context is the ABC's default (run(params));
+    a tool that grounds on the conversation overrides it, every other
+    tool accepts the context and ignores it."""
+    from engine.tools.envelope import TurnContext
+
+    from tests.conftest import build_tool_registry
+
+    registry, _ = build_tool_registry(tool_pack, [])
+    context = TurnContext(texts=["hello"])
+    invocation = registry.invoke(
+        "query_univariate_stats", {"table": "invoices"}, context=context
+    )
+    assert invocation.status == "ok", invocation.error

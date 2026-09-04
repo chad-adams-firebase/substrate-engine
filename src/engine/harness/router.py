@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict
 from engine.harness.events import EventLog
 from engine.harness.state import HistoryTurn, ToolSelection
 from engine.ports.types import LLMResponse, Message, ToolCall
-from engine.tools.envelope import ToolInvocation
+from engine.tools.envelope import ToolInvocation, TurnContext
 from engine.tools.registry import ToolRegistry, UnknownToolError
 
 
@@ -110,6 +110,7 @@ def execute_selections(
     selections: list[ToolSelection],
     evidence_so_far: int,
     events: EventLog,
+    context: TurnContext | None = None,
 ) -> list[SelectionResult]:
     """Run the router's selections in order. Hallucinated tool names
     become notes, not invocations — registry.invoke treats an unknown
@@ -120,7 +121,9 @@ def execute_selections(
     for selection in selections:
         events.emit("tool:" + selection.name, "start", f"Running {selection.name}…")
         try:
-            invocation = registry.invoke(selection.name, selection.arguments)
+            invocation = registry.invoke(
+                selection.name, selection.arguments, context=context
+            )
         except UnknownToolError:
             available = ", ".join(name.value for name in registry.names())
             results.append(

@@ -8,8 +8,13 @@ from engine.ports.types import LLMResponse
 from engine.tools.run_sql import extract_sql, guard_select_only
 
 from tests.conftest import build_tool_registry
+from engine.tools.envelope import Anchor, KnownKey, TurnContext
+
 from tests.golden_grounding import (
+    ANCHORS,
+    ANCHORS_TURN,
     GOLDEN,
+    GOLDEN_ANCHORED,
     GOLDEN_METRIC,
     METRIC_QUESTION,
     render_snapshot_grounding,
@@ -638,3 +643,93 @@ def test_a_leading_confession_is_read_before_extract_sql_drops_it(tool_pack):
     assert invocation.status == "ok", invocation.error
     assert invocation.evidence.attempts[0].placeholder_lint is not None
     assert "replace 1 with the actual invoice id" in invocation.evidence.attempts[0].error
+
+
+HISTORY_123 = LLMResponse(
+    content=(
+        "```sql\nSELECT ih.from_status AS from_status, ih.to_status AS to_status "
+        "FROM invoice_history ih WHERE ih.invoice_id = 123 ORDER BY ih.at\n```"
+    ),
+    model="scripted",
+)
+HISTORY_BY_NUMBER = LLMResponse(
+    content=(
+        "```sql\nSELECT ih.from_status AS from_status, ih.to_status AS to_status "
+        "FROM invoice_history ih JOIN invoices i ON i.id = ih.invoice_id "
+        "WHERE i.invoice_number = 'INV-00002' ORDER BY ih.at\n```"
+    ),
+    model="scripted",
+)
+CONTEXT = TurnContext(
+    texts=["Show me an example invoice for it.", "What was that invoice's history?"],
+    anchors=[Anchor(kind="invoice", column="invoices.invoice_number", value="INV-00002", source="cell")],
+    anchors_turn=19,
+    known_keys=[KnownKey(column="invoices.invoice_number", value="INV-00002")],
+)
+
+
+def test_ungrounded_key_draws_one_repair_round_and_the_repair_runs(tool_pack):
+    """Turn 20 without the comment: 123 was never shown, the key is
+    INV-00002 — one challenge, then the statement on the known key
+    executes with a clean trail."""
+    registry, ports = build_tool_registry(tool_pack, [HISTORY_123, HISTORY_BY_NUMBER])
+    invocation = registry.invoke(
+        "run_sql", {"question": "What was that invoice's history?"}, context=CONTEXT
+    )
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert attempts[0].error.startswith("Key check: `invoice_history.invoice_id = 123`")
+    assert attempts[0].key_lint == attempts[0].error
+    assert attempts[0].row_count is None
+    assert attempts[1].key_lint is None and attempts[1].error is None
+    stub = ports.get(PortName.LLM)
+    assert attempts[0].error in stub.calls[1]["messages"][-1].content
+
+
+def test_ungrounded_key_resent_unchanged_executes_with_the_override_recorded(tool_pack):
+    registry, _ = build_tool_registry(tool_pack, [HISTORY_123, HISTORY_123])
+    invocation = registry.invoke(
+        "run_sql", {"question": "What was that invoice's history?"}, context=CONTEXT
+    )
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert attempts[1].error is None
+    assert attempts[1].key_lint is not None and attempts[1].key_lint.startswith("Key check:")
+
+
+def test_the_tools_own_question_never_grounds_a_key(tool_pack):
+    """The laundering rule: turn 9's router paraphrase already carried
+    the invented name. Only the user's words in the context count."""
+    registry, _ = build_tool_registry(tool_pack, [HISTORY_123, HISTORY_BY_NUMBER])
+    context = CONTEXT.model_copy(update={"texts": ["that invoice's history"]})
+    invocation = registry.invoke(
+        "run_sql", {"question": "history of invoice 123"}, context=context
+    )
+    assert invocation.evidence.attempts[0].key_lint is not None
+
+
+def test_without_a_conversation_the_key_lint_is_silent(tool_pack):
+    registry, _ = build_tool_registry(tool_pack, [HISTORY_123])
+    invocation = registry.invoke("run_sql", {"question": "history of invoice 123"})
+    assert invocation.status == "ok", invocation.error
+    assert invocation.evidence.attempts[0].key_lint is None
+
+
+def test_the_grounding_states_the_conversations_keys(tool_pack, snapshot_outputs):
+    """A prior turn's key leads the tables section, verbatim; with no
+    anchors the prompt is byte-identical to the plain golden."""
+    anchored = render_snapshot_grounding(
+        snapshot_outputs, anchors=ANCHORS, anchors_turn=ANCHORS_TURN
+    )
+    assert anchored == GOLDEN_ANCHORED.read_text(encoding="utf-8")
+    assert "## Keys this conversation established" in anchored
+    assert "invoices.invoice_number = 'INV-00426' (invoice, turn 1)" in anchored
+    assert "filters on this key, verbatim" in anchored
+    assert render_snapshot_grounding(snapshot_outputs) == GOLDEN.read_text(encoding="utf-8")
+    assert render_snapshot_grounding(snapshot_outputs, anchors=[]) == GOLDEN.read_text(encoding="utf-8")
+    # And it reaches the SQL author's system message.
+    registry, ports = build_tool_registry(tool_pack, [HISTORY_BY_NUMBER])
+    registry.invoke("run_sql", {"question": "that invoice's history?"}, context=CONTEXT)
+    system = ports.get(PortName.LLM).calls[0]["messages"][0].content
+    assert "invoices.invoice_number = 'INV-00002' (invoice, turn 19)" in system

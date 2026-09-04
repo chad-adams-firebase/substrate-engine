@@ -1568,3 +1568,28 @@ def test_quoted_identifiers_face_the_same_bounds():
     assert result.disposition == "refused"
     (finding,) = result.plausibility
     assert finding.check == "run_sql.filtered_count_bound"
+
+
+def test_an_overridden_key_challenge_costs_the_badge():
+    """Backlog Pass: the licensed resend still binds a key the
+    conversation never showed — warn, [UNVERIFIED], never refused."""
+    from engine.verifier.models import DraftAnswer
+
+    from tests.verifier_support import make_verifier, sql_invocation
+
+    verifier, llm = make_verifier([], stats=[])
+    invocation = sql_invocation(
+        "SELECT ih.to_status AS to_status FROM invoice_history ih WHERE ih.invoice_id = 123",
+        [{"to_status": "LAPSED"}],
+        final_key_lint="Key check: `invoice_history.invoice_id = 123` — 123 appears in no result",
+    )
+    result = verifier.verify(
+        question="that invoice's history?",
+        draft=DraftAnswer(kind="table_passthrough", text=invocation.output.sql),
+        evidence=[invocation],
+        attempt=1,
+    )
+    assert result.disposition == "unverified"
+    checks = [(r.check, r.severity) for r in result.plausibility]
+    assert ("run_sql.ungrounded_key_override", "warn") in checks
+    assert llm.calls == []

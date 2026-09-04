@@ -117,6 +117,8 @@ def test_the_inspector_reads_what_the_interludes_recorded():
     assert '["lint", "Fan-out check"]' in script
     assert '["enum_lint", "Enum check"]' in script
     assert '["interval_lint", "Interval check"]' in script
+    assert '["placeholder_lint", "Placeholder check"]' in script
+    assert '["key_lint", "Key check"]' in script
     assert '"executed · override"' in script and '"blocked by lint"' in script
     assert "finding.check" in script and "finding.severity" in script
     assert "claim.start" in script and "claim.end" in script and "claim.status" in script

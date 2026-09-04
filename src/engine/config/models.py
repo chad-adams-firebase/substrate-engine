@@ -135,6 +135,13 @@ class RunSqlSettings(BaseModel):
     # budget exhausts and the tool fails — an invented key executed is
     # another invoice's answer, verified.
     placeholder_lint: bool = True
+    # An id-like column (a primary or foreign key, or a map-declared key
+    # column) bound to a literal that no result, question, or grounding
+    # in the conversation carried draws one repair round (Backlog Pass,
+    # turn 20's invoice_id = 123); the model may resend unchanged and
+    # the override warns. Silent when the tool runs with no conversation
+    # context (direct tool use) — there is nothing to ground against.
+    ungrounded_key_lint: bool = True
 
 
 class SearchBusinessDocsSettings(BaseModel):

@@ -469,6 +469,24 @@ class RunSqlCheck(SubstrateCheck):
                         ),
                     )
                 )
+            # 0e: an ungrounded-key challenge the model overrode (Backlog
+            # Pass, turn 20): the executed statement still binds an
+            # id-like column to a value the conversation never showed,
+            # so its rows may be another entity's — [UNVERIFIED] for
+            # this stated reason. (The placeholder challenge has no
+            # override: it is hard and never executes.)
+            if final.key_lint is not None and final.error is None:
+                findings.append(
+                    PlausibilityFinding(
+                        check="run_sql.ungrounded_key_override",
+                        severity="warn",
+                        detail=(
+                            "the executed statement still binds a key the "
+                            "conversation never showed: "
+                            f"{final.key_lint}"
+                        ),
+                    )
+                )
 
         is_single_cell = (
             len(queried) == 1
