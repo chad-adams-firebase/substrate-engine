@@ -97,6 +97,67 @@ class Table(BaseModel):
     column_formats: dict[str, ColumnFormat] = {}
 
 
+# --- What a turn establishes, and what a tool may know of the
+# --- conversation it runs in (Backlog Pass) ----------------------------
+
+
+class Anchor(BaseModel):
+    """One column's word for the entity a turn established — "that
+    invoice" resolved: the kind, the column (canonical "table.column";
+    "" for a declared about that names no column), the value, and where
+    it came from — a single-valued result column, a filter literal, or
+    the router's own declaration. A turn's anchors of one kind all
+    describe one entity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    column: str
+    value: str
+    source: Literal["cell", "filter", "declared"]
+
+
+class KnownKey(BaseModel):
+    """A key value the conversation has seen: a cell of an id-like
+    result column, or a literal a statement filtered an id-like column
+    on. What the ungrounded-key lint grounds against."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    column: str  # canonical "table.column"
+    value: str
+
+
+class TurnAnchors(BaseModel):
+    """What one finished turn's evidence established, kept on the
+    checkpoint's history: the determinate entities (for the router's
+    transcript and the Verifier's anchor check) and every key value
+    (for the key lint). turn is explicit so a consumer can say
+    "turn 6 established"."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    turn: int = 0
+    entities: list[Anchor] = []
+    keys: list[KnownKey] = []
+
+
+class TurnContext(BaseModel):
+    """What a tool may know of the conversation it runs in — handed by
+    the harness, never checkpointed: the user's own words (history
+    questions, the current question, the running summary — never a
+    tool argument, which is the router's paraphrase), the most recent
+    turn's determinate entities, and every key the conversation has
+    seen. run_sql grounds on it; no other tool reads it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    texts: list[str] = []
+    anchors: list[Anchor] = []
+    anchors_turn: int = 0
+    known_keys: list[KnownKey] = []
+
+
 # --- Per-tool outputs (what the drafting LLM may see) -----------------
 
 

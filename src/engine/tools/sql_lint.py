@@ -102,6 +102,8 @@ from dataclasses import dataclass
 
 from engine.substrates.models import DictionaryMap, DictionaryRow
 from engine.tools.sql_scopes import (
+    EQUALS_LITERAL,
+    IN_LITERALS,
     KEYWORDS,
     QueryScope,
     from_table_of,
@@ -335,11 +337,8 @@ _WHERE_REGION = re.compile(
 # '' in scope text and read back by index from the scope. The word
 # before IN must be the column itself, so NOT IN never reads as IN;
 # <>, != and a literal-first comparison never match.
-_EQUALS_LITERAL = re.compile(r"(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s*=\s*''")
-_IN_LITERALS = re.compile(
-    r"(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s+in\s*\(\s*''(?:\s*,\s*'')*\s*\)",
-    re.IGNORECASE,
-)
+_EQUALS_LITERAL = EQUALS_LITERAL  # promoted to sql_scopes (Backlog Pass)
+_IN_LITERALS = IN_LITERALS
 _PAREN_OR_OR = re.compile(r"[()]|\bor\b", re.IGNORECASE)
 
 

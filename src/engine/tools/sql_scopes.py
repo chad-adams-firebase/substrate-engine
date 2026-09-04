@@ -38,6 +38,16 @@ _QUOTED_OR_LITERAL = re.compile(r"'(?:[^']|'')*'|\"([A-Za-z_]\w*)\"")
 # literals are its own before the index becomes ''.
 _PLACEHOLDER = re.compile("'\x00(\\d+)\x00'")
 SUBQUERY = "(__subquery__)"
+# A column restricted to blanked string literals — read back by index
+# with literals_between. The word before IN must be the column itself,
+# so NOT IN never reads as IN; <>, != , <= and a literal-first
+# comparison never match. Shared by the fan-out lint's declared
+# conditions, the key lint, and the anchor harvest (Backlog Pass).
+EQUALS_LITERAL = re.compile(r"(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s*=\s*''")
+IN_LITERALS = re.compile(
+    r"(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s+in\s*\(\s*''(?:\s*,\s*'')*\s*\)",
+    re.IGNORECASE,
+)
 _SUBQUERY_START = re.compile(r"\s*(select|with)\b", re.IGNORECASE)
 # `name AS (` — with an optional column list — right before a subquery
 # is a CTE head; `FROM (` / `JOIN (` right before one is a derived table.
