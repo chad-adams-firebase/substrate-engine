@@ -130,3 +130,107 @@
     PLAY-R1's questions, green on their own rows; turn 4's "that
     supplier" resolves only through the summary. The summary
     assertions read the summary turn 4 ends with (through turn 3).
+
+# Backlog Pass (2026-09-04): the two wrong-but-verified outcomes of the
+# developer's 30-turn browser session (gate verdict §5), reconstructed
+# as rows so the class is regression-visible. Both are user-sourced:
+# the questions are the session's own words.
+
+- id: MT-KEY
+  provenance: user-sourced
+  category: multiturn
+  gold: gold/mt_key_invoice_history.py
+  expected_gold:
+    invoice_number: INV-00426
+    invoice_total: 43117.71
+    ties: 1
+    transitions: 5
+    day: "2026-03-20"
+    actor: ava
+  threshold: 0.8
+  turns:
+    - question: "Which invoice has the highest invoice total?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: name_from_gold, field: invoice_number}
+          - {kind: numeric_from_gold, field: invoice_total}
+    - question: "What was that invoice's history?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: route, mode: must_include, tools: [run_sql]}
+          # The wrong-invoice sentinel: every transition of the anchored
+          # invoice falls on the gold's `day`; any other day in the
+          # answer is another invoice's history. A history query carries
+          # no date literal, so the SQL caption cannot trip it.
+          - {kind: not_contains, pattern: "2026-(?!03-20)\\d\\d-\\d\\d", regex: true}
+          - {kind: pattern_count, pattern: "2026-03-20", from_gold_field: transitions, breach: false}
+          - {kind: name_from_gold, field: actor, breach: false}
+  note: >-
+    Verdict §5, turns 19–20: "that invoice's history" ran
+    `WHERE ih.invoice_id = 123 -- Replace 123 with the actual invoice
+    ID` and returned another invoice's transitions, verified. Turn 1
+    establishes one invoice by its number (the id never surfaces, as
+    in the session); turn 2 must read that invoice's history. Breach
+    semantics: wrong-invoice content at exit 0 — a transition on any
+    day but the anchored invoice's — is wrong-but-verified, and the
+    regex sentinel breaches; the transition count and the auditor are
+    breach: false, since a rep that omits the timestamp or actor
+    column is a miss, not a wrong answer. The regex's day and the About
+    text are derived from the gold and pinned by expected_gold, so a
+    world change rots the row rather than silently passing it.
+    Threshold 0.8: the anchor turn's SQL shape varies (the model may or
+    may not project the id), and a rep that overrides the key challenge
+    ships [UNVERIFIED] — a miss, never a breach.
+
+- id: MT-ANCHOR
+  provenance: user-sourced
+  category: multiturn
+  gold: gold/mt_anchor_rule.py
+  expected_gold:
+    rule: line_note
+    fire_count: 505
+    wrong_rule: new_supplier
+    wrong_count: 197
+  threshold: 0.8
+  turns:
+    - question: "Which rule fires most often?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: name_from_gold, field: rule}
+          - {kind: numeric_from_gold, field: fire_count}
+    - question: "Tell me more about that rule."
+      expect:
+        # An honest refusal is allowed: line_note has no rules-engine
+        # function and no business doc. What is not allowed is an answer
+        # about another rule, or a clarify — the transcript names it.
+        exit: [0, 2, 3]
+        assertions:
+          # The mechanism assertion this row exists for: the About line
+          # the answer declares (or the anchor check would have caught).
+          - {kind: contains, pattern: "About: line_note.", at_exit: [0, 2]}
+          - {kind: not_contains, pattern: new_supplier, at_exit: [0, 2]}
+    - question: "How many findings has it produced?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: numeric_from_gold, field: fire_count}
+  note: >-
+    Verdict §5, turns 6–9: turn 6 named line_note in a one-row table,
+    the router saw only its SQL in the history, and turns 7 and 9
+    answered about new_supplier — verified. Turn 1 is the session's
+    turn 6; turn 2 asks about "that rule" and must be about line_note;
+    turn 3 is the session's turn 9 with executed gold. Breach
+    semantics: an About line naming a rule other than the anchor's, or
+    new_supplier anywhere in the answer, at exit 0 or 2 is the drift
+    and not_contains breaches at exit 0; turn 3's count of any other
+    rule (197 is new_supplier's) at exit 0 is a contradicted breach.
+    A turn-2 refusal is not drift and passes. Threshold 0.8: turn 2's
+    answer source is open (the CKG constant, the dictionary, a
+    re-query) and a rep may clarify instead, which is a miss.

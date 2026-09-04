@@ -149,3 +149,36 @@ def test_mt4_exercises_the_summary_live():
     assert kinds.count("summary_contains") == 2
     assert "summary_excludes_figures" in kinds and "route" in kinds
     assert all(r.context is None for r in bank.rows if r.id != "MT4")
+
+
+def test_backlog_pass_rows_reconstruct_the_sessions_two_findings():
+    """Backlog Pass: MT-KEY and MT-ANCHOR carry the 30-turn session's
+    wrong-but-verified shapes with executed gold and breach semantics
+    stated in their notes; the bank is 67 rows."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    assert len(bank.rows) == 67
+    key = next(r for r in bank.rows if r.id == "MT-KEY")
+    anchor = next(r for r in bank.rows if r.id == "MT-ANCHOR")
+    for row in (key, anchor):
+        assert row.provenance == "user-sourced" and row.threshold == 0.8
+        assert row.context is None
+        assert "Breach semantics" in row.note
+    assert [t.question for t in key.turns] == [
+        "Which invoice has the highest invoice total?",
+        "What was that invoice's history?",
+    ]
+    sentinel = next(a for a in key.turns[1].expect.assertions if a.kind == "not_contains")
+    assert sentinel.regex and sentinel.breach and "03-20" in sentinel.pattern
+    tolerant = [a for a in key.turns[1].expect.assertions if not a.breach]
+    assert sorted(a.kind for a in tolerant) == ["name_from_gold", "pattern_count"]
+    assert [t.question for t in anchor.turns] == [
+        "Which rule fires most often?",
+        "Tell me more about that rule.",
+        "How many findings has it produced?",
+    ]
+    assert anchor.turns[1].expect.exit == [0, 2, 3]
+    about = next(a for a in anchor.turns[1].expect.assertions if a.kind == "contains")
+    assert about.pattern == "About: line_note." and about.at_exit == [0, 2]
+    drift = next(a for a in anchor.turns[1].expect.assertions if a.kind == "not_contains")
+    assert drift.pattern == "new_supplier" and drift.breach
+    assert anchor.turns[2].expect.exit == [0]
