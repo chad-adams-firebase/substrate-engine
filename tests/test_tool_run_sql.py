@@ -574,3 +574,67 @@ def test_readings_carry_the_matched_metrics_interpretations(tool_pack):
     plain = registry.invoke("run_sql", {"question": "how many invoices?"})
     assert plain.status == "ok", plain.error
     assert plain.output.readings == []
+
+
+PLACEHOLDER_ATTEMPT = LLMResponse(
+    content=(
+        "```sql\nSELECT ih.from_status AS from_status, ih.to_status AS to_status "
+        "FROM invoice_history ih\nWHERE ih.invoice_id = 123 -- Replace 123 with the actual invoice ID\n"
+        "ORDER BY ih.at\n```"
+    ),
+    model="scripted",
+)
+HISTORY_CLEAN = LLMResponse(
+    content=(
+        "```sql\nSELECT ih.from_status AS from_status, ih.to_status AS to_status "
+        "FROM invoice_history ih WHERE ih.invoice_id = 1 ORDER BY ih.at\n```"
+    ),
+    model="scripted",
+)
+
+
+def test_placeholder_challenge_is_hard_and_exhausts_the_budget(tool_pack):
+    """Backlog Pass: the 30-turn session's turn 20 kept its confession;
+    a resend unchanged is blocked again, every round, until the tool
+    fails — never executed, never verified as another invoice's
+    history. The challenge rides beside error on every attempt."""
+    registry, ports = build_tool_registry(
+        tool_pack, [PLACEHOLDER_ATTEMPT, PLACEHOLDER_ATTEMPT, PLACEHOLDER_ATTEMPT]
+    )
+    invocation = registry.invoke("run_sql", {"question": "that invoice's history?"})
+    assert invocation.status == "error"
+    assert "Placeholder check:" in invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 3  # max_repair_attempts + 1, every one blocked
+    for attempt in attempts:
+        assert attempt.row_count is None
+        assert attempt.placeholder_lint is not None
+        assert attempt.error.startswith("Placeholder check:")
+    stub = ports.get(PortName.LLM)
+    assert attempts[0].error in stub.calls[1]["messages"][-1].content
+
+
+def test_placeholder_challenge_repaired_executes_without_a_trace_on_the_winner(tool_pack):
+    registry, _ = build_tool_registry(tool_pack, [PLACEHOLDER_ATTEMPT, HISTORY_CLEAN])
+    invocation = registry.invoke("run_sql", {"question": "that invoice's history?"})
+    assert invocation.status == "ok", invocation.error
+    attempts = invocation.evidence.attempts
+    assert len(attempts) == 2
+    assert attempts[0].placeholder_lint is not None
+    assert attempts[1].placeholder_lint is None and attempts[1].error is None
+
+
+def test_a_leading_confession_is_read_before_extract_sql_drops_it(tool_pack):
+    leading = LLMResponse(
+        content=(
+            "```sql\n-- replace 1 with the actual invoice id\n"
+            "SELECT ih.from_status AS from_status FROM invoice_history ih "
+            "WHERE ih.invoice_id = 1 ORDER BY ih.at\n```"
+        ),
+        model="scripted",
+    )
+    registry, _ = build_tool_registry(tool_pack, [leading, HISTORY_CLEAN])
+    invocation = registry.invoke("run_sql", {"question": "that invoice's history?"})
+    assert invocation.status == "ok", invocation.error
+    assert invocation.evidence.attempts[0].placeholder_lint is not None
+    assert "replace 1 with the actual invoice id" in invocation.evidence.attempts[0].error

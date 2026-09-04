@@ -17,9 +17,11 @@ import re
 
 from engine.tools.enum_lint import lint_enum_literals
 from engine.tools.interval_lint import lint_interval_arithmetic
+from engine.tools.key_lint import lint_placeholders
 from engine.tools.sql_lint import lint_fan_out
 from tests import test_tool_enum_lint as enum_fixtures
 from tests import test_tool_interval_lint as interval_fixtures
+from tests import test_tool_key_lint as key_fixtures
 from tests import test_tool_sql_lint as fan_out_fixtures
 from tests.verifier_support import W3_REP4_SQL
 
@@ -121,3 +123,14 @@ def test_the_helper_reads_parentheses_too():
     }
     assert tables_named("(a (nested invoices) note)", tables) == {"invoices"}
     assert tables_named("the invoices_to_lines path", tables) == set()
+
+
+def test_the_placeholder_challenge_names_no_table_at_all():
+    """Backlog Pass: the confession is about a value, and the challenge
+    says so without naming even the queried table — the stricter form,
+    like the interval check."""
+    for sql in (key_fixtures.T20_PLACEHOLDER_ATTEMPT, key_fixtures.T20_BIND_ATTEMPT):
+        challenge = lint_placeholders(sql)
+        assert challenge is not None
+        assert tables_named(challenge, _tables(enum_fixtures.DICTIONARY)) == set()
+        assert "resend" not in challenge

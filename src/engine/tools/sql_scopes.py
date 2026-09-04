@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 _STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
+STRING_LITERAL = _STRING_LITERAL  # the same pattern, for the lints that blank literals
 _LINE_COMMENT = re.compile(r"--[^\n]*")
 # A double-quoted identifier, or a single-quoted literal to step over
 # so a string containing "quotes" is never edited.

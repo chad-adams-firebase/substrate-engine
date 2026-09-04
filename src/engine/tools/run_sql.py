@@ -46,6 +46,7 @@ from engine.tools.envelope import (
 from engine.tools.enum_lint import lint_enum_literals
 from engine.tools.grounding import match_metrics, render_grounding
 from engine.tools.interval_lint import lint_interval_arithmetic
+from engine.tools.key_lint import lint_placeholders
 from engine.tools.sql_lint import lint_fan_out
 
 _SQL_FENCE = re.compile(r"```(?:sql)?\s*\n(.*?)```", re.DOTALL | re.IGNORECASE)
@@ -80,6 +81,15 @@ _SQL_SHAPED = re.compile(
     r"|\bJOIN\b.*\bON\b",
     re.DOTALL,
 )
+
+
+def fenced_block(response_text: str) -> str:
+    """The fenced SQL block as the model wrote it — leading comments
+    included — or the whole response when there is no fence. The
+    placeholder lint reads comments from this, since extract_sql pops
+    leading comment lines and a confession on the first line counts."""
+    match = _SQL_FENCE.search(response_text)
+    return match.group(1) if match else response_text
 
 
 def extract_sql(response_text: str) -> str | None:
@@ -200,6 +210,7 @@ class RunSql(Tool):
             response = self._llm.complete(messages, temperature=0.0)
             sql = extract_sql(response.content)
             row_count: int | None = None
+            placeholder_reason: str | None = None
             lint_reason: str | None = None
             enum_reason: str | None = None
             interval_reason: str | None = None
@@ -212,12 +223,23 @@ class RunSql(Tool):
             elif (guard_error := guard_select_only(sql)) is not None:
                 error = guard_error
             else:
+                if self._settings.placeholder_lint:
+                    placeholder_reason = lint_placeholders(
+                        sql, comment_source=fenced_block(response.content)
+                    )
                 if self._settings.fan_out_lint:
                     lint_reason = lint_fan_out(sql, dictionary, dictionary_map)
                 if self._settings.enum_literal_lint:
                     enum_reason = lint_enum_literals(sql, dictionary)
                 if self._settings.interval_arithmetic_lint:
                     interval_reason = lint_interval_arithmetic(sql, dictionary)
+                # The placeholder challenge is HARD: it blocks on every
+                # attempt it fires, with no license to resend unchanged —
+                # the comment is the model's own word that the value is
+                # invented (the 30-turn session's turn 20), and a resend
+                # that keeps it is blocked again until the budget exhausts.
+                if placeholder_reason is not None:
+                    blocking.append(placeholder_reason)
                 if lint_reason is not None and not fan_out_challenged:
                     fan_out_challenged = True
                     blocking.append(lint_reason)
@@ -288,6 +310,7 @@ class RunSql(Tool):
                     lint=lint_reason,
                     enum_lint=enum_reason,
                     interval_lint=interval_reason,
+                    placeholder_lint=placeholder_reason,
                 )
             )
             messages.append(Message(role="assistant", content=response.content))

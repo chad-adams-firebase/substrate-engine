@@ -274,6 +274,11 @@ class SqlAttempt(BaseModel):
     # interval by a literal — the Verifier's
     # run_sql.interval_arithmetic_override.
     interval_lint: str | None = None
+    # The placeholder challenge (Backlog Pass, turn 20's `invoice_id =
+    # 123 -- Replace 123 with the actual invoice ID`), recorded beside
+    # error on every round it blocks. Never on an executed attempt: it
+    # is hard — a resend that keeps the confession is blocked again.
+    placeholder_lint: str | None = None
 
 
 class RunSqlEvidence(BaseModel):

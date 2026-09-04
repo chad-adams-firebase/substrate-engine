@@ -127,6 +127,14 @@ class RunSqlSettings(BaseModel):
     # is an interval of 0.041667 seconds, not 0.0417 days, and it
     # verified); the model may resend unchanged and the override warns.
     interval_arithmetic_lint: bool = True
+    # A comment admitting a value is invented ("Replace 123 with the
+    # actual invoice ID") or a bind shape standing where a value belongs
+    # (:invoice_id, ?, $1, {{…}}, <id>) is a HARD challenge (Backlog
+    # Pass, the 30-turn session's turn 20): it blocks on every attempt
+    # it fires, with no license to resend unchanged, until the repair
+    # budget exhausts and the tool fails — an invented key executed is
+    # another invoice's answer, verified.
+    placeholder_lint: bool = True
 
 
 class SearchBusinessDocsSettings(BaseModel):
