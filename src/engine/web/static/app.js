@@ -527,11 +527,13 @@
   function updateNudge() {
     const due = state.conversationId !== null && state.nudgeAfterTurns !== null
       && state.turnCount >= state.nudgeAfterTurns && !state.nudgeDismissed;
-    nudge.hidden = !due;
-    if (due) {
-      nudgeText.textContent = `This conversation is ${state.turnCount} turns long. `
-        + "Its earlier turns now reach the assistant as a summary; a fresh conversation keeps answers sharp.";
-    }
+    // The text is written before the strip is shown, and an empty
+    // strip is never shown: a banner with nothing to say is hidden.
+    nudgeText.textContent = due
+      ? `This conversation is ${state.turnCount} turns long. `
+        + "Its earlier turns now reach the assistant as a summary; a fresh conversation keeps answers sharp."
+      : "";
+    nudge.hidden = !due || !nudgeText.textContent;
   }
   function summarySection() {
     if (!state.summary) return null;

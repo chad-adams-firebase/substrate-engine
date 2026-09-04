@@ -159,3 +159,28 @@ def test_the_page_nudges_past_the_threshold_with_in_page_state_only():
     assert "localStorage" not in script and "sessionStorage" not in script
     css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
     assert ".banner {" in css and ".summary-text" in css
+
+
+def test_the_banner_starts_hidden_and_is_never_shown_empty():
+    """The Phase 5 gate's one failed done-check (verdict §7): `.banner
+    { display: flex }` outranked the browser's `[hidden] { display:
+    none }`, so an empty strip was painted from first paint. Pinned:
+    the markup ships the attribute, the stylesheet lets the attribute
+    win, and updateNudge writes the text before it unhides and never
+    unhides an empty strip. The jsdom smoke (fresh page: no strip;
+    at the threshold: strip with text; dismissed: gone) is the
+    executed check; this test reads the source."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    assert '<div class="banner" id="nudge" hidden>' in html
+    css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    rules = {}
+    for selector, body in re.findall(r"([^{}]+)\{([^{}]*)\}", css):
+        rules[selector.strip()] = body
+    assert "display: flex" in rules[".banner"]
+    assert "display: none" in rules[".banner[hidden]"]
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    start = script.index("function updateNudge()")
+    body = script[start:script.index("function summarySection", start)]
+    assert body.index("nudgeText.textContent =") < body.index("nudge.hidden =")
+    assert "nudge.hidden = !due || !nudgeText.textContent;" in body

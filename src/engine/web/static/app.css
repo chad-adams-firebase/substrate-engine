@@ -135,6 +135,10 @@ code { font-family: var(--mono); font-size: 13px; }
   display: flex; align-items: center; gap: 10px; padding: 8px 20px; font-size: 13px;
   background: #fffbeb; color: var(--ink); border-bottom: 1px solid var(--warn);
 }
+/* An author `display` beats the browser's `[hidden] { display: none }`,
+   so the strip was painted empty from first paint (the Phase 5 gate's
+   one failed done-check). The attribute wins again here. */
+.banner[hidden] { display: none; }
 .banner span { flex: 1; }
 .banner button {
   font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--warn);
