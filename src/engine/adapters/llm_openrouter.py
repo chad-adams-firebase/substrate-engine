@@ -9,6 +9,11 @@ The API key comes from the OPENROUTER_API_KEY environment variable,
 never from pack config: secrets are env-only. A missing key is not an
 error until the first completion call, so that `engine info` can
 resolve and report this adapter without credentials.
+
+The router loop's transcript is sent natively: an assistant message
+that requested tools carries them as tool_calls, and a role="tool"
+message answers one call by id — the same shape the provider returns
+the calls in, so the model never sees a prose rendering of them.
 """
 
 import json
@@ -57,7 +62,7 @@ class OpenRouterLLM:
     ) -> LLMResponse:
         response = self._connect().chat.completions.create(
             model=self._settings.model,
-            messages=[{"role": m.role, "content": m.content} for m in messages],
+            messages=[self._to_openai_message(m) for m in messages],
             tools=[self._to_openai_tool(t) for t in tools] if tools else NOT_GIVEN,
             temperature=temperature,
         )
@@ -66,6 +71,7 @@ class OpenRouterLLM:
             content=choice.content or "",
             tool_calls=[
                 ToolCall(
+                    id=call.id,
                     name=call.function.name,
                     arguments=json.loads(call.function.arguments),
                 )
@@ -95,6 +101,38 @@ class OpenRouterLLM:
                 http_client=self._http_client,
             )
         return self._client
+
+    @staticmethod
+    def _to_openai_message(message: Message) -> dict:
+        """The wire shape of one message. A tool message answers a call
+        by id; an assistant message that requested tools carries them
+        natively, with content None when it said nothing — mirroring
+        the provider's own response shape, since some OpenRouter routes
+        reject an empty text block. A plain message stays the two-key
+        dict: no empty tool_calls list leaks onto it."""
+        if message.role == "tool":
+            return {
+                "role": "tool",
+                "tool_call_id": message.tool_call_id,
+                "content": message.content,
+            }
+        if message.tool_calls:
+            return {
+                "role": "assistant",
+                "content": message.content or None,
+                "tool_calls": [
+                    {
+                        "id": call.id,
+                        "type": "function",
+                        "function": {
+                            "name": call.name,
+                            "arguments": json.dumps(call.arguments),
+                        },
+                    }
+                    for call in message.tool_calls
+                ],
+            }
+        return {"role": message.role, "content": message.content}
 
     @staticmethod
     def _to_openai_tool(tool: ToolSpec) -> dict:

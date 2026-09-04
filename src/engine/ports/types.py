@@ -10,11 +10,31 @@ from typing import Any
 from pydantic import BaseModel
 
 
+class ToolCall(BaseModel):
+    """A tool invocation requested by the LLM in its response."""
+
+    # The provider's call id; "" from stubs — the harness synthesizes
+    # one, so the transcript's tool message always has a call to answer.
+    id: str = ""
+    name: str
+    arguments: dict[str, Any]
+
+
 class Message(BaseModel):
-    """One turn of LLM conversation input (OpenAI-compatible shape)."""
+    """One turn of LLM conversation input (OpenAI-compatible shape).
+
+    Roles: system | user | assistant | tool. A plain message is a role
+    and its content; an assistant message that requested tools also
+    carries them, and a tool message answers one of those calls by id.
+    Message(role=..., content=...) stays the whole constructor for the
+    plain case."""
 
     role: str  # "system" | "user" | "assistant" | "tool"
     content: str
+    # An assistant message that requested tools: the calls it made.
+    tool_calls: list[ToolCall] = []
+    # A tool message: the id of the call this content answers.
+    tool_call_id: str | None = None
 
 
 class ToolSpec(BaseModel):
@@ -23,13 +43,6 @@ class ToolSpec(BaseModel):
     name: str
     description: str
     input_schema: dict[str, Any]
-
-
-class ToolCall(BaseModel):
-    """A tool invocation requested by the LLM in its response."""
-
-    name: str
-    arguments: dict[str, Any]
 
 
 class TokenUsage(BaseModel):

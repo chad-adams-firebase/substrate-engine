@@ -92,7 +92,7 @@ def test_every_checkpointed_engine_type_survives_the_msgpack_allowlist():
         ToolSelection,
         TurnState,
     )
-    from engine.ports.types import Message
+    from engine.ports.types import Message, ToolCall
     from engine.verifier.models import (
         AttemptRecord,
         ClaimRecord,
@@ -125,12 +125,25 @@ def test_every_checkpointed_engine_type_survives_the_msgpack_allowlist():
         summary="In turn 1 the user asked for the row count (see turn 1).",
         summary_through_turn=1,
         question="q",
-        scratch=[Message(role="assistant", content="a")],
+        scratch=[
+            Message(
+                role="assistant",
+                content="",
+                tool_calls=[
+                    ToolCall(id="c1", name="run_sql", arguments={"question": "q"})
+                ],
+            ),
+            Message(role="tool", tool_call_id="c1", content="{}"),
+        ],
         evidence=[sql_invocation("SELECT 1 AS n", [{"n": 146}])],
         iterations=2,
         decision=RouteDecision(
             kind="tools",
-            selections=[ToolSelection(name="run_sql", arguments={"question": "q"})],
+            selections=[
+                ToolSelection(
+                    name="run_sql", arguments={"question": "q"}, call_id="c1"
+                )
+            ],
         ),
         draft=MarkdownAnswer(text="146 rows."),
         draft_raw="{{e0.table.rows[0].n}} rows.",

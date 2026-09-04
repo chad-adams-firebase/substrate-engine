@@ -139,6 +139,9 @@ class ToolSelection(BaseModel):
     # act() turns an unknown name into feedback, not a crash.
     name: str
     arguments: dict[str, Any]
+    # The id the transcript's tool message answers: the provider's, or
+    # one the router synthesizes when the response carried none.
+    call_id: str = ""
 
 
 class RouteDecision(BaseModel):

@@ -42,8 +42,8 @@ from engine.harness.router import (
     build_router_messages,
     context_window,
     execute_selections,
-    results_message,
-    summarize_invocation,
+    tool_results,
+    with_call_ids,
 )
 from engine.harness.placeholders import referenced_indices
 from engine.harness.state import (
@@ -222,6 +222,17 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 raw_response=response.content or None,
             )
         deps.events.emit("route", "finish", f"decision: {decision.kind}")
+        if decision.kind == "tools":
+            # Every call gets the id its tool message will answer — the
+            # provider's, or a synthesized one when the response
+            # carried none (stubs) — before the echo replays it.
+            decision = decision.model_copy(
+                update={
+                    "selections": with_call_ids(
+                        decision.selections, state.iterations + 1
+                    )
+                }
+            )
         update: dict = {
             "decision": decision,
             "iterations": state.iterations + 1,
@@ -233,23 +244,24 @@ def build_graph(deps: GraphDeps, checkpointer=None):
         return update
 
     def act(state: TurnState) -> dict:
-        invocations, unknown = execute_selections(
+        results = execute_selections(
             deps.registry,
             state.decision.selections,
             evidence_so_far=len(state.evidence),
             events=deps.events,
         )
-        summaries = [
-            summarize_invocation(
-                invocation,
-                evidence_index=len(state.evidence) + offset,
-                max_rows=deps.settings.max_rows_in_context,
-            )
-            for offset, invocation in enumerate(invocations)
-        ]
+        invocations = [r.invocation for r in results if r.invocation is not None]
+        # The transcript invariant: route's assistant tool-call message
+        # is followed by exactly one role="tool" message per call, in
+        # order. Nudges — the protocol violation in route, the untabular
+        # give_answer in _draft_table — stay role="user", which is valid
+        # after tool messages.
         return {
             "evidence": state.evidence + invocations,
-            "scratch": state.scratch + [results_message(summaries, unknown)],
+            "scratch": state.scratch
+            + tool_results(
+                results, len(state.evidence), deps.settings.max_rows_in_context
+            ),
             "decision": None,
         }
 

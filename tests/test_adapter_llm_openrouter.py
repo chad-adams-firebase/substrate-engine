@@ -13,7 +13,7 @@ from engine.adapters.llm_openrouter import (
     OpenRouterLLM,
     OpenRouterSettings,
 )
-from engine.ports.types import Message, ToolSpec
+from engine.ports.types import Message, ToolCall, ToolSpec
 
 BASE_URL = "https://example.test/api/v1"
 
@@ -135,6 +135,7 @@ def test_response_parsing_tool_calls(adapter):
     assert len(response.tool_calls) == 1
     assert response.tool_calls[0].name == "run_sql"
     assert response.tool_calls[0].arguments == {"query": "SELECT 1"}
+    assert response.tool_calls[0].id == "call-1"
 
 
 def test_missing_key_fails_at_first_call_not_construction(monkeypatch):
@@ -170,3 +171,67 @@ def test_usage_is_captured_when_reported(adapter):
 def test_usage_defaults_to_none_when_absent(adapter):
     response = adapter().complete([Message(role="user", content="Hi.")])
     assert response.usage is None
+
+
+def test_assistant_tool_calls_are_sent_natively(adapter, captured):
+    """The loop transcript replays a prior call in the provider's own
+    shape — an assistant message carrying tool_calls, content None
+    when it said nothing — never as prose the model could complete."""
+    adapter().complete(
+        [
+            Message(role="user", content="Count rows."),
+            Message(
+                role="assistant",
+                content="",
+                tool_calls=[
+                    ToolCall(id="call-1", name="run_sql", arguments={"question": "q"})
+                ],
+            ),
+        ]
+    )
+
+    sent = captured["body"]["messages"][1]
+    assert set(sent) == {"role", "content", "tool_calls"}
+    assert sent["role"] == "assistant"
+    assert sent["content"] is None
+    (call,) = sent["tool_calls"]
+    assert call["id"] == "call-1"
+    assert call["type"] == "function"
+    assert call["function"]["name"] == "run_sql"
+    assert json.loads(call["function"]["arguments"]) == {"question": "q"}
+
+
+def test_tool_results_are_sent_as_tool_messages(adapter, captured):
+    adapter().complete(
+        [
+            Message(role="user", content="Count rows."),
+            Message(
+                role="assistant",
+                content="",
+                tool_calls=[ToolCall(id="call-1", name="run_sql", arguments={})],
+            ),
+            Message(role="tool", tool_call_id="call-1", content='{"rows": 1}'),
+        ]
+    )
+
+    assert captured["body"]["messages"][2] == {
+        "role": "tool",
+        "tool_call_id": "call-1",
+        "content": '{"rows": 1}',
+    }
+
+
+def test_a_spoken_tool_call_keeps_its_content(adapter, captured):
+    adapter().complete(
+        [
+            Message(
+                role="assistant",
+                content="Let me check.",
+                tool_calls=[ToolCall(id="call-1", name="run_sql", arguments={})],
+            )
+        ]
+    )
+
+    sent = captured["body"]["messages"][0]
+    assert sent["content"] == "Let me check."
+    assert sent["tool_calls"][0]["id"] == "call-1"

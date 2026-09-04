@@ -1,19 +1,30 @@
 """Router-loop mechanics: message assembly, tool execution, and the
-prose feedback that carries results back to the router.
+transcript that carries results back to the router.
 
-Feedback is prose (assistant echo + user message), the run_sql repair
-loop's precedent: we never emit role="tool" messages, so the port's
-Message type needs no tool-call ids. The router sees each result under
-an evidence index — the same index give_answer(evidence_index=...)
-and the drafter's placeholders refer to, one numbering everywhere.
+The loop's working messages are native tool messages: each assistant
+message that requested tools carries them as tool_calls and is
+followed by exactly one role="tool" message per call, in order — the
+transcript invariant. The model never sees a text format it could
+complete. (The Close Pass: the old rendering was prose, "Requested:
+..." then "Tool results: ...", and on B2 the router completed it —
+a fabricated "Tool results:" block for a call it never made, and
+give_answer written as text under the same echo.) Nudges — a protocol
+violation, a give_answer over untabular evidence — remain user
+messages, which are valid after tool messages.
+
+The router sees each result under an evidence index — the same index
+give_answer(evidence_index=...) and the drafter's placeholders refer
+to, one numbering everywhere.
 """
 
 import json
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
+
 from engine.harness.events import EventLog
 from engine.harness.state import HistoryTurn, ToolSelection
-from engine.ports.types import LLMResponse, Message
+from engine.ports.types import LLMResponse, Message, ToolCall
 from engine.tools.envelope import ToolInvocation
 from engine.tools.registry import ToolRegistry, UnknownToolError
 
@@ -66,41 +77,75 @@ def build_router_messages(
     ]
 
 
+def with_call_ids(
+    selections: list[ToolSelection], step: int
+) -> list[ToolSelection]:
+    """Every selection with the id its tool message will answer: the
+    provider's when the response carried one, else call_{step}_{index}
+    — unique within a turn, since step is the router iteration and
+    scratch resets per turn."""
+    return [
+        selection
+        if selection.call_id
+        else selection.model_copy(update={"call_id": f"call_{step}_{index}"})
+        for index, selection in enumerate(selections)
+    ]
+
+
+class SelectionResult(BaseModel):
+    """What one selection came to: the invocation it ran, or — for a
+    tool name the registry does not know — a note saying what exists,
+    and no invocation. One result per selection, so every call gets
+    exactly one tool message (the transcript invariant)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    selection: ToolSelection
+    invocation: ToolInvocation | None = None
+    note: str = ""
+
+
 def execute_selections(
     registry: ToolRegistry,
     selections: list[ToolSelection],
     evidence_so_far: int,
     events: EventLog,
-) -> tuple[list[ToolInvocation], list[str]]:
+) -> list[SelectionResult]:
     """Run the router's selections in order. Hallucinated tool names
-    become feedback lines, not invocations — registry.invoke treats an
-    unknown name as a harness bug, but here the LLM chose it, so the
-    harness absorbs the mistake and tells the model what exists."""
-    invocations: list[ToolInvocation] = []
-    unknown: list[str] = []
+    become notes, not invocations — registry.invoke treats an unknown
+    name as a harness bug, but here the LLM chose it, so the harness
+    absorbs the mistake and tells the model what exists."""
+    results: list[SelectionResult] = []
+    invoked = 0
     for selection in selections:
         events.emit("tool:" + selection.name, "start", f"Running {selection.name}…")
         try:
             invocation = registry.invoke(selection.name, selection.arguments)
         except UnknownToolError:
             available = ", ".join(name.value for name in registry.names())
-            unknown.append(
-                f"There is no tool named {selection.name!r}. "
-                f"Available tools: {available}."
+            results.append(
+                SelectionResult(
+                    selection=selection,
+                    note=(
+                        f"There is no tool named {selection.name!r}. "
+                        f"Available tools: {available}."
+                    ),
+                )
             )
             events.emit(
                 "tool:" + selection.name, "finish", "unknown tool — skipped"
             )
             continue
-        invocations.append(invocation)
-        index = evidence_so_far + len(invocations) - 1
+        results.append(SelectionResult(selection=selection, invocation=invocation))
+        index = evidence_so_far + invoked
+        invoked += 1
         detail = (
             f"evidence[{index}] ok"
             if invocation.status == "ok"
             else f"error: {invocation.error}"
         )
         events.emit("tool:" + selection.name, "finish", detail)
-    return invocations, unknown
+    return results
 
 
 def summarize_invocation(
@@ -129,21 +174,40 @@ def summarize_invocation(
 
 
 def assistant_echo(response: LLMResponse, selections: list[ToolSelection]) -> Message:
-    """The router's own turn, replayed into the loop transcript. Tool-
-    calling responses usually have empty content, so synthesize one."""
-    if response.content.strip():
-        return Message(role="assistant", content=response.content)
-    requested = "; ".join(
-        f"{s.name}({json.dumps(s.arguments, sort_keys=True)})" for s in selections
+    """The router's own turn, replayed into the loop transcript as the
+    tool-call message it was: its content as spoken (usually empty),
+    its calls native. No prose stands in for them."""
+    return Message(
+        role="assistant",
+        content=response.content,
+        tool_calls=[
+            ToolCall(id=s.call_id, name=s.name, arguments=s.arguments)
+            for s in selections
+        ],
     )
-    return Message(role="assistant", content=f"Requested: {requested}")
 
 
-def results_message(summaries: list[dict[str, Any]], notes: list[str]) -> Message:
-    lines = ["Tool results:"]
-    lines.extend(
-        json.dumps(summary, sort_keys=True, separators=(",", ":"))
-        for summary in summaries
-    )
-    lines.extend(notes)
-    return Message(role="user", content="\n".join(lines))
+def tool_results(
+    results: list[SelectionResult], evidence_so_far: int, max_rows: int
+) -> list[Message]:
+    """One role="tool" message per result, in order, each answering its
+    selection's call id: the compact summary of an invocation, or the
+    unknown-tool note. Evidence indices count invocations only — an
+    unknown tool never joins the bundle."""
+    messages: list[Message] = []
+    invoked = 0
+    for result in results:
+        if result.invocation is None:
+            content = result.note
+        else:
+            summary = summarize_invocation(
+                result.invocation, evidence_so_far + invoked, max_rows
+            )
+            invoked += 1
+            content = json.dumps(summary, sort_keys=True, separators=(",", ":"))
+        messages.append(
+            Message(
+                role="tool", tool_call_id=result.selection.call_id, content=content
+            )
+        )
+    return messages

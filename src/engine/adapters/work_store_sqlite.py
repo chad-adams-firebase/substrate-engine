@@ -449,7 +449,7 @@ class SqliteWorkStore:
             ToolSelection,
             TurnState,
         )
-        from engine.ports.types import Message
+        from engine.ports.types import Message, ToolCall
         from engine.tools.envelope import ToolInvocation
         from engine.verifier.models import (
             AttemptRecord,
@@ -461,6 +461,7 @@ class SqliteWorkStore:
         return JsonPlusSerializer(
             allowed_msgpack_modules=[
                 Message,
+                ToolCall,  # nested in the scratch messages' tool_calls
                 HistoryTurn,
                 ToolName,
                 SubstrateName,

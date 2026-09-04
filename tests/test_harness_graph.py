@@ -259,9 +259,18 @@ def test_untabular_evidence_index_feeds_back_and_reroutes(tool_pack):
         tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
         tool_call("refuse", {"reason": "cannot present that as a table"}),
     ]
-    session, _, _ = build_ask_session(tool_pack, responses)
+    session, ports, _ = build_ask_session(tool_pack, responses)
     result = session.ask("show the primer as a table")
     assert result.outcome.kind == "refuse"
+    # The nudge is a user message after the primer's tool message —
+    # valid there, and not a format the model could pattern-complete.
+    from engine.config.models import PortName
+
+    llm = ports.get(PortName.LLM)
+    nudged = llm.calls[2]["messages"]
+    assert nudged[-1].role == "user"
+    assert "not table-shaped" in nudged[-1].content
+    assert nudged[-2].role == "tool"
 
 
 def test_iteration_cap_is_a_refuse_outcome_without_an_llm_call(tool_pack):
@@ -533,3 +542,53 @@ def test_question_of_turn_reads_both_history_layouts():
     assert question_of_turn(records, 2) is None  # turn 2 raised; no record
     assert question_of_turn(records, 3) == "And per supplier?"
     assert question_of_turn([], 1) is None
+
+
+# --- Close Pass: the loop transcript is native tool messages ------------
+
+
+def test_the_second_router_call_sees_native_tool_history(tool_pack):
+    """B2 fabricated a "Tool results:" block and wrote give_answer as
+    text under a "Requested:" echo — completions of the old prose
+    rendering. The router now sees its own call as an assistant
+    tool_calls message and the result as the tool message answering
+    it, so there is no text format to complete."""
+    import json
+
+    from engine.config.models import PortName
+
+    responses = [STATS_CALL, tool_call("refuse", {"reason": "enough"})]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    session.ask("how many invoice rows are there?")
+
+    llm = ports.get(PortName.LLM)
+    m = llm.calls[1]["messages"]
+    assert m[-2].role == "assistant"
+    assert m[-2].tool_calls[0].name == "query_univariate_stats"
+    assert m[-1].role == "tool"
+    assert m[-1].tool_call_id == m[-2].tool_calls[0].id
+    assert json.loads(m[-1].content)["evidence_index"] == 0
+    assert not any("Tool results:" in msg.content for msg in m)
+    assert not any(msg.content.startswith("Requested:") for msg in m)
+
+
+def test_a_hallucinated_tool_gets_exactly_one_tool_message(tool_pack):
+    """The transcript invariant holds for a name the registry does not
+    know: the call still gets its one tool message — the note naming
+    what exists — and nothing joins the evidence."""
+    from engine.config.models import PortName
+
+    responses = [
+        tool_call("query_the_database"),
+        tool_call("refuse", {"reason": "no such tool"}),
+    ]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("q")
+
+    llm = ports.get(PortName.LLM)
+    m = llm.calls[1]["messages"]
+    assert m[-1].role == "tool"
+    assert m[-1].tool_call_id == m[-2].tool_calls[0].id
+    assert "query_the_database" in m[-1].content
+    assert "run_sql" in m[-1].content
+    assert result.tools_used == []

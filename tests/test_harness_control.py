@@ -27,12 +27,16 @@ def test_control_specs_are_llm_ready():
 def test_real_tool_calls_become_a_tools_decision_in_order():
     decision = parse_route(
         _response(
-            ToolCall(name="app_primer", arguments={}),
+            ToolCall(id="a", name="app_primer", arguments={}),
             ToolCall(name="run_sql", arguments={"question": "how many?"}),
         )
     )
     assert decision.kind == "tools"
     assert [s.name for s in decision.selections] == ["app_primer", "run_sql"]
+    # The provider's call id rides along for the tool message that
+    # answers it; a stub's blank id is left for the router to fill.
+    assert decision.selections[0].call_id == "a"
+    assert decision.selections[1].call_id == ""
 
 
 def test_real_calls_win_over_control_calls_in_the_same_response():
@@ -136,8 +140,7 @@ def test_a_text_form_control_verb_is_the_call_it_plainly_is():
         "answer", "prose", 3,
     )
     assert decision.parsed_from_text is True
-    # The loop transcript's echo prefix, a bare call, and the other verbs.
-    assert parse_route(_response(content='Requested: give_answer({"shape":"prose"})')).kind == "answer"
+    # A bare call, and the other verbs.
     assert parse_route(_response(content="give_answer()")).kind == "answer"
     refuse = parse_route(_response(content='refuse({"reason": "no", "what_would_work": "x"})'))
     assert (refuse.kind, refuse.reason, refuse.what_would_work) == ("refuse", "no", "x")
@@ -156,6 +159,10 @@ def test_text_form_calls_still_validate_and_prose_still_nudges():
         'The answer is give_answer({"shape":"prose"}).',  # not the whole response
         'traverse_code_knowledge_graph({"entry": "abc", "hop": "callees"})',  # a real tool
         "The answer is probably 42.",
+        # Close Pass: the old loop transcript's echo prefix. Nothing
+        # produces it now, so a response wearing it is the model
+        # completing a format it should never have seen.
+        'Requested: give_answer({"shape":"prose"})',
     ):
         with pytest.raises(RouteProtocolViolation) as info:
             parse_route(_response(content=content))

@@ -5,21 +5,23 @@ import json
 
 from engine.harness.events import EventLog
 from engine.harness.router import (
+    SelectionResult,
     assistant_echo,
     build_router_messages,
     execute_selections,
-    results_message,
     summarize_invocation,
+    tool_results,
+    with_call_ids,
 )
 from engine.harness.state import ToolSelection
-from engine.ports.types import LLMResponse, Message
+from engine.ports.types import LLMResponse, Message, ToolCall
 from tests.conftest import build_tool_registry
 
 
 def test_selections_execute_in_order_and_emit_events(tool_pack):
     registry, _ = build_tool_registry(tool_pack)
     events = EventLog()
-    invocations, unknown = execute_selections(
+    results = execute_selections(
         registry,
         [
             ToolSelection(name="app_primer", arguments={}),
@@ -31,12 +33,12 @@ def test_selections_execute_in_order_and_emit_events(tool_pack):
         evidence_so_far=0,
         events=events,
     )
-    assert unknown == []
-    assert [inv.tool.value for inv in invocations] == [
+    assert [r.note for r in results] == ["", ""]
+    assert [r.invocation.tool.value for r in results] == [
         "app_primer",
         "query_univariate_stats",
     ]
-    assert all(inv.status == "ok" for inv in invocations)
+    assert all(r.invocation.status == "ok" for r in results)
     assert [e.node for e in events.events] == [
         "tool:app_primer",
         "tool:app_primer",
@@ -49,16 +51,15 @@ def test_selections_execute_in_order_and_emit_events(tool_pack):
 def test_hallucinated_tool_name_becomes_feedback_not_evidence(tool_pack):
     registry, _ = build_tool_registry(tool_pack)
     events = EventLog()
-    invocations, unknown = execute_selections(
+    (r,) = execute_selections(
         registry,
         [ToolSelection(name="query_the_database", arguments={})],
         evidence_so_far=0,
         events=events,
     )
-    assert invocations == []
-    assert len(unknown) == 1
-    assert "query_the_database" in unknown[0]
-    assert "run_sql" in unknown[0]  # names what exists
+    assert r.invocation is None
+    assert "query_the_database" in r.note
+    assert "run_sql" in r.note  # names what exists
 
 
 def test_bad_arguments_still_produce_an_error_envelope(tool_pack):
@@ -66,14 +67,14 @@ def test_bad_arguments_still_produce_an_error_envelope(tool_pack):
     # invocation comes back status="error" and joins the evidence, so
     # the router sees exactly what went wrong.
     registry, _ = build_tool_registry(tool_pack)
-    invocations, unknown = execute_selections(
+    results = execute_selections(
         registry,
         [ToolSelection(name="query_univariate_stats", arguments={"nope": 1})],
         evidence_so_far=0,
         events=EventLog(),
     )
-    assert unknown == []
-    assert invocations[0].status == "error"
+    assert results[0].note == ""
+    assert results[0].invocation.status == "error"
 
 
 def test_summaries_truncate_tables_visibly(tool_pack):
@@ -107,25 +108,54 @@ def test_summaries_truncate_tables_visibly(tool_pack):
     assert "showing 10 of 50" in truncated["output"]["table"]["note"]
 
 
-def test_echo_and_results_messages_shape():
-    selections = [ToolSelection(name="run_sql", arguments={"question": "q"})]
+def test_echo_is_a_native_call_and_results_are_tool_messages():
+    """The Close Pass: the echo is the tool-call message the router
+    sent — never a "Requested: ..." line — and each result answers its
+    call as a role="tool" message, so there is no text format for the
+    model to complete."""
+    from engine.tools.envelope import RunSqlOutput, Table, ToolInvocation
+
+    selections = [
+        ToolSelection(name="run_sql", arguments={"question": "q"}, call_id="c1")
+    ]
     silent = LLMResponse(content="", tool_calls=[], model="scripted")
     echo = assistant_echo(silent, selections)
     assert echo.role == "assistant"
-    assert 'run_sql({"question": "q"})' in echo.content
+    assert echo.content == ""
+    assert echo.tool_calls == [
+        ToolCall(id="c1", name="run_sql", arguments={"question": "q"})
+    ]
+    assert "Requested" not in echo.content
 
     spoken = LLMResponse(content="Let me check.", tool_calls=[], model="scripted")
-    assert assistant_echo(spoken, selections).content == "Let me check."
+    spoken_echo = assistant_echo(spoken, selections)
+    assert spoken_echo.content == "Let me check."
+    assert spoken_echo.tool_calls == echo.tool_calls
 
-    message = results_message(
-        [{"evidence_index": 0, "tool": "run_sql", "status": "ok"}],
-        notes=["There is no tool named 'x'."],
+    ok = SelectionResult(
+        selection=selections[0],
+        invocation=ToolInvocation(
+            tool="run_sql",
+            arguments={},
+            status="ok",
+            output=RunSqlOutput(
+                sql="SELECT 1",
+                table=Table(columns=["n"], rows=[{"n": 1}], total_row_count=1),
+            ),
+            substrates_read=[],
+        ),
     )
-    assert message.role == "user"
-    first_line, payload, note = message.content.split("\n")
-    assert first_line == "Tool results:"
-    assert json.loads(payload)["tool"] == "run_sql"
-    assert note.startswith("There is no tool")
+    unknown = SelectionResult(
+        selection=ToolSelection(name="x", arguments={}, call_id="c2"),
+        note="There is no tool named 'x'.",
+    )
+    first, second = tool_results([ok, unknown], 0, 30)
+    assert [m.role for m in (first, second)] == ["tool", "tool"]
+    assert [m.tool_call_id for m in (first, second)] == ["c1", "c2"]
+    payload = json.loads(first.content)
+    assert payload["tool"] == "run_sql"
+    assert payload["evidence_index"] == 0
+    assert second.content.startswith("There is no tool")
 
 
 def test_router_call_offers_all_real_and_control_specs(tool_pack):
@@ -332,10 +362,17 @@ def test_router_messages_order_system_history_question_scratch():
         "SYSTEM",
         history=[HistoryTurn(turn=1, question="earlier q", answer="earlier a", kind="prose")],
         question="current q",
-        scratch=[Message(role="assistant", content="Requested: app_primer({})")],
+        scratch=[
+            Message(
+                role="assistant",
+                content="",
+                tool_calls=[ToolCall(id="c1", name="app_primer", arguments={})],
+            ),
+            Message(role="tool", tool_call_id="c1", content="{}"),
+        ],
     )
     assert [m.role for m in messages] == [
-        "system", "user", "assistant", "user", "assistant"
+        "system", "user", "assistant", "user", "assistant", "tool"
     ]
     assert messages[0].content == "SYSTEM"
     assert [m.content for m in messages[1:3]] == ["earlier q", "earlier a"]
@@ -387,3 +424,14 @@ def test_router_summary_rides_in_the_system_message_only():
     assert messages[0].content.endswith("Turn 1 asked (see turn 1).")
     assert "gather it again with a tool this turn" in messages[0].content
     assert build_router_messages("SYSTEM", window, "now", [])[0].content == "SYSTEM"
+
+
+def test_with_call_ids_keeps_provider_ids_and_fills_blanks():
+    """A stub's call carries no id; the router synthesizes one unique
+    within the turn (step and index), and keeps a provider's as is."""
+
+    def sel(call_id: str = "") -> ToolSelection:
+        return ToolSelection(name="app_primer", arguments={}, call_id=call_id)
+
+    with_ids = with_call_ids([sel(), sel(call_id="x")], step=2)
+    assert [s.call_id for s in with_ids] == ["call_2_0", "x"]

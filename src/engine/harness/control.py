@@ -16,14 +16,16 @@ from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 from engine.harness.state import RouteDecision, ToolSelection
 from engine.ports.types import LLMResponse, ToolCall, ToolSpec
 
-# A control verb written as prose — give_answer({"shape":"prose"}) —
-# the whole response, optionally behind the "Requested: " echo the
-# loop transcript uses, with a JSON object (or nothing) in the
-# parentheses. Read as the call it plainly is (Polish Pass): B2's
+# A control verb spelled as the whole response —
+# give_answer({"shape":"prose"}) — with a JSON object (or nothing) in
+# the parentheses. Read as the call it plainly is (Polish Pass): B2's
 # router wrote exactly this on nine runs, in the wrong channel, and was
-# nudged into budget exhaustion four times per rep.
+# nudged into budget exhaustion four times per rep. No "Requested: "
+# prefix is tolerated: nothing produces that echo any more — the loop
+# transcript is native tool messages — so a response wearing it is
+# the model completing a format it should never have seen.
 _TEXT_FORM_CALL = re.compile(
-    r"^\s*(?:Requested:\s*)?(give_answer|refuse|clarify|escalate)\s*\((.*)\)\s*$",
+    r"^\s*(give_answer|refuse|clarify|escalate)\s*\((.*)\)\s*$",
     re.DOTALL,
 )
 
@@ -155,7 +157,8 @@ def parse_route(response: LLMResponse) -> RouteDecision:
         return RouteDecision(
             kind="tools",
             selections=[
-                ToolSelection(name=c.name, arguments=c.arguments) for c in real
+                ToolSelection(name=c.name, arguments=c.arguments, call_id=c.id)
+                for c in real
             ],
         )
 
