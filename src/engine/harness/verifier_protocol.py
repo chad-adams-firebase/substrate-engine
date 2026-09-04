@@ -5,7 +5,7 @@ concrete class, so graph tests can script verdicts."""
 from typing import Protocol
 
 from engine.tools.envelope import ToolInvocation
-from engine.verifier.models import DraftAnswer, VerifierResult
+from engine.verifier.models import DraftAnswer, VerifierResult, VerifyContext
 
 
 class VerifierProtocol(Protocol):
@@ -16,4 +16,5 @@ class VerifierProtocol(Protocol):
         draft: DraftAnswer,
         evidence: list[ToolInvocation],
         attempt: int,
+        context: VerifyContext | None = None,
     ) -> VerifierResult: ...

@@ -66,7 +66,7 @@ from engine.ports.types import Message
 from engine.tools.entities import EntityCatalog, anaphor_kind, harvest_turn_anchors
 from engine.tools.envelope import TurnAnchors, TurnContext
 from engine.tools.registry import ToolRegistry
-from engine.verifier.models import DraftAnswer
+from engine.verifier.models import DraftAnswer, VerifyContext
 from engine.verifier.verdict import finalize as finalize_verdict
 from engine.verifier.verdict import render_feedback
 
@@ -506,6 +506,12 @@ def build_graph(deps: GraphDeps, checkpointer=None):
             draft=draft_answer,
             evidence=state.evidence,
             attempt=attempt,
+            # The full history, not the router's window: an anchor a
+            # folded turn established is still the anchor.
+            context=VerifyContext(
+                prior=[record.anchors for record in state.history],
+                about=state.draft.about or None,
+            ),
         )
         attempts = state.verifier_attempts + [result.attempt_record]
         judge_calls = state.judge_calls_total + result.judge_calls

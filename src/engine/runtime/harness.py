@@ -34,6 +34,7 @@ def build_verifier(pack: LoadedPack, ports: ResolvedPorts) -> Verifier:
         ports.get(PortName.LLM),
         pack.config.verifier,
         stats_provider=store.stats,
+        catalog=resolve_entity_catalog(pack, ports),
     )
 
 

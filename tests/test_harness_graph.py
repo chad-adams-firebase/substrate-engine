@@ -777,3 +777,28 @@ def test_the_next_turns_tools_see_what_the_conversation_established(tool_pack):
     # And the anchor rode into the router's history line.
     router_messages = calls[3]["messages"]
     assert any(m.role == "assistant" and m.content.startswith(f"[table: About: rule {name}. ") for m in router_messages)
+
+
+def test_the_verify_node_hands_the_verifier_the_history_and_the_declaration(tool_pack):
+    """Backlog Pass: the anchor check reads every prior turn's anchors
+    (the full history, not the router's window) and the router's about."""
+    responses = [
+        TOP_RULE_CALL,
+        TOP_RULE_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+        tool_call("run_sql", {"question": "How many findings has that rule produced?"}),
+        LLMResponse(
+            content="```sql\nSELECT COUNT(*) AS n FROM findings f WHERE f.rule_name = 'line_note'\n```",
+            model="scripted",
+        ),
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "about": "line_note"}),
+    ]
+    session, _, verifier = build_ask_session(tool_pack, responses)
+    first = session.ask("Which rule fires most often?")
+    session.ask("Tell me more about that rule.", conversation_id=first.conversation_id)
+    name = first.outcome.body.table.rows[0]["rule_name"]
+    first_call, second_call = verifier.calls
+    assert first_call["context"].prior == [] and first_call["context"].about is None
+    (prior,) = second_call["context"].prior
+    assert prior.turn == 1 and prior.entities[0].value == name
+    assert second_call["context"].about == "line_note"

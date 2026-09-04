@@ -82,6 +82,7 @@ class StubVerifier:
         draft: DraftAnswer,
         evidence: list[ToolInvocation],
         attempt: int,
+        context=None,
     ) -> VerifierResult:
         self.calls.append(
             {
@@ -89,6 +90,7 @@ class StubVerifier:
                 "draft": draft,
                 "evidence": evidence,
                 "attempt": attempt,
+                "context": context,
             }
         )
         if self._results:

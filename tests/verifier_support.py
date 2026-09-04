@@ -86,6 +86,7 @@ def make_verifier(
     llm_responses=None,
     settings: VerifierSettings | None = None,
     stats: list[StatsRow] | None = None,
+    catalog=None,
 ) -> tuple[Verifier, ScriptedLLM]:
     llm = ScriptedLLM(llm_responses or [])
     verifier = Verifier(
@@ -93,6 +94,7 @@ def make_verifier(
         llm,
         settings or VerifierSettings(),
         lambda: stats or [],
+        catalog=catalog,
     )
     return verifier, llm
 

@@ -23,7 +23,9 @@ from typing import Literal
 from engine.config.models import VerifierSettings
 from engine.ports.llm import LLMPort
 from engine.substrates.models import StatsRow
+from engine.tools.entities import EntityCatalog
 from engine.tools.envelope import ToolInvocation
+from engine.verifier.anchor import check_anchor
 from engine.verifier.checks.base import CheckRegistry, PlausibilityContext
 from engine.verifier.checks.invocation import harvest_invocation
 from engine.verifier.claims import containing_sentence, extract_claims
@@ -43,6 +45,7 @@ from engine.verifier.models import (
     PlausibilityRecord,
     QuoteClaim,
     VerifierResult,
+    VerifyContext,
 )
 from engine.verifier.verdict import build_feedback, decide
 
@@ -85,12 +88,17 @@ class Verifier:
         llm: LLMPort,
         settings: VerifierSettings,
         stats_provider: Callable[[], list[StatsRow]],
+        catalog: EntityCatalog | None = None,
     ) -> None:
         self._checks = checks
         self._llm = llm
         self._settings = settings
         self._stats_provider = stats_provider
         self._stats: list[StatsRow] | None = None
+        # The pack's entity kinds (Backlog Pass): the anchor check reads
+        # a follow-up's question with them. None means no pack
+        # declaration, and the check is silent.
+        self._catalog = catalog
 
     def _load_stats(self) -> list[StatsRow]:
         if self._stats is None:
@@ -165,6 +173,7 @@ class Verifier:
         draft: DraftAnswer,
         evidence: list[ToolInvocation],
         attempt: int,
+        context: VerifyContext | None = None,
     ) -> VerifierResult:
         pools = self._pools(evidence)
         claims = self._claims_of(draft, pools)
@@ -232,6 +241,25 @@ class Verifier:
             unmatched_count=len(unmatched_pairs),
         )
         plausibility = self._plausibility(evidence)
+        # The anchor check (Backlog Pass): conversation-level, so it
+        # rides beside the per-invocation findings with no tool.
+        if context is not None and self._catalog is not None:
+            finding = check_anchor(
+                question=question,
+                about=context.about,
+                draft=draft,
+                evidence=evidence,
+                prior=context.prior,
+                catalog=self._catalog,
+            )
+            if finding is not None:
+                plausibility.append(
+                    PlausibilityRecord(
+                        check=finding.check,
+                        severity=finding.severity,
+                        detail=finding.detail,
+                    )
+                )
         disposition = decide(
             len(unmatched_pairs), plausibility, attempt, self._settings
         )

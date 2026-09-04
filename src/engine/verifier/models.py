@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from engine.config.models import ToolName
+from engine.tools.envelope import TurnAnchors
 
 
 class InjectedSpan(BaseModel):
@@ -181,14 +182,27 @@ class AttemptRecord(BaseModel):
 
 class PlausibilityRecord(BaseModel):
     """An evidence-side sanity finding (§9.3). fail means the evidence
-    contradicts what is independently known; warn is a soft band."""
+    contradicts what is independently known; warn is a soft band. tool
+    is None for a conversation-level finding — the anchor check (Backlog
+    Pass) belongs to no invocation."""
 
     model_config = ConfigDict(extra="forbid")
 
     check: str  # e.g. "run_sql.count_vs_stats"
-    tool: ToolName
+    tool: ToolName | None = None
     severity: Literal["fail", "warn"]
     detail: str
+
+
+class VerifyContext(BaseModel):
+    """What the Verifier may know of the conversation beyond this
+    turn's evidence (Backlog Pass): every prior turn's anchors, in
+    order, and the entity the router declared this answer is about."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prior: list[TurnAnchors] = []
+    about: str | None = None
 
 
 class FeedbackItem(BaseModel):
