@@ -10,7 +10,8 @@ from engine.substrates.models import (
     JoinPath,
     JoinStep,
 )
-from engine.tools.sql_lint import lint_fan_out, split_scopes, table_aliases
+from engine.tools.sql_lint import lint_fan_out
+from engine.tools.sql_scopes import split_scopes, table_aliases
 from tests.verifier_support import MACHINE
 
 
@@ -412,7 +413,7 @@ def test_expression_join_challenge_quotes_the_models_own_literal():
     _clean's literal-stripped copy — CONCAT('compliance_', …), never
     CONCAT('', …). The rebuilt fragment survives both spellings and
     the whitespace the model chose."""
-    from engine.tools.sql_lint import original_fragment
+    from engine.tools.sql_scopes import original_fragment
 
     reason = lint_fan_out(MT2_EXPRESSION_JOIN, DICTIONARY, MAP)
     assert "CONCAT('compliance_', cr.rule_code)" in reason

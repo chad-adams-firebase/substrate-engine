@@ -9,9 +9,11 @@ inclusion is not grounding-by-enforcement; this is the mechanical
 check.
 
 Regex-level on purpose (the house precedent, generators/ckg/sql_tables
-.py): no parser dependency the work machine cannot install. Scopes
-are split on parentheses so a correlated or scalar subquery is linted
-as its own SELECT, never mistaken for a join in its parent.
+.py): no parser dependency the work machine cannot install. The text
+layer — scopes split on parentheses so a correlated or scalar subquery
+is linted as its own SELECT, never mistaken for a join in its parent;
+table references; select lists — is tools/sql_scopes.py, shared with
+every other lint and parse; this module holds the rules.
 
 What fires (the Polish Pass's direction rule): a scope whose
 COUNT/SUM/AVG reads a table its joins REPEAT. A join along a foreign
@@ -71,26 +73,15 @@ executed attempt, which the Verifier turns into a plausibility warn.
 import re
 
 from engine.substrates.models import DictionaryMap, DictionaryRow
-
-_STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
-_LINE_COMMENT = re.compile(r"--[^\n]*")
-_KEYWORDS = {
-    "on", "where", "join", "left", "right", "inner", "outer", "full",
-    "cross", "group", "order", "limit", "having", "union", "qualify",
-    "using", "as", "select", "with", "natural", "lateral",
-}
-# A keyword after a table name is not its alias: without the lookahead,
-# `FROM findings JOIN compliance_reports` read JOIN as findings' alias
-# and the scan never saw compliance_reports (guard pass; latent — the
-# pinned model aliases every table, so no live statement hit it).
-_TABLE_REF = re.compile(
-    r"\b(from|join)\s+([A-Za-z_]\w*)"
-    rf"(?:\s+(?:as\s+)?(?!(?:{'|'.join(sorted(_KEYWORDS))})\b)([A-Za-z_]\w*))?",
-    re.IGNORECASE,
+from engine.tools.sql_scopes import (
+    KEYWORDS,
+    from_table_of,
+    original_fragment,
+    select_list_of,
+    split_scopes,
+    table_aliases,
 )
-# A double-quoted identifier, or a single-quoted literal to step over
-# so a string containing "quotes" is never edited.
-_QUOTED_OR_LITERAL = re.compile(r"'(?:[^']|'')*'|\"([A-Za-z_]\w*)\"")
+
 _JOIN_ON = re.compile(
     r"\bjoin\s+([A-Za-z_]\w*)(?:\s+(?:as\s+)?([A-Za-z_]\w*))?\s+on\s+(.*?)"
     r"(?=\b(?:left|right|inner|outer|full|cross|join|where|group|order"
@@ -107,7 +98,6 @@ _PLAIN_AGGREGATE = re.compile(
 _DISTINCT_AGG_BANDAID = re.compile(
     r"\b(?:sum|avg)\s*\(\s*distinct\b", re.IGNORECASE
 )
-_SUBQUERY = "(__subquery__)"
 # Any aggregate, DISTINCT included — the gate for the dead-LEFT-JOIN
 # check, which COUNT(DISTINCT ...) must not slip past (B5 did).
 _ANY_AGGREGATE = re.compile(r"\b(?:count|sum|avg)\s*\(", re.IGNORECASE)
@@ -161,141 +151,6 @@ def _derives_a_key(condition: str) -> bool:
         name.lower() not in _NOT_FUNCTIONS
         for name in _FUNC_CALL.findall(condition)
     )
-
-
-def unquote_identifiers(sql: str) -> str:
-    """`"invoices"."status"` read as `invoices.status` — for analysis
-    only. Every lint and parse in this package reads identifiers with a
-    bare-name regex, so a quoted statement bypassed all of them (guard
-    pass; 0 of 202 live statements quoted under the current pin). The
-    executed statement is never rewritten: a quoted reserved word must
-    stay quoted for the database."""
-    return _QUOTED_OR_LITERAL.sub(
-        lambda match: match.group(0) if match.group(1) is None else match.group(1),
-        sql,
-    )
-
-
-def _clean(sql: str) -> str:
-    return _STRING_LITERAL.sub(
-        "''", _LINE_COMMENT.sub("", unquote_identifiers(sql))
-    )
-
-
-def original_fragment(sql: str, cleaned: str) -> str:
-    """The model's own text for a fragment of a cleaned scope. _clean
-    blanks every string literal to '' and split_scopes hoists
-    subqueries, so a challenge that quotes the cleaned text would show
-    CONCAT('', cr.rule_code) for the CONCAT('compliance_', cr.rule_code)
-    the model wrote (Block 2 rider). Rebuild the fragment as a pattern
-    — literals and hoisted subqueries as wildcards, whitespace as any
-    whitespace — and find it in the original; fall back to the cleaned
-    text, whitespace-collapsed, when nothing matches (a comment inside
-    the fragment, say)."""
-    parts: list[str] = []
-    for token in re.split(r"(''|\(__subquery__\)|\s+)", cleaned):
-        if not token:
-            continue
-        if token == "''":
-            parts.append(r"'(?:[^']|'')*'")
-        elif token == _SUBQUERY:
-            parts.append(r"\((?:[^()]|\([^()]*\))*\)")
-        elif token.isspace():
-            parts.append(r"\s+")
-        else:
-            parts.append(re.escape(token))
-    match = re.search("".join(parts), sql, re.IGNORECASE | re.DOTALL)
-    text = match.group(0) if match else cleaned
-    return " ".join(text.split())
-
-
-def split_scopes(sql: str) -> list[str]:
-    """Every SELECT scope in the statement, each with its nested
-    subqueries replaced by a placeholder: the outer statement, each
-    CTE body, each subquery. Function-call parentheses stay inline so
-    COUNT(DISTINCT x) remains visible to the aggregate scan."""
-    scopes: list[str] = []
-
-    def walk(text: str) -> str:
-        out: list[str] = []
-        index = 0
-        while index < len(text):
-            char = text[index]
-            if char != "(":
-                out.append(char)
-                index += 1
-                continue
-            depth = 0
-            end = index
-            while end < len(text):
-                if text[end] == "(":
-                    depth += 1
-                elif text[end] == ")":
-                    depth -= 1
-                    if depth == 0:
-                        break
-                end += 1
-            inner = text[index + 1 : end]
-            if re.match(r"\s*(select|with)\b", inner, re.IGNORECASE):
-                walk(inner)
-                out.append(_SUBQUERY)
-            else:
-                out.append("(" + walk_inline(inner) + ")")
-            index = end + 1
-        flattened = "".join(out)
-        scopes.append(flattened)
-        return flattened
-
-    def walk_inline(text: str) -> str:
-        # Function arguments may themselves hold a subquery
-        # (SUM(CASE WHEN x IN (SELECT ...))): recurse, keep the rest.
-        out: list[str] = []
-        index = 0
-        while index < len(text):
-            if text[index] != "(":
-                out.append(text[index])
-                index += 1
-                continue
-            depth = 0
-            end = index
-            while end < len(text):
-                if text[end] == "(":
-                    depth += 1
-                elif text[end] == ")":
-                    depth -= 1
-                    if depth == 0:
-                        break
-                end += 1
-            inner = text[index + 1 : end]
-            if re.match(r"\s*(select|with)\b", inner, re.IGNORECASE):
-                walk(inner)
-                out.append(_SUBQUERY)
-            else:
-                out.append("(" + walk_inline(inner) + ")")
-            index = end + 1
-        return "".join(out)
-
-    walk(_clean(sql))
-    return scopes
-
-
-def table_aliases(scope: str) -> dict[str, str]:
-    """alias (or bare table name) -> table name, lowercased, from the
-    scope's FROM/JOIN references. Shared with the select-list
-    resolution both the verifier and the display layer read
-    (tools/sql_select.py)."""
-    aliases: dict[str, str] = {}
-    for _, table, alias in _TABLE_REF.findall(scope):
-        aliases[table.lower()] = table.lower()
-        if alias and alias.lower() not in _KEYWORDS:
-            aliases[alias.lower()] = table.lower()
-    return aliases
-
-
-def select_list_of(scope: str) -> str:
-    """The text between the scope's first SELECT and its FROM — where
-    the aggregates and result aliases live."""
-    return _select_list(scope)
 
 
 def _aggregate_arguments(select_list: str) -> list[tuple[str, str]]:
@@ -487,7 +342,7 @@ def lint_fan_out(
     involved: set[str] = set()
     bandaid_seen = False
     for scope in split_scopes(sql):
-        select_list = _select_list(scope)
+        select_list = select_list_of(scope)
         bandaid = _DISTINCT_AGG_BANDAID.search(select_list) is not None
         plain_agg = _PLAIN_AGGREGATE.search(select_list) is not None
         any_agg = _ANY_AGGREGATE.search(select_list) is not None
@@ -497,8 +352,7 @@ def lint_fan_out(
 
         if plain_agg or bandaid:
             in_scope = set(aliases.values())
-            refs = _TABLE_REF.findall(scope)
-            from_table = refs[0][1].lower() if refs else None
+            from_table = from_table_of(scope)
             steps = _join_steps(scope, sql, aliases, fk_of, one_to_one)
             repeated = _repeated_tables(steps, in_scope)
             fired_here = False
@@ -545,7 +399,7 @@ def lint_fan_out(
                 qualifiers = {sub_alias.lower()}
             else:
                 qualifiers = {table.lower()}
-                if alias and alias.lower() not in _KEYWORDS:
+                if alias and alias.lower() not in KEYWORDS:
                     qualifiers.add(alias.lower())
             for qual, col in _AVG_QUALIFIED.findall(select_list):
                 if qual.lower() in qualifiers:
@@ -622,9 +476,3 @@ def lint_fan_out(
         )
     return " ".join(parts)
 
-
-def _select_list(scope: str) -> str:
-    """The text between the scope's first SELECT and its FROM — where
-    the aggregates live. A scope without FROM is not a query."""
-    match = re.search(r"\bselect\b(.*?)\bfrom\b", scope, re.IGNORECASE | re.DOTALL)
-    return match.group(1) if match else ""

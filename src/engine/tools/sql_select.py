@@ -32,7 +32,9 @@ One parse, two views (the coverage pass's resolver unification):
 Both views come from the same tokenizer and the same tree, so on any
 alias both act on they name the same source column. Regex- and
 hand-parser-level on purpose (the house precedent, sql_lint.py): no
-parser dependency the work machine cannot install. Tools never import
+parser dependency the work machine cannot install. The scope split,
+table references and select-list item grammar are the shared text
+layer, tools/sql_scopes.py. Tools never import
 the verifier; the verifier imports this module.
 
 Pure code: no ports, no I/O.
@@ -42,8 +44,12 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal, Union
 
-from engine.tools.sql_lint import (
+from engine.tools.sql_scopes import (
+    NON_COLUMN_WORDS,
+    PLAIN_ITEM,
     select_list_of,
+    split_alias,
+    split_items,
     split_scopes,
     table_aliases,
     unquote_identifiers,
@@ -61,12 +67,6 @@ _SUM_COALESCE = re.compile(
     r"\s*,[^()]*\)\s*\)\s+as\s+([A-Za-z_]\w*)\s*$",
     re.IGNORECASE,
 )
-_PLAIN = re.compile(
-    r"^\s*(?:([A-Za-z_]\w*)\.)?([A-Za-z_]\w*)"
-    r"(?:\s+as\s+([A-Za-z_]\w*))?\s*$",
-    re.IGNORECASE,
-)
-_NON_COLUMN = {"distinct", "null", "true", "false"}
 
 
 @dataclass
@@ -79,23 +79,6 @@ class ResolvedColumn:
     table: str | None
     column: str
     aggregate: Literal["sum", "avg"] | None
-
-
-def split_items(select_list: str) -> list[str]:
-    """Top-level comma split, paren-aware (function calls survive)."""
-    items: list[str] = []
-    depth = 0
-    start = 0
-    for index, char in enumerate(select_list):
-        if char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-        elif char == "," and depth == 0:
-            items.append(select_list[start:index])
-            start = index + 1
-    items.append(select_list[start:])
-    return items
 
 
 def resolve_select_columns(sql: str) -> dict[str, ResolvedColumn]:
@@ -114,12 +97,12 @@ def resolve_select_columns(sql: str) -> dict[str, ResolvedColumn]:
             func, qualifier, column, alias = match.groups()
             aggregate: Literal["sum", "avg"] | None = func.lower()  # type: ignore[assignment]
         else:
-            plain = _PLAIN.match(item)
+            plain = PLAIN_ITEM.match(item)
             if plain is None:
                 continue
             qualifier, column, alias = plain.groups()
-            if column.lower() in _NON_COLUMN or (
-                alias and alias.lower() in _NON_COLUMN
+            if column.lower() in NON_COLUMN_WORDS or (
+                alias and alias.lower() in NON_COLUMN_WORDS
             ):
                 continue
             alias = alias or column
@@ -232,7 +215,6 @@ _WITH = re.compile(r"^\s*with\s+(?:recursive\s+)?", re.IGNORECASE)
 _CTE_HEAD = re.compile(r"\s*([A-Za-z_]\w*)\s*(?:\([^()]*\)\s*)?as\s*\(", re.IGNORECASE)
 _FROM_OR_JOIN_PAREN = re.compile(r"\b(from|join)\s*\(", re.IGNORECASE)
 _ALIAS_AFTER = re.compile(r"\s*(?:as\s+)?([A-Za-z_]\w*)", re.IGNORECASE)
-_AS_ALIAS = re.compile(r"\s+as\s+([A-Za-z_]\w*)\s*$", re.IGNORECASE)
 _SELECT_LIST = re.compile(r"\bselect\b(.*?)\bfrom\b", re.IGNORECASE | re.DOTALL)
 _KEYWORDS_NOT_ALIAS = {
     "on", "where", "join", "left", "right", "inner", "outer", "full",
@@ -327,7 +309,7 @@ def _parse_query(text: str, ctes: dict[str, _Scope]) -> _Scope:
     if select_match is None:
         return _Scope(items=items, sources=sources)
     for item in split_items(select_match.group(1)):
-        alias, expr_text = _split_alias(item)
+        alias, expr_text = split_alias(item)
         if alias is None:
             continue
         items[alias] = _parse_expr(expr_text, sources)
@@ -355,21 +337,6 @@ def _blank_subqueries(text: str) -> str:
             out.append(text[index])
             index += 1
     return "".join(out)
-
-
-def _split_alias(item: str) -> tuple[str | None, str]:
-    """(alias, expression text) for one select item: `expr AS alias`,
-    or a bare column whose alias is its own name."""
-    match = _AS_ALIAS.search(item)
-    if match:
-        return match.group(1), item[: match.start()]
-    plain = _PLAIN.match(item)
-    if plain and plain.group(3) is None:
-        column = plain.group(2)
-        if column.lower() in _NON_COLUMN:
-            return None, item
-        return column, item
-    return None, item
 
 
 class _Parser:

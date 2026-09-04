@@ -83,7 +83,7 @@ from engine.tools.envelope import (
     ToolInvocation,
 )
 from engine.tools.interval_lint import AGGREGATE_WORD
-from engine.tools.sql_lint import unquote_identifiers
+from engine.tools.sql_scopes import unquote_identifiers
 from engine.verifier.checks.base import (
     PlausibilityContext,
     SubstrateCheck,

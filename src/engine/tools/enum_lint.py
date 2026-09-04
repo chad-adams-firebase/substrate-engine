@@ -57,7 +57,7 @@ Regex-level on purpose (the house precedent, sql_lint.py). Pure code.
 import re
 
 from engine.substrates.models import DictionaryRow
-from engine.tools.sql_lint import split_scopes, table_aliases, unquote_identifiers
+from engine.tools.sql_scopes import split_scopes, table_aliases, unquote_identifiers
 
 _LITERAL = r"'(?:[^']|'')*'"
 _COMPARISON = re.compile(
