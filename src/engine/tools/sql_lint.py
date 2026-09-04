@@ -46,6 +46,19 @@ vouched that way is one-to-one) — and COUNT(DISTINCT ...).
 Comma-separated FROM lists escape the check (the model does not write
 them).
 
+A CTE or derived table is read through the scope registry (the Close
+Pass — AMB1's five reps were challenged on a join to a DISTINCT CTE by
+its key, "no foreign key relates these columns", the shape the
+challenge itself recommends): a scope whose projection is unique on
+the join's columns (SELECT DISTINCT k, GROUP BY k — a primary key
+beside other columns of its table counts as the key alone) is one row
+per key and a one side; a table is on its primary key; both unique and
+the join is one-to-one. Otherwise a scope's plain pass-through column
+reads the foreign-key knowledge of the column behind it (unless the
+scope's own joins repeat that table), so a lookup or a filtered many
+side written as a CTE behaves exactly like its flat twin, and a
+computed column vouches for nothing.
+
 The challenge names the aggregate, the table it reads, and the step
 that repeats it — never a destination (the guard pass's principle:
 a challenge names what is wrong, and no table the statement does not
@@ -89,16 +102,28 @@ from engine.tools.sql_scopes import (
     original_fragment,
     scope_tree,
     select_list_of,
+    split_alias,
+    split_items,
     table_aliases,
     table_references,
 )
 
+# A join to a table, a CTE (by name) or a derived table (a hoisted
+# subquery under its alias — visible since the Close Pass, read through
+# the scope registry rather than fed to the foreign-key loop blind).
 _JOIN_ON = re.compile(
-    r"\bjoin\s+([A-Za-z_]\w*)(?:\s+(?:as\s+)?([A-Za-z_]\w*))?\s+on\s+(.*?)"
+    r"\bjoin\s*(?:\(__subquery__\)\s+(?:as\s+)?([A-Za-z_]\w*)"
+    r"|([A-Za-z_]\w*)(?:\s+(?:as\s+)?([A-Za-z_]\w*))?)\s+on\s+(.*?)"
     r"(?=\b(?:left|right|inner|outer|full|cross|join|where|group|order"
     r"|limit|having|union|qualify)\b|$)",
     re.IGNORECASE | re.DOTALL,
 )
+_GROUP_BY = re.compile(
+    r"\bgroup\s+by\b(.*?)(?=\b(?:having|order|limit|qualify|union|window)\b|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+_TOP_LEVEL_UNION = re.compile(r"\bunion\b", re.IGNORECASE)
+_PLAIN_COLUMN = re.compile(r"^\s*(?:([A-Za-z_]\w*)\s*\.\s*)?([A-Za-z_]\w*)\s*$")
 _EQUALITY = re.compile(r"([A-Za-z_]\w*)\.([A-Za-z_]\w*)\s*=\s*([A-Za-z_]\w*)\.([A-Za-z_]\w*)")
 _PLAIN_AGGREGATE = re.compile(
     r"\b(?:count|sum|avg)\s*\(\s*(?!distinct\b)", re.IGNORECASE
@@ -416,63 +441,203 @@ def _one_to_one_step(
     )
 
 
+Step = tuple[str, str | None, str | None, set[str], str]
+
+
+@dataclass
+class ScopeGrain:
+    """What a named scope's rows are, read from its own text (Close
+    Pass): the table its row grain follows, the output columns it is
+    unique on (a DISTINCT projection, a GROUP BY key), what each output
+    column reads, which output columns are plain columns of a body
+    table, and the tables its own joins repeat."""
+
+    from_table: str | None
+    unique_on: frozenset[str] | None
+    reads: dict[str, set[str] | None]
+    passthrough: dict[str, tuple[str, str]]
+    repeated: dict[str, list[str]]
+    steps: list[Step]
+    has_left_join: bool
+
+
+def _grain_of(
+    scope: QueryScope, name: str, ctx: _Context, memo: dict[int, ScopeGrain]
+) -> ScopeGrain | None:
+    """The grain of the CTE or derived table this scope references
+    under name, or None when name is a real table."""
+    named = scope.named.get(name)
+    return None if named is None else _scope_grain(named, ctx, memo)
+
+
+def _scope_grain(
+    scope: QueryScope, ctx: _Context, memo: dict[int, ScopeGrain]
+) -> ScopeGrain:
+    if id(scope) in memo:
+        return memo[id(scope)]
+    text = scope.text
+    aliases = table_aliases(text)
+    in_scope = set(aliases.values())
+    steps = _join_steps(scope, aliases, ctx, memo)
+    repeated = _repeated_tables(steps, in_scope)
+    select_list = select_list_of(text)
+    distinct = _DISTINCT_PREFIX.match(select_list) is not None
+    if distinct:
+        select_list = _DISTINCT_PREFIX.sub("", select_list, count=1)
+    items: list[tuple[str | None, str]] = []
+    for item in split_items(select_list):
+        name, expression = split_alias(item)
+        items.append((name.lower() if name else None, expression))
+    reads: dict[str, set[str] | None] = {}
+    passthrough: dict[str, tuple[str, str]] = {}
+    for name, expression in items:
+        if name is None:
+            continue
+        reads[name] = _tables_read(expression, aliases, ctx.columns_of, in_scope)
+        plain = _PLAIN_COLUMN.match(expression)
+        if plain is None:
+            continue
+        qualifier, column = plain.group(1), plain.group(2).lower()
+        if qualifier is not None:
+            table = aliases.get(qualifier.lower())
+            if table is not None:
+                passthrough[name] = (table, column)
+        else:
+            owners = {t for t in in_scope if column in ctx.columns_of.get(t, set())}
+            if len(owners) == 1:
+                passthrough[name] = (owners.pop(), column)
+    if _TOP_LEVEL_UNION.search(text):
+        unique_on = None
+        reads = {name: {"?"} for name in reads}
+    elif distinct:
+        named = [name for name, _ in items]
+        unique_on = frozenset(named) if all(named) else None
+    else:
+        unique_on = _group_key(text, items, passthrough, ctx)
+    grain = ScopeGrain(
+        from_table=from_table_of(text),
+        unique_on=unique_on,
+        reads=reads,
+        passthrough=passthrough,
+        repeated=repeated,
+        steps=steps,
+        has_left_join=_LEFT_JOIN_ON.search(text) is not None,
+    )
+    memo[id(scope)] = grain
+    return grain
+
+
+def _group_key(
+    text: str,
+    items: list[tuple[str | None, str]],
+    passthrough: dict[str, tuple[str, str]],
+    ctx: _Context,
+) -> frozenset[str] | None:
+    """The output columns a GROUP BY makes the scope unique on: each
+    group expression matched to an item by alias, by expression text,
+    by ordinal, or by bare column name — any unmatched expression and
+    the scope vouches for no key. A key that carries a table's primary
+    key beside other columns of the same table (GROUP BY s.id, s.name)
+    is that primary key alone."""
+    match = _GROUP_BY.search(text)
+    if match is None:
+        return None
+    by_name = {name: index for index, (name, _) in enumerate(items) if name}
+    by_text = {_squeeze(expression): name for name, expression in items if name}
+    names: list[str] = []
+    for expression in split_items(match.group(1)):
+        expression = expression.strip()
+        if not expression:
+            continue
+        if expression.lower() in by_name:
+            names.append(expression.lower())
+        elif _squeeze(expression) in by_text:
+            names.append(by_text[_squeeze(expression)])
+        elif expression.isdigit() and 1 <= int(expression) <= len(items) and items[int(expression) - 1][0]:
+            names.append(items[int(expression) - 1][0])  # type: ignore[arg-type]
+        else:
+            return None
+    keys = frozenset(names)
+    for name in keys:
+        behind = passthrough.get(name)
+        if behind is not None and behind in ctx.pk and all(
+            passthrough.get(other, (None, None))[0] == behind[0]
+            for other in keys
+            if other != name
+        ):
+            return frozenset({name})
+    return keys
+
+
+def _squeeze(expression: str) -> str:
+    return re.sub(r"\s+", "", expression.lower())
+
+
+def _unique_side(
+    table: str,
+    column: str,
+    on_columns: set[str],
+    grain: ScopeGrain | None,
+    ctx: _Context,
+) -> bool:
+    """One row per value of its join columns: a real table on its
+    primary key, or a scope whose projection is unique on a subset of
+    the columns this ON reads from it."""
+    if grain is None:
+        return (table, column) in ctx.pk
+    return grain.unique_on is not None and grain.unique_on <= on_columns
+
+
+def _behind(
+    table: str, column: str, grain: ScopeGrain | None
+) -> tuple[str, str] | None:
+    """The real column a side reads: itself for a table, the plain
+    column behind a scope's output column, None when the scope's
+    column is computed."""
+    if grain is None:
+        return (table, column)
+    return grain.passthrough.get(column)
+
+
 def _join_steps(
     scope: QueryScope,
     aliases: dict[str, str],
     ctx: _Context,
-) -> list[tuple[str, str | None, str | None, set[str], str]]:
-    """Every join step in the scope the map does not vouch for:
-    (kind, one, many, tables, text). kind is "one_to_many" when exactly
-    one side is a foreign key to the other, else "unvouched"; text is
-    the condition with its reason in parentheses."""
-    steps: list[tuple[str, str | None, str | None, set[str], str]] = []
+    memo: dict[int, ScopeGrain],
+) -> list[Step]:
+    """Every join step in the scope the map or the scope's own text
+    does not vouch for: (kind, one, many, tables, text). kind is
+    "one_to_many" when exactly one side is one row per join value,
+    else "unvouched"; text is the condition with its reason in
+    parentheses."""
+    steps: list[Step] = []
     for match in _JOIN_ON.finditer(scope.text):
-        joined = match.group(1).lower()
-        condition = match.group(3)
-        regions = _filter_regions(scope, (match.start(3), match.end(3)))
-        equalities = _EQUALITY.findall(condition)
+        joined = (match.group(1) or match.group(2)).lower()
+        condition = match.group(4)
+        regions = _filter_regions(scope, (match.start(4), match.end(4)))
+        equalities = [
+            (a.lower(), c1.lower(), b.lower(), c2.lower())
+            for a, c1, b, c2 in _EQUALITY.findall(condition)
+        ]
+        on_columns: dict[str, set[str]] = {}
         for a, c1, b, c2 in equalities:
-            a, b = a.lower(), b.lower()
+            on_columns.setdefault(a, set()).add(c1)
+            on_columns.setdefault(b, set()).add(c2)
+        seen: set[tuple[str, str]] = set()
+        for a, c1, b, c2 in equalities:
             ta, tb = aliases.get(a, a), aliases.get(b, b)
-            c1, c2 = c1.lower(), c2.lower()
-            left, right = f"{ta}.{c1}", f"{tb}.{c2}"
-            if _one_to_one_step(scope, regions, a, c1, b, c2, aliases, ctx):
-                continue
-            a_fk = ctx.fk_of.get((ta, c1)) == right
-            b_fk = ctx.fk_of.get((tb, c2)) == left
-            if a_fk and b_fk:
-                steps.append((
-                    "unvouched", None, None, {ta, tb},
-                    f"{left} = {right} (each side is a foreign key to the other)",
-                ))
-            elif a_fk or b_fk:
-                many, one, fk = (ta, tb, c1) if a_fk else (tb, ta, c2)
-                steps.append((
-                    "one_to_many", one, many, {ta, tb},
-                    f"{left} = {right} ({many}.{fk} is a foreign key — "
-                    f"several {many} rows can share one {one} row)",
-                ))
+            grain_a = _grain_of(scope, ta, ctx, memo)
+            grain_b = _grain_of(scope, tb, ctx, memo)
+            if grain_a is None and grain_b is None:
+                step = _table_step(scope, regions, a, c1, b, c2, aliases, ctx)
             else:
-                shared = ctx.fk_of.get((ta, c1))
-                if shared and shared == ctx.fk_of.get((tb, c2)):
-                    # Two rows of the same target's many side (W3's
-                    # history self-join): one-to-one when each side is
-                    # vouched one row per target key by its own filter.
-                    target_table, _, target_column = shared.partition(".")
-                    target = (target_table, target_column)
-                    if _vouched_conditionally(
-                        scope, regions, frozenset({(ta, c1), target}), ((a, ta),), aliases, ctx
-                    ) and _vouched_conditionally(
-                        scope, regions, frozenset({(tb, c2), target}), ((b, tb),), aliases, ctx
-                    ):
-                        continue
-                    reason = (
-                        "both columns are foreign keys with the same target — "
-                        f"every {ta} row pairs with every {tb} row that shares it"
-                    )
-                else:
-                    reason = "no foreign key relates these columns"
-                steps.append(("unvouched", None, None, {ta, tb}, f"{left} = {right} ({reason})"))
+                step = _scope_step(
+                    ta, c1, grain_a, on_columns[a],
+                    tb, c2, grain_b, on_columns[b],
+                    ctx, seen,
+                )
+            if step is not None:
+                steps.append(step)
         # A condition with no plain column equality at all that derives
         # its key with an expression (MT2's CONCAT join): no foreign key
         # can vouch for a computed key, and a non-unique derived key
@@ -496,10 +661,158 @@ def _join_steps(
     return steps
 
 
-def _repeated_tables(
-    steps: list[tuple[str, str | None, str | None, set[str], str]],
-    in_scope: set[str],
-) -> dict[str, list[str]]:
+def _table_step(
+    scope: QueryScope,
+    regions: list[tuple[int, int]],
+    a: str,
+    c1: str,
+    b: str,
+    c2: str,
+    aliases: dict[str, str],
+    ctx: _Context,
+) -> Step | None:
+    """An equality between two real tables' columns, classified by the
+    dictionary's foreign keys and the map's declarations; None when
+    the map vouches for it."""
+    ta, tb = aliases.get(a, a), aliases.get(b, b)
+    left, right = f"{ta}.{c1}", f"{tb}.{c2}"
+    if _one_to_one_step(scope, regions, a, c1, b, c2, aliases, ctx):
+        return None
+    a_fk = ctx.fk_of.get((ta, c1)) == right
+    b_fk = ctx.fk_of.get((tb, c2)) == left
+    if a_fk and b_fk:
+        return (
+            "unvouched", None, None, {ta, tb},
+            f"{left} = {right} (each side is a foreign key to the other)",
+        )
+    if a_fk or b_fk:
+        many, one, fk = (ta, tb, c1) if a_fk else (tb, ta, c2)
+        return (
+            "one_to_many", one, many, {ta, tb},
+            f"{left} = {right} ({many}.{fk} is a foreign key — "
+            f"several {many} rows can share one {one} row)",
+        )
+    shared = ctx.fk_of.get((ta, c1))
+    if shared and shared == ctx.fk_of.get((tb, c2)):
+        # Two rows of the same target's many side (W3's history
+        # self-join): one-to-one when each side is vouched one row per
+        # target key by its own filter.
+        target_table, _, target_column = shared.partition(".")
+        target = (target_table, target_column)
+        if _vouched_conditionally(
+            scope, regions, frozenset({(ta, c1), target}), ((a, ta),), aliases, ctx
+        ) and _vouched_conditionally(
+            scope, regions, frozenset({(tb, c2), target}), ((b, tb),), aliases, ctx
+        ):
+            return None
+        reason = (
+            "both columns are foreign keys with the same target — "
+            f"every {ta} row pairs with every {tb} row that shares it"
+        )
+    else:
+        reason = "no foreign key relates these columns"
+    return ("unvouched", None, None, {ta, tb}, f"{left} = {right} ({reason})")
+
+
+def _scope_step(
+    ta: str,
+    c1: str,
+    grain_a: ScopeGrain | None,
+    on_a: set[str],
+    tb: str,
+    c2: str,
+    grain_b: ScopeGrain | None,
+    on_b: set[str],
+    ctx: _Context,
+    seen: set[tuple[str, str]],
+) -> Step | None:
+    """An equality with a CTE or derived table on at least one side.
+    A side unique on its join columns — a scope by its projection, a
+    table by its primary key — is a one side; both unique and the join
+    is one-to-one. Otherwise a scope's column is read through to the
+    plain table column behind it (unless the scope's own joins repeat
+    that table) and the foreign keys decide, as for two tables. A
+    composite join to a unique scope is one step, not one per column."""
+    left, right = f"{ta}.{c1}", f"{tb}.{c2}"
+    a_unique = _unique_side(ta, c1, on_a, grain_a, ctx)
+    b_unique = _unique_side(tb, c2, on_b, grain_b, ctx)
+    if a_unique and b_unique:
+        return None
+    if a_unique or b_unique:
+        one, many, key = (ta, tb, on_a) if a_unique else (tb, ta, on_b)
+        if (one, many) in seen:
+            return None
+        seen.add((one, many))
+        # Name the real column a scope's many side carries, so the
+        # model sees which table it joined through.
+        many_column, many_grain = (c2, grain_b) if a_unique else (c1, grain_a)
+        behind = _behind(many, many_column, many_grain)
+        note, tables = "", {ta, tb}
+        if many_grain is not None and behind is not None:
+            note = f"; {many}.{many_column} reads {behind[0]}.{behind[1]}"
+            tables.add(behind[0])
+        return (
+            "one_to_many", one, many, tables,
+            f"{left} = {right} ({one} is one row per {', '.join(sorted(key))}{note} — "
+            f"several {many} rows can share one {one} row)",
+        )
+    behind_a, behind_b = _behind(ta, c1, grain_a), _behind(tb, c2, grain_b)
+    for name, column, grain, behind in (
+        (ta, c1, grain_a, behind_a), (tb, c2, grain_b, behind_b)
+    ):
+        if grain is None:
+            continue
+        if behind is None:
+            return (
+                "unvouched", None, None, {ta, tb},
+                f"{left} = {right} (nothing vouches for {name}.{column}: {name} is "
+                f"not one row per {column}, and the column is computed, not a "
+                "table's own)",
+            )
+        if behind[0] in grain.repeated:
+            return (
+                "unvouched", None, None, {ta, tb, behind[0]},
+                f"{left} = {right} ({name}.{column} reads {behind[0]}.{behind[1]}, "
+                f"but the joins inside {name} repeat {behind[0]})",
+            )
+    assert behind_a is not None and behind_b is not None
+    (rta, rc1), (rtb, rc2) = behind_a, behind_b
+    read = " and ".join(
+        note
+        for note, grain in (
+            (f"{ta}.{c1} reads {rta}.{rc1}", grain_a),
+            (f"{tb}.{c2} reads {rtb}.{rc2}", grain_b),
+        )
+        if grain is not None
+    )
+    tables = {ta, tb, rta, rtb}
+    a_fk = ctx.fk_of.get((rta, rc1)) == f"{rtb}.{rc2}"
+    b_fk = ctx.fk_of.get((rtb, rc2)) == f"{rta}.{rc1}"
+    if a_fk and b_fk:
+        return (
+            "unvouched", None, None, tables,
+            f"{left} = {right} ({read} — each side is a foreign key to the other)",
+        )
+    if a_fk or b_fk:
+        many, one = (ta, tb) if a_fk else (tb, ta)
+        fk_column = f"{rta}.{rc1}" if a_fk else f"{rtb}.{rc2}"
+        return (
+            "one_to_many", one, many, tables,
+            f"{left} = {right} ({read}; {fk_column} is a foreign key — "
+            f"several {many} rows can share one {one} row)",
+        )
+    shared = ctx.fk_of.get((rta, rc1))
+    if shared and shared == ctx.fk_of.get((rtb, rc2)):
+        reason = (
+            f"{read} — both foreign keys with the same target — "
+            f"every {ta} row pairs with every {tb} row that shares it"
+        )
+    else:
+        reason = f"{read} — no foreign key relates these columns"
+    return ("unvouched", None, None, tables, f"{left} = {right} ({reason})")
+
+
+def _repeated_tables(steps: list[Step], in_scope: set[str]) -> dict[str, list[str]]:
     """table -> the reasons this scope's joins repeat its rows. With a
     step nothing vouches for, every table in scope is repeated (by all
     the steps); otherwise the one side of each one-to-many step, and
@@ -536,6 +849,7 @@ def lint_fan_out(
     """The reason the statement risks a join fan-out (or a LEFT JOIN
     shape that answers the wrong question), or None."""
     ctx = _context(sql, dictionary, dictionary_map)
+    memo: dict[int, ScopeGrain] = {}
 
     fan: list[str] = []
     dead: list[str] = []
@@ -554,9 +868,8 @@ def lint_fan_out(
 
         if plain_agg or bandaid:
             in_scope = set(aliases.values())
-            from_table = from_table_of(text)
-            steps = _join_steps(scope, aliases, ctx)
-            repeated = _repeated_tables(steps, in_scope)
+            grain = _scope_grain(scope, ctx, memo)
+            from_table, steps, repeated = grain.from_table, grain.steps, grain.repeated
             fired_here = False
             for func, argument in _aggregate_arguments(select_list):
                 if func == "count" and _DISTINCT_PREFIX.match(argument):

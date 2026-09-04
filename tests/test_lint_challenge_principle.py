@@ -79,6 +79,14 @@ def test_the_fan_out_challenges_keep_their_tables():
         fixtures.HISTORY_FILTER_NOT_IN,
         fixtures.HISTORY_FILTER_WITH_TOP_LEVEL_OR,
         fixtures.HISTORY_FILTER_ON_THE_OTHER_ALIAS,
+        fixtures.S2_REPAIRED_WITH_COALESCE,
+        fixtures.GROUPED_CTE_TO_FK_SIDE,
+        fixtures.DERIVED_TABLE_TO_FK_SIDE,
+        fixtures.GROUPED_CTE_ON_NON_KEY,
+        fixtures.LOOKUP_CTE_SUM_OVER_LOOKUP,
+        fixtures.FILTERED_PASSTHROUGH_CTE_COUNT,
+        fixtures.S2_CTE_PAIR,
+        fixtures.PASSTHROUGH_PK_THROUGH_A_FANNED_BODY,
     ):
         challenge = lint_fan_out(sql, fixtures.DICTIONARY, fixtures.MAP)
         _assert_keeps_its_tables(challenge, sql, fixtures.DICTIONARY)

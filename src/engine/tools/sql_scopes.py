@@ -54,10 +54,15 @@ KEYWORDS = {
 # A keyword after a table name is not its alias: without the lookahead,
 # `FROM findings JOIN compliance_reports` read JOIN as findings' alias
 # and the scan never saw compliance_reports (guard pass; latent — the
-# pinned model aliases every table, so no live statement hit it).
+# pinned model aliases every table, so no live statement hit it). A
+# derived table — a hoisted subquery with an alias — stands under its
+# alias (Close Pass), so a join to it is a reference like any other.
+_NOT_A_KEYWORD = rf"(?!(?:{'|'.join(sorted(KEYWORDS))})\b)"
 _TABLE_REF = re.compile(
-    r"\b(from|join)\s+([A-Za-z_]\w*)"
-    rf"(?:\s+(?:as\s+)?(?!(?:{'|'.join(sorted(KEYWORDS))})\b)([A-Za-z_]\w*))?",
+    r"\b(from|join)\s*(?:"
+    rf"\(__subquery__\)\s+(?:as\s+)?{_NOT_A_KEYWORD}([A-Za-z_]\w*)"
+    rf"|\b([A-Za-z_]\w*)(?:\s+(?:as\s+)?{_NOT_A_KEYWORD}([A-Za-z_]\w*))?"
+    r")",
     re.IGNORECASE,
 )
 _SELECT_LIST = re.compile(r"\bselect\b(.*?)\bfrom\b", re.IGNORECASE | re.DOTALL)
@@ -275,10 +280,14 @@ def original_fragment(sql: str, cleaned: str) -> str:
 def table_references(scope: str) -> list[tuple[str, str | None]]:
     """(table, alias) for every FROM/JOIN reference in the scope's
     text, in order, lowercased; alias is None when the table stands
-    bare. A name after FROM or JOIN is a real table or a CTE — the
-    consumer tells them apart through the scope's named map."""
+    bare. A name after FROM or JOIN is a real table or a CTE, and a
+    derived table is referenced by its alias — the consumer tells them
+    apart through the scope's named map."""
     references: list[tuple[str, str | None]] = []
-    for _, table, alias in _TABLE_REF.findall(scope):
+    for _, derived, table, alias in _TABLE_REF.findall(scope):
+        if derived:
+            references.append((derived.lower(), None))
+            continue
         alias_name = alias.lower() if alias and alias.lower() not in KEYWORDS else None
         references.append((table.lower(), alias_name))
     return references

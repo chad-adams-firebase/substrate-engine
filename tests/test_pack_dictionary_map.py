@@ -207,12 +207,20 @@ def test_the_polish_pass_silent_shapes_stay_silent(pack_map, pack_dictionary):
     scope, the browser's correct resend that used to ship [UNVERIFIED])
     and the correction_application_rate template, whose SUM(CASE WHEN
     NOT EXISTS …) reads no outer column and counts the row grain."""
-    from tests.test_tool_sql_lint import FLAGSHIP_ATTEMPT_2, WF_CLOSED_SAVINGS
+    from tests.test_tool_sql_lint import (
+        AMB1_DISTINCT_CTE,
+        AMB1_DISTINCT_CTE_UNALIASED,
+        FLAGSHIP_ATTEMPT_2,
+        WF_CLOSED_SAVINGS,
+    )
 
     assert lint_fan_out(FLAGSHIP_ATTEMPT_2, pack_dictionary, pack_map) is None
     # Close Pass: the terminal-status sum inside a CTE, vouched by the
-    # history path's declared condition.
+    # history path's declared condition; the anti-join to a DISTINCT
+    # CTE on its key, vouched by the projection.
     assert lint_fan_out(WF_CLOSED_SAVINGS, pack_dictionary, pack_map) is None
+    assert lint_fan_out(AMB1_DISTINCT_CTE, pack_dictionary, pack_map) is None
+    assert lint_fan_out(AMB1_DISTINCT_CTE_UNALIASED, pack_dictionary, pack_map) is None
     template = next(
         m for m in pack_map.metrics if m.name == "correction_application_rate"
     )

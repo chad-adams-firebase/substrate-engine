@@ -425,8 +425,17 @@ def test_avg_over_the_null_side_of_a_left_join_is_challenged():
     assert "resend the statement unchanged" in reason
 
 
-def test_avg_coalesce_is_the_repair_shape_and_stays_silent():
-    assert lint_fan_out(S2_REPAIRED_WITH_COALESCE, DICTIONARY, MAP) is None
+def test_avg_coalesce_is_the_repair_shape_for_the_null_check():
+    """COALESCE repairs the NULL semantics, so that paragraph is gone.
+    The derived join itself is visible since the Close Pass and reads
+    through to the line-grain join to findings — the same composite
+    key the flat S2 indicator draws the fan-out check on, deliberately
+    undeclared (a line may carry two findings by schema)."""
+    reason = lint_fan_out(S2_REPAIRED_WITH_COALESCE, DICTIONARY, MAP)
+    assert reason is not None
+    assert "AVG skips NULLs" not in reason
+    assert reason.startswith("Fan-out check:")
+    assert "flagged_lines.invoice_id reads findings.invoice_id" in reason
 
 
 def test_avg_over_a_plain_left_joined_table_is_challenged():
@@ -751,3 +760,221 @@ def test_avg_over_a_conditionally_one_to_one_left_join_is_exempt():
     (U5's precedent); a join one-to-one under its own ON filter is the
     same shape."""
     assert lint_fan_out(AVG_OVER_A_TERMINAL_LEFT_JOIN, DICTIONARY, MAP) is None
+
+
+# --- Close Pass: a scope's projection vouches for its key ---------------
+
+# AMB1 attempt 2 (×5, post-Block-4): a DISTINCT projection of the join
+# key cannot multiply; the challenge had said "no foreign key relates
+# these columns" because a CTE name has no dictionary row.
+AMB1_DISTINCT_CTE = """
+WITH reviewed_invoices AS (
+  SELECT DISTINCT ih.invoice_id FROM invoice_history ih
+  WHERE ih.to_status IN ('CLOSED', 'NO_REVIEW_NEEDED')
+)
+SELECT DATE(i.received_at) AS received_date, COUNT(*) AS unreviewed_invoices
+FROM invoices i LEFT JOIN reviewed_invoices ri ON i.id = ri.invoice_id
+WHERE ri.invoice_id IS NULL
+GROUP BY DATE(i.received_at) ORDER BY received_date
+"""
+AMB1_DISTINCT_CTE_UNALIASED = AMB1_DISTINCT_CTE.replace(
+    "SELECT DISTINCT ih.invoice_id FROM invoice_history ih\n  WHERE ih.to_status",
+    "SELECT DISTINCT invoice_id FROM invoice_history\n  WHERE to_status",
+)
+GROUPED_CTE_ON_KEY_SUM = """
+WITH invoice_amounts AS (
+  SELECT i.supplier_id, SUM(i.invoice_total) AS total FROM invoices i GROUP BY i.supplier_id
+)
+SELECT s.name AS supplier_name, SUM(ia.total) AS total_invoice_amount
+FROM suppliers s JOIN invoice_amounts ia ON ia.supplier_id = s.id
+GROUP BY s.name
+"""
+# GROUP BY s.id, s.name (live ×11): the key is the primary key alone.
+GROUPED_CTE_PK_AND_NAME = """
+WITH per_supplier AS (
+  SELECT s.id AS supplier_id, s.name AS supplier_name, COUNT(i.id) AS invoice_count
+  FROM suppliers s LEFT JOIN invoices i ON i.supplier_id = s.id
+  GROUP BY s.id, s.name
+)
+SELECT p.supplier_name, SUM(i.invoice_total) AS total
+FROM per_supplier p JOIN invoices i ON i.supplier_id = p.supplier_id
+GROUP BY p.supplier_name
+"""
+# The grouped scope joined on its key from the FK side: the scope is
+# the one side, repeated once per invoice — reading it fans, reading
+# the invoices does not.
+GROUPED_CTE_TO_FK_SIDE = """
+WITH invoice_amounts AS (
+  SELECT i.supplier_id, SUM(i.invoice_total) AS total FROM invoices i GROUP BY i.supplier_id
+)
+SELECT SUM(ia.total) AS doubled_total, SUM(i.invoice_total) AS true_total
+FROM invoices i LEFT JOIN invoice_amounts ia ON i.supplier_id = ia.supplier_id
+"""
+DERIVED_TABLE_TO_FK_SIDE = """
+SELECT SUM(ia.total) AS doubled_total, SUM(i.invoice_total) AS true_total
+FROM invoices i
+LEFT JOIN (SELECT i2.supplier_id, SUM(i2.invoice_total) AS total FROM invoices i2 GROUP BY i2.supplier_id) ia
+  ON i.supplier_id = ia.supplier_id
+"""
+# Grouped on two columns, joined on one: not unique on the join, so the
+# primary-key side is the one side and reading it fans.
+GROUPED_CTE_ON_NON_KEY = """
+WITH per_item AS (
+  SELECT i.supplier_id, l.item_code, SUM(l.extended_price) AS amount
+  FROM invoice_lines l JOIN invoices i ON i.id = l.invoice_id
+  GROUP BY i.supplier_id, l.item_code
+)
+SELECT s.name AS supplier_name, SUM(s.credit_limit) AS credit, SUM(p.amount) AS spend
+FROM suppliers s JOIN per_item p ON p.supplier_id = s.id
+GROUP BY s.name
+"""
+# A lookup written as a CTE: its columns read through to suppliers, so
+# the foreign key from invoices decides — the lookup side fans, the
+# invoices side does not (LOOKUP_SIDE_SUM in CTE clothing).
+LOOKUP_CTE = """
+WITH supplier_names AS (SELECT s.id, s.name FROM suppliers s)
+SELECT sn.name AS supplier_name, COUNT(*) AS invoice_count, SUM(i.invoice_total) AS total
+FROM invoices i JOIN supplier_names sn ON sn.id = i.supplier_id
+GROUP BY sn.name
+"""
+LOOKUP_CTE_SUM_OVER_LOOKUP = """
+WITH supplier_credit AS (SELECT s.id, s.credit_limit FROM suppliers s)
+SELECT SUM(sc.credit_limit) AS credit
+FROM invoices i JOIN supplier_credit sc ON sc.id = i.supplier_id
+"""
+# FO_EXCEPT_NAIVE in a CTE: the filtered pass-through reads through to
+# findings.invoice_id, a foreign key, and the invoice grain multiplies.
+FILTERED_PASSTHROUGH_CTE_COUNT = """
+WITH open_findings AS (SELECT f.id, f.invoice_id FROM findings f WHERE f.status = 'OPEN')
+SELECT COUNT(*) AS invoices_with_open_findings
+FROM invoices i JOIN open_findings o ON o.invoice_id = i.id
+"""
+FILTERED_PASSTHROUGH_CTE_COUNT_DISTINCT = FILTERED_PASSTHROUGH_CTE_COUNT.replace(
+    "COUNT(*)", "COUNT(DISTINCT i.id)"
+)
+TWO_GROUPED_CTES_ON_SHARED_KEY = """
+WITH totals AS (SELECT i.supplier_id, SUM(i.invoice_total) AS total FROM invoices i GROUP BY i.supplier_id),
+counts AS (SELECT i.supplier_id, COUNT(*) AS n FROM invoices i GROUP BY i.supplier_id)
+SELECT t.supplier_id, SUM(t.total) AS total, SUM(c.n) AS n
+FROM totals t JOIN counts c ON c.supplier_id = t.supplier_id
+GROUP BY t.supplier_id
+"""
+CTE_JOINED_TWICE = """
+WITH per_supplier AS (SELECT i.supplier_id, SUM(i.invoice_total) AS total FROM invoices i GROUP BY i.supplier_id)
+SELECT SUM(a.total) AS a_total, SUM(b.total) AS b_total
+FROM per_supplier a JOIN per_supplier b ON a.supplier_id = b.supplier_id
+"""
+# S2 reps 1/3 (post-Block-4): two pass-through CTEs on the composite
+# line key — the line-grain join the map leaves undeclared, now named
+# through the tables behind the CTEs.
+S2_CTE_PAIR = """
+WITH line_population AS (SELECT l.invoice_id, l.line_number FROM invoice_lines l WHERE l.item_code = 'SVC-4410'),
+flagged_lines AS (SELECT f.invoice_id, f.line_number FROM findings f WHERE f.rule_name = 'service_hours_excessive')
+SELECT AVG(CASE WHEN fl.invoice_id IS NOT NULL THEN 1.0 ELSE 0.0 END) AS item_flag_rate
+FROM line_population lp LEFT JOIN flagged_lines fl
+  ON lp.invoice_id = fl.invoice_id AND lp.line_number = fl.line_number
+"""
+# A primary key passed through a body whose joins repeat its table:
+# the pass-through vouches for nothing.
+PASSTHROUGH_PK_THROUGH_A_FANNED_BODY = """
+WITH x AS (SELECT i.id, l.extended_price FROM invoices i JOIN invoice_lines l ON l.invoice_id = i.id)
+SELECT COUNT(*) AS n FROM findings f JOIN x ON x.id = f.invoice_id
+"""
+
+
+def test_a_distinct_projection_of_the_join_key_cannot_multiply():
+    """AMB1 ×5 on the post-Block-4 report: the anti-join to a DISTINCT
+    CTE on its key is one-to-one, aliased or not."""
+    assert lint_fan_out(AMB1_DISTINCT_CTE, DICTIONARY, MAP) is None
+    assert lint_fan_out(AMB1_DISTINCT_CTE_UNALIASED, DICTIONARY, MAP) is None
+
+
+def test_a_grouped_scope_joined_on_its_key_is_one_per_key():
+    assert lint_fan_out(GROUPED_CTE_ON_KEY_SUM, DICTIONARY, MAP) is None
+    assert lint_fan_out(GROUPED_CTE_PK_AND_NAME, DICTIONARY, MAP) is None
+    assert lint_fan_out(TWO_GROUPED_CTES_ON_SHARED_KEY, DICTIONARY, MAP) is None
+    assert lint_fan_out(CTE_JOINED_TWICE, DICTIONARY, MAP) is None
+    assert lint_fan_out(W1_DERIVED_LINES, DICTIONARY, MAP) is None
+
+
+def test_a_grouped_scope_is_the_one_side_from_the_foreign_key_side():
+    for sql in (GROUPED_CTE_TO_FK_SIDE, DERIVED_TABLE_TO_FK_SIDE):
+        reason = lint_fan_out(sql, DICTIONARY, MAP)
+        assert reason is not None, sql
+        assert "SUM(ia.total) reads ia" in reason or "SUM(ia.total) reads invoice_amounts" in reason
+        assert "once per invoices row" in reason
+        assert "SUM(i.invoice_total)" not in reason
+    reason = lint_fan_out(GROUPED_CTE_ON_NON_KEY, DICTIONARY, MAP)
+    assert reason is not None
+    assert "SUM(s.credit_limit) reads suppliers" in reason
+    assert "SUM(p.amount)" not in reason
+
+
+def test_a_scope_column_reads_through_to_the_table_behind_it():
+    """A pass-through CTE carries the foreign-key knowledge of the
+    column it projects: the lookup and the filtered many side behave
+    exactly as their flat twins."""
+    assert lint_fan_out(LOOKUP_CTE, DICTIONARY, MAP) is None
+    reason = lint_fan_out(LOOKUP_CTE_SUM_OVER_LOOKUP, DICTIONARY, MAP)
+    assert reason is not None
+    assert "SUM(sc.credit_limit) reads supplier_credit" in reason
+    assert "supplier_credit.id reads suppliers.id" in reason
+    reason = lint_fan_out(FILTERED_PASSTHROUGH_CTE_COUNT, DICTIONARY, MAP)
+    assert reason is not None
+    assert "COUNT(*) reads invoices" in reason
+    assert "invoices is one row per id; open_findings.invoice_id reads findings.invoice_id" in reason
+    assert "once per open_findings row" in reason
+    assert lint_fan_out(FILTERED_PASSTHROUGH_CTE_COUNT_DISTINCT, DICTIONARY, MAP) is None
+
+
+def test_the_line_grain_cte_pair_stays_challenged_through_its_tables():
+    reason = lint_fan_out(S2_CTE_PAIR, DICTIONARY, MAP)
+    assert reason is not None
+    assert "line_population.invoice_id reads invoice_lines.invoice_id" in reason
+    assert "flagged_lines.invoice_id reads findings.invoice_id" in reason
+    assert "both foreign keys with the same target" in reason
+    assert "no foreign key relates these columns" in reason  # line_number
+
+
+def test_a_pass_through_key_from_a_fanned_body_vouches_for_nothing():
+    reason = lint_fan_out(PASSTHROUGH_PK_THROUGH_A_FANNED_BODY, DICTIONARY, MAP)
+    assert reason is not None
+    assert "x.id reads invoices.id, but the joins inside x repeat invoices" in reason
+
+
+def test_a_scope_reads_its_own_key():
+    """The projection reader, on the shapes the pinned model writes."""
+    from engine.tools.sql_lint import _context, _scope_grain
+    from engine.tools.sql_scopes import scope_tree
+
+    def grain(sql: str, name: str):
+        tree = scope_tree(sql)
+        scope = next(s for s in tree if s.name == name)
+        return _scope_grain(scope, _context(sql, DICTIONARY, MAP), {})
+
+    assert grain(AMB1_DISTINCT_CTE, "reviewed_invoices").unique_on == {"invoice_id"}
+    assert grain(GROUPED_CTE_ON_KEY_SUM, "invoice_amounts").unique_on == {"supplier_id"}
+    assert grain(GROUPED_CTE_PK_AND_NAME, "per_supplier").unique_on == {"supplier_id"}
+    assert grain(GROUPED_CTE_ON_NON_KEY, "per_item").unique_on == {"supplier_id", "item_code"}
+    assert grain(LOOKUP_CTE, "supplier_names").unique_on is None
+    assert grain(LOOKUP_CTE, "supplier_names").passthrough == {
+        "id": ("suppliers", "id"), "name": ("suppliers", "name"),
+    }
+    by_ordinal = "WITH c AS (SELECT i.supplier_id, COUNT(*) AS n FROM invoices i GROUP BY 1) SELECT * FROM c"
+    assert grain(by_ordinal, "c").unique_on == {"supplier_id"}
+    by_expression = (
+        "WITH c AS (SELECT DATE(i.received_at) AS received_date, COUNT(*) AS n "
+        "FROM invoices i GROUP BY DATE(i.received_at)) SELECT * FROM c"
+    )
+    assert grain(by_expression, "c").unique_on == {"received_date"}
+    by_alias = "WITH c AS (SELECT ih.actor AS reviewer, COUNT(*) AS n FROM invoice_history ih GROUP BY reviewer) SELECT * FROM c"
+    assert grain(by_alias, "c").unique_on == {"reviewer"}
+    # COUNT(DISTINCT x) is not a scope-level DISTINCT; DISTINCT * names
+    # no key; an unmatched group expression and a UNION vouch for none.
+    count_distinct = "WITH c AS (SELECT COUNT(DISTINCT i.id) AS n FROM invoices i) SELECT * FROM c"
+    assert grain(count_distinct, "c").unique_on is None
+    assert grain("WITH c AS (SELECT DISTINCT * FROM invoices i) SELECT * FROM c", "c").unique_on is None
+    unmatched = "WITH c AS (SELECT i.supplier_id, COUNT(*) AS n FROM invoices i GROUP BY i.supplier_id, i.status) SELECT * FROM c"
+    assert grain(unmatched, "c").unique_on is None
+    union = "WITH c AS (SELECT DISTINCT i.id FROM invoices i UNION SELECT f.id FROM findings f) SELECT * FROM c"
+    assert grain(union, "c").unique_on is None
