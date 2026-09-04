@@ -87,14 +87,17 @@ def test_the_fan_out_challenges_keep_their_tables():
         fixtures.FILTERED_PASSTHROUGH_CTE_COUNT,
         fixtures.S2_CTE_PAIR,
         fixtures.PASSTHROUGH_PK_THROUGH_A_FANNED_BODY,
+        fixtures.S2_HIDDEN_FAN,
+        fixtures.HIDDEN_W1_SUM,
+        fixtures.CTE_CHAIN,
     ):
         challenge = lint_fan_out(sql, fixtures.DICTIONARY, fixtures.MAP)
         _assert_keeps_its_tables(challenge, sql, fixtures.DICTIONARY)
-    # The self-join challenged only when nothing vouches for its sides.
-    challenge = lint_fan_out(
-        fixtures.W3_SELF_JOIN, fixtures.DICTIONARY, fixtures.MAP_WITHOUT_RECEIVED
-    )
-    _assert_keeps_its_tables(challenge, fixtures.W3_SELF_JOIN, fixtures.DICTIONARY)
+    # The self-join challenged only when nothing vouches for its sides,
+    # flat and read through a CTE.
+    for sql in (fixtures.W3_SELF_JOIN, fixtures.W3_CTE_SELF_JOIN):
+        challenge = lint_fan_out(sql, fixtures.DICTIONARY, fixtures.MAP_WITHOUT_RECEIVED)
+        _assert_keeps_its_tables(challenge, sql, fixtures.DICTIONARY)
 
 
 def test_the_interval_challenge_names_no_table_at_all():

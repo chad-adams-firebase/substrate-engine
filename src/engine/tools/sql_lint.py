@@ -57,7 +57,14 @@ the join is one-to-one. Otherwise a scope's plain pass-through column
 reads the foreign-key knowledge of the column behind it (unless the
 scope's own joins repeat that table), so a lookup or a filtered many
 side written as a CTE behaves exactly like its flat twin, and a
-computed column vouches for nothing.
+computed column vouches for nothing. And an aggregate over a scope that
+is not deduplicated reads what that scope's rows are: COUNT(*) FROM a
+CTE whose body LEFT JOINs the line grain reads the lines across that
+join (S2 reps 2/4's 100%, silent before — the hidden-fan gap the pin
+pass recorded, closed), SUM(x.total) over a CTE that repeats invoices
+reads invoices, and a deduplicated scope propagates nothing. When a
+LEFT JOIN is among the joins that fired, the challenge also names the
+EXISTS test — the shape a match indicator should take.
 
 The challenge names the aggregate, the table it reads, and the step
 that repeats it — never a destination (the guard pass's principle:
@@ -843,6 +850,107 @@ def _repeated_tables(steps: list[Step], in_scope: set[str]) -> dict[str, list[st
     return repeated
 
 
+@dataclass
+class _Through:
+    """What an aggregate reads when it reads a scope that is not
+    deduplicated: the scope's name, the real tables its rows come from,
+    the tables the scope's own joins repeat (folded through the scopes
+    it reads in turn), those joins' steps, and whether a LEFT JOIN is
+    among them."""
+
+    scope_name: str
+    tables: set[str]
+    repeated: dict[str, list[str]]
+    steps: list[Step]
+    has_left_join: bool
+
+
+def _read_through(
+    name: str,
+    columns: set[str] | None,
+    scope: QueryScope,
+    ctx: _Context,
+    memo: dict[int, ScopeGrain],
+) -> _Through | None:
+    """The tables an aggregate reads through the named scope — its row
+    grain when columns is None, else what its output columns read —
+    and the scope's repeated map. None for a real table, and for a
+    deduplicated scope, which propagates nothing: its own aggregates
+    were linted in its body and its rows are one per key."""
+    named = scope.named.get(name)
+    if named is None:
+        return None
+    grain = _scope_grain(named, ctx, memo)
+    if grain.unique_on is not None:
+        return None
+    row_grain = {grain.from_table} if grain.from_table else set()
+    sources: set[str] = set()
+    if columns is None:
+        sources = set(row_grain)
+    for column in columns or ():
+        if column not in grain.reads:
+            sources.add("?")  # SELECT *, or a column the scope never named
+        else:
+            read = grain.reads[column]
+            sources |= read if read else row_grain
+    if "?" in sources:
+        sources = (sources - {"?"}) | set(grain.repeated)
+    result = _Through(name, set(), dict(grain.repeated), list(grain.steps), grain.has_left_join)
+    for source in sources:
+        deeper = _read_through(source, None, named, ctx, memo)
+        if deeper is None:
+            result.tables.add(source)
+            continue
+        result.tables |= deeper.tables
+        for table, reasons in deeper.repeated.items():
+            known = result.repeated.setdefault(table, [])
+            known.extend(reason for reason in reasons if reason not in known)
+        result.steps.extend(deeper.steps)
+        result.has_left_join |= deeper.has_left_join
+    return result
+
+
+def _scope_columns_read(
+    argument: str,
+    aliases: dict[str, str],
+    scope: QueryScope,
+    in_scope: set[str],
+    ctx: _Context,
+    memo: dict[int, ScopeGrain],
+) -> dict[str, set[str]]:
+    """scope name -> the output columns of it an aggregate argument
+    reads: qualified through the scope's alias, or bare when no real
+    table in scope owns the word and exactly one scope names it (W3's
+    AVG(time_in_seconds) over a CTE)."""
+    text = _DISTINCT_PREFIX.sub("", argument).strip()
+    columns: dict[str, set[str]] = {}
+    for qualifier, column in _QUALIFIED_REF.findall(text):
+        name = aliases.get(qualifier.lower(), qualifier.lower())
+        if name in scope.named:
+            columns.setdefault(name, set()).add(column.lower())
+    bare = _QUALIFIED_REF.sub(" ", text)
+    called = {name.lower() for name in _FUNC_CALL.findall(bare)}
+    for word in _WORD.findall(bare):
+        lowered = word.lower()
+        if (
+            lowered in _ARGUMENT_KEYWORDS
+            or lowered in called
+            or lowered in aliases
+            or lowered.startswith("__")
+            or any(lowered in ctx.columns_of.get(t, set()) for t in in_scope)
+        ):
+            continue
+        owners = [
+            name
+            for name in in_scope
+            if name in scope.named
+            and lowered in _scope_grain(scope.named[name], ctx, memo).reads
+        ]
+        if len(owners) == 1:
+            columns.setdefault(owners[0], set()).add(lowered)
+    return columns
+
+
 def lint_fan_out(
     sql: str, dictionary: list[DictionaryRow], dictionary_map: DictionaryMap
 ) -> str | None:
@@ -856,6 +964,7 @@ def lint_fan_out(
     avg_null: list[str] = []
     involved: set[str] = set()
     bandaid_seen = False
+    left_join_seen = False
     for scope in scope_tree(sql):
         text = scope.text
         select_list = select_list_of(text)
@@ -875,24 +984,61 @@ def lint_fan_out(
                 if func == "count" and _DISTINCT_PREFIX.match(argument):
                     continue  # COUNT(DISTINCT x) is the sanctioned repair
                 reads = _tables_read(argument, aliases, ctx.columns_of, in_scope)
+                row_grain = reads is None
                 if reads is None:
                     reads = {from_table} if from_table else set()
                 if "?" in reads:
                     reads = (reads - {"?"}) | set(repeated)
-                hit = [table for table in sorted(reads) if table in repeated]
-                if not hit:
+                # An aggregate over a scope that is not deduplicated reads
+                # what that scope's rows are — the hidden fan (S2 reps
+                # 2/4): a LEFT JOIN inside a CTE, COUNT(*) FROM it outside.
+                columns = (
+                    {}
+                    if row_grain
+                    else _scope_columns_read(argument, aliases, scope, in_scope, ctx, memo)
+                )
+                throughs = [
+                    through
+                    for name in sorted(reads | set(columns))
+                    for through in [
+                        _read_through(name, columns.get(name), scope, ctx, memo)
+                    ]
+                    if through is not None
+                ]
+                hits: list[tuple[str, str | None, str]] = [
+                    (table, None, reason)
+                    for table in sorted(reads)
+                    for reason in repeated.get(table, [])
+                ]
+                for through in throughs:
+                    hits.extend(
+                        (table, through.scope_name, reason)
+                        for table in sorted(through.tables)
+                        for reason in through.repeated.get(table, [])
+                    )
+                if not hits:
                     continue
                 fired_here = True
                 shown = original_fragment(sql, f"{func}({argument})")
-                for table in hit:
-                    for reason in repeated[table]:
-                        entry = f"{shown} reads {table} {reason}"
-                        if entry not in fan:
-                            fan.append(entry)
-                    involved.update(
-                        t for kind, _, _, tables, _ in steps for t in tables
-                        if kind == "unvouched" or table in tables
+                for table, via, reason in hits:
+                    entry = (
+                        f"{shown} reads {table} {reason}"
+                        if via is None
+                        else f"{shown} reads {via}, whose rows are {table} {reason}"
                     )
+                    if entry not in fan:
+                        fan.append(entry)
+                hit_tables = {table for table, _, _ in hits}
+                touched = list(steps)
+                left_join_seen = left_join_seen or grain.has_left_join
+                for through in throughs:
+                    if through.tables & hit_tables:
+                        touched.extend(through.steps)
+                        left_join_seen = left_join_seen or through.has_left_join
+                involved.update(
+                    t for kind, _, _, tables, _ in touched for t in tables
+                    if kind == "unvouched" or tables & hit_tables
+                )
             if bandaid and fired_here:
                 bandaid_seen = True
 
@@ -953,12 +1099,23 @@ def lint_fan_out(
             if bandaid_seen
             else ""
         )
+        # The recommended shapes must be shapes every guard can read
+        # (the challenge principle's corollary): a scope de-duplicated
+        # on its key, COUNT(DISTINCT), and — when a LEFT JOIN is in
+        # play — an EXISTS test, which hoists to a scope nothing joins.
+        exists_note = (
+            ", or test whether a row has a match with EXISTS rather than a "
+            "LEFT JOIN"
+            if left_join_seen
+            else ""
+        )
         parts.append(
             f"Fan-out check: {listed} — the aggregate adds join "
             "combinations, not entities. Aggregate each side in its own "
             "scope, then join the results; count an entity with "
-            f"COUNT(DISTINCT <table>.id).{bandaid_note}{hint} If this join "
-            "cannot multiply rows, resend the statement unchanged."
+            f"COUNT(DISTINCT <table>.id){exists_note}.{bandaid_note}{hint} "
+            "If this join cannot multiply rows, resend the statement "
+            "unchanged."
         )
     if dead:
         names = ", ".join(dict.fromkeys(dead))

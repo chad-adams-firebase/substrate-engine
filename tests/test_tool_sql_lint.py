@@ -978,3 +978,106 @@ def test_a_scope_reads_its_own_key():
     assert grain(unmatched, "c").unique_on is None
     union = "WITH c AS (SELECT DISTINCT i.id FROM invoices i UNION SELECT f.id FROM findings f) SELECT * FROM c"
     assert grain(union, "c").unique_on is None
+
+
+# --- Close Pass: an aggregate over a CTE reads what the CTE's rows are --
+
+# S2 reps 2/4 (post-Block-4): the composite LEFT JOIN hidden in a CTE
+# with no aggregate, counted outside — 100% instead of 95.5%, silent
+# before, caught only by the saturated-rate warn.
+S2_HIDDEN_FAN = """
+WITH flagged_lines AS (
+  SELECT l.id AS line_id FROM invoice_lines l
+  LEFT JOIN findings f ON l.invoice_id = f.invoice_id AND l.line_number = f.line_number
+    AND f.rule_name = 'service_hours_excessive'
+  WHERE l.item_code = 'SVC-4410'
+),
+total_lines AS (SELECT COUNT(*) AS total_count FROM invoice_lines WHERE item_code = 'SVC-4410'),
+flagged_count AS (SELECT COUNT(*) AS flagged_count FROM flagged_lines)
+SELECT flagged_count.flagged_count * 1.0 / total_lines.total_count AS item_flag_rate
+FROM flagged_count, total_lines
+"""
+# S2 rep 5: the gotcha's EXISTS indicator inside a CTE, averaged outside.
+S2_EXISTS_CTE = """
+WITH flagged_lines AS (
+  SELECT l.id AS line_id,
+         CASE WHEN EXISTS (SELECT 1 FROM findings f WHERE f.invoice_id = l.invoice_id
+                           AND f.line_number = l.line_number AND f.rule_name = 'service_hours_excessive')
+              THEN 1.0 ELSE 0.0 END AS is_flagged
+  FROM invoice_lines l WHERE l.item_code = 'SVC-4410'
+)
+SELECT AVG(is_flagged) AS item_flag_rate FROM flagged_lines
+"""
+# The flagship fan hidden in a CTE: the invoices column fans, the lines
+# column does not — read through the CTE's own projection.
+HIDDEN_W1_SUM = """
+WITH x AS (
+  SELECT i.invoice_total, l.extended_price
+  FROM invoices i JOIN invoice_lines l ON l.invoice_id = i.id
+)
+SELECT SUM(invoice_total) AS total_invoice_amount, SUM(extended_price) AS total_line_amount FROM x
+"""
+CTE_CHAIN = """
+WITH base AS (SELECT i.id AS invoice_id, l.id AS line_id FROM invoices i JOIN invoice_lines l ON l.invoice_id = i.id),
+passthrough AS (SELECT invoice_id FROM base)
+SELECT COUNT(*) AS n FROM passthrough
+"""
+DEDUPLICATED_CTE_PROPAGATES_NOTHING = """
+WITH matched AS (
+  SELECT DISTINCT l.id FROM invoice_lines l
+  LEFT JOIN findings f ON l.invoice_id = f.invoice_id AND l.line_number = f.line_number
+)
+SELECT COUNT(*) AS n FROM matched
+"""
+# W3 reps 1/4: the history self-join in a CTE, averaged outside.
+W3_CTE_SELF_JOIN = """
+WITH received_to_ready AS (
+  SELECT r.invoice_id, DATE_DIFF('second', r.at, rr.at) AS time_in_seconds
+  FROM invoice_history r JOIN invoice_history rr ON r.invoice_id = rr.invoice_id
+  WHERE r.to_status = 'RECEIVED' AND rr.from_status = 'RECEIVED' AND rr.to_status = 'READY'
+)
+SELECT AVG(time_in_seconds) / 3600.0 AS avg_hours_to_ready FROM received_to_ready
+"""
+
+
+def test_a_fan_hidden_in_a_cte_is_read_through_its_rows():
+    """The ledger's known gap, closed: the aggregate reads the CTE, the
+    CTE's rows are the line grain across the composite join nothing
+    vouches for."""
+    reason = lint_fan_out(S2_HIDDEN_FAN, DICTIONARY, MAP)
+    assert reason is not None
+    assert "COUNT(*) reads flagged_lines, whose rows are invoice_lines across join condition(s) nothing vouches for" in reason
+    assert "invoice_lines.invoice_id = findings.invoice_id" in reason
+    assert lint_fan_out(S2_EXISTS_CTE, DICTIONARY, MAP) is None
+    assert lint_fan_out(DEDUPLICATED_CTE_PROPAGATES_NOTHING, DICTIONARY, MAP) is None
+
+
+def test_a_cte_column_reads_what_its_expression_read():
+    reason = lint_fan_out(HIDDEN_W1_SUM, DICTIONARY, MAP)
+    assert reason is not None
+    assert "SUM(invoice_total) reads x, whose rows are invoices" in reason
+    assert "SUM(extended_price)" not in reason
+    reason = lint_fan_out(CTE_CHAIN, DICTIONARY, MAP)
+    assert reason is not None
+    assert "COUNT(*) reads passthrough, whose rows are invoices" in reason
+
+
+def test_the_history_self_join_cte_is_silent_only_because_the_map_vouches():
+    assert lint_fan_out(W3_CTE_SELF_JOIN, DICTIONARY, MAP) is None
+    reason = lint_fan_out(W3_CTE_SELF_JOIN, DICTIONARY, MAP_WITHOUT_RECEIVED)
+    assert reason is not None
+    assert "AVG(time_in_seconds) reads received_to_ready, whose rows are invoice_history" in reason
+    assert "both columns are foreign keys with the same target" in reason
+
+
+def test_the_challenge_names_exists_when_a_left_join_is_in_play():
+    """A recommended shape must be one every guard can read: the EXISTS
+    indicator hoists to a scope nothing joins, so it is named exactly
+    where a LEFT JOIN fired — the flat S2 indicator, the hidden fan —
+    and not for MT2's inner joins."""
+    for sql in (S2_LEFT_JOIN_INDICATOR, S2_HIDDEN_FAN):
+        reason = lint_fan_out(sql, DICTIONARY, MAP)
+        assert "COUNT(DISTINCT <table>.id), or test whether a row has a match with EXISTS rather than a LEFT JOIN." in reason
+    reason = lint_fan_out(MT2_FANOUT, DICTIONARY, MAP)
+    assert "COUNT(DISTINCT <table>.id)." in reason
+    assert "EXISTS" not in reason

@@ -20,6 +20,7 @@ from tests.verifier_support import sql_invocation, stats_row
 
 ROOT = Path(__file__).resolve().parents[1]
 POST_DURATION = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-02-post-duration.jsonl"
+POST_BLOCK4 = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-block4.jsonl"
 
 EMPTY_MAP = DictionaryMap(
     provenance=DocProvenance(source="machine", confidence=0.5, needs_validation=True),
@@ -279,3 +280,36 @@ def test_the_cli_verb_replays_the_packs_work_store(tool_pack, tmp_path, capsys):
         "--pack", str(tool_pack), "--work-store",
     ]) == 1
     assert "--conversation" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(not POST_BLOCK4.is_file(), reason="the committed report is absent")
+def test_the_post_block4_report_exposes_exactly_the_s2_line_grain_statements():
+    """The Close Pass's evidence, pinned: the CTE-aware fan-out lint over
+    the report it was measured against — 237 executed statements,
+    fifteen challenges before (AMB1 x5, W-F x5, U-WHO x3, S2 x2), four
+    after, all S2: the CTE pair on the undeclared line-grain key (reps
+    1/3) and the fan hidden in a CTE and counted outside (reps 2/4),
+    which was silent. The next lint is measured against this."""
+    from engine.config.pack_loader import load_pack
+    from engine.eval.runner import load_report
+    from engine.substrates.jsonl import read_rows
+    from engine.substrates.models import DictionaryRow, StatsRow
+    from engine.substrates.pack_data import load_dictionary_map
+
+    pack = load_pack(ROOT / "packs" / "invoiceguard")
+    _, records = load_report(POST_BLOCK4)
+    report = expose(
+        records,
+        stats=read_rows(pack.root / "substrates" / "univariate_stats.jsonl", StatsRow),
+        dictionary=read_rows(pack.root / "substrates" / "dictionary.jsonl", DictionaryRow),
+        dictionary_map=load_dictionary_map(pack.root / "dictionary_map.yaml"),
+        settings=pack.config.verifier.plausibility,
+        checks=["lint.fan_out"],
+    )
+    assert report.statements == 237
+    assert [(h.row_id, h.rep, h.check) for h in report.hits] == [
+        ("S2", rep, "lint.fan_out") for rep in (1, 2, 3, 4)
+    ]
+    hidden = "Fan-out check: COUNT(*) reads flagged_lines, whose rows are invoice_lines"
+    assert [h.detail.startswith(hidden) for h in report.hits] == [False, True, False, True]
+    assert all("EXISTS rather than a LEFT JOIN" in h.detail for h in report.hits)
