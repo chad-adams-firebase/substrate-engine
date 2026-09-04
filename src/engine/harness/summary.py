@@ -18,8 +18,11 @@ decimal and a percent sign (92.2%), durations spelled out in a unit
 word (1 hour, 1.1 days, 45 seconds), plain ints and floats, ISO dates.
 It is anchored on digits with no letter, digit or underscore on either
 side, so a code (CR147), an evidence ref (e0), an identifier
-(rule_rate_variance) or a reading name never matches, and the em dash
-a NULL renders as is never a figure. Pure code: no ports, no I/O.
+(rule_rate_variance) or a reading name never matches, nor a hyphenated
+identifier (SVC-4410, INV-CRP-0001) — a digit run joined to a letter run
+by a hyphen is a code, not a figure — and a figure never ends in a
+comma. The em dash a NULL renders as is never a figure. Pure code: no
+ports, no I/O.
 """
 
 import re
@@ -35,7 +38,7 @@ _UNIT_WORDS = r"days?|hours?|minutes?|seconds?|percent"
 FIGURE = re.compile(
     r"(?<![A-Za-z0-9_])"
     r"(?:(?P<date>\d{4}-\d{2}-\d{2})"
-    r"|(?P<sign>-?)(?P<symbol>\$?)(?P<digits>\d[\d,]*(?:\.\d+)?)(?P<percent>%?)"
+    r"|(?P<sign>-?)(?P<symbol>\$?)(?P<digits>\d(?:[\d,]*\d)?(?:\.\d+)?)(?P<percent>%?)"
     rf"(?P<unit>\s+(?:{_UNIT_WORDS}))?)"
     r"(?![A-Za-z0-9_])"
 )
@@ -45,6 +48,10 @@ FIGURE = re.compile(
 TURN_REF = re.compile(
     r"\bturns?\s+\d+(?:\s*(?:[-–—]|,|and|to)\s*\d+)*", re.IGNORECASE
 )
+
+# SVC-4410, INV-CRP-0001: a hyphenated token with a letter in it is an
+# identifier, and the digits inside are never a figure (Close Pass).
+IDENTIFIER = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+(?![A-Za-z0-9_])")
 
 
 class SummaryProblems(BaseModel):
@@ -73,6 +80,28 @@ def figure_key(match: re.Match) -> str:
     return format(value.normalize(), "f")
 
 
+def _identifier_spans(text: str) -> list[tuple[int, int]]:
+    """(start, end) per hyphenated token that contains a letter; a
+    date (2026-05-30) or a numeric range (4471-4480) is not one."""
+    return [
+        (match.start(), match.end())
+        for match in IDENTIFIER.finditer(text)
+        if re.search(r"[A-Za-z]", match.group())
+    ]
+
+
+def _figures(text: str) -> list[re.Match]:
+    """Every figure match in the text, minus any that starts inside an
+    identifier — the 4410 of SVC-4410 is a code, not a figure. Used on
+    both sides so the answers folded and the summary checked agree."""
+    spans = _identifier_spans(text)
+    return [
+        match
+        for match in FIGURE.finditer(text)
+        if not any(start <= match.start() < end for start, end in spans)
+    ]
+
+
 def figure_set(records: list[HistoryTurn]) -> dict[str, int]:
     """Every figure the folded prose answers stated, keyed to the
     first turn that stated it, minus every number the user typed in
@@ -81,10 +110,10 @@ def figure_set(records: list[HistoryTurn]) -> dict[str, int]:
     for record in sorted(records, key=lambda r: r.turn):
         if record.kind != "prose":
             continue
-        for match in FIGURE.finditer(record.answer):
+        for match in _figures(record.answer):
             figures.setdefault(figure_key(match), record.turn)
     for record in records:
-        for match in FIGURE.finditer(record.question):
+        for match in _figures(record.question):
             figures.pop(figure_key(match), None)
     return figures
 
@@ -102,9 +131,10 @@ def _offending_figures(
     text: str, figures: dict[str, int], ref_spans: list[tuple[int, int, bool]]
 ) -> list[tuple[int, int, int]]:
     """(start, end, turn) per figure token that restates a folded
-    answer's figure — tokens inside a turn reference excluded."""
+    answer's figure — tokens inside a turn reference or an identifier
+    excluded."""
     found = []
-    for match in FIGURE.finditer(text):
+    for match in _figures(text):
         if any(start <= match.start() < end for start, end, _ in ref_spans):
             continue
         turn = figures.get(figure_key(match))

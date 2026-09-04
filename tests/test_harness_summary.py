@@ -25,6 +25,12 @@ def _keys(text):
     return [figure_key(m) for m in FIGURE.finditer(text)]
 
 
+def _answer_keys(text):
+    """What an answer stating `text` puts in the figure set: the public
+    path, which also drops the digits inside a hyphenated identifier."""
+    return set(figure_set([_prose(1, text)]))
+
+
 def test_the_grammar_reads_every_rendered_form():
     text = (
         "Total $8,308.92, refund -$1,234.00, rate 92.2%, elapsed 1 hour "
@@ -46,6 +52,28 @@ def test_the_grammar_never_matches_a_word_code_or_reading():
         "abc123def",
     ):
         assert _keys(text) == [], text
+        assert _answer_keys(text) == set(), text
+    # A digit run joined to a letter run by a hyphen is a code. FIGURE
+    # alone still sees its digits; figure_set never keys them.
+    for code in ("SVC-4410", "CR-147", "INV-CRP-0001", "INV-2026-0001"):
+        assert _answer_keys(code) == set(), code
+        assert _answer_keys(f"item {code}, then {code}.") == set(), code
+
+
+def test_a_signed_figure_a_range_and_a_date_still_key():
+    text = (
+        "refund -$1,234.00, drift -12.5%, fee -$5, items 4471-4480 on "
+        "2026-05-30, 1,234 rows"
+    )
+    expected = ["-1234", "-12.5", "-5", "4471", "4480", "2026-05-30", "1234"]
+    assert _keys(text) == expected
+    assert _answer_keys(text) == set(expected)
+
+
+def test_a_figure_never_ends_in_a_comma():
+    text = "12, then 1,234, and 5,"
+    assert [m.group() for m in FIGURE.finditer(text)] == ["12", "1,234", "5"]
+    assert _keys(text) == ["12", "1234", "5"]
 
 
 def test_a_figure_is_keyed_the_same_in_every_surface():
@@ -67,6 +95,10 @@ def test_figure_set_reads_prose_only_and_allows_what_the_user_typed():
         HistoryTurn(turn=4, question="Fire them", answer="[refused: 3 reasons]", kind="refuse"),
     ]
     assert figure_set(records) == {"12": 1, "8308.92": 1, "92.2": 3}
+
+
+def test_an_identifier_in_an_answer_contributes_no_figure():
+    assert figure_set([_prose(4, "SVC-4410 was flagged 63 times.")]) == {"63": 4}
 
 
 def test_summary_problems_names_restated_figures_and_impossible_turns():
@@ -110,6 +142,23 @@ def test_scrub_leaves_turn_references_and_user_numbers_alone():
     records = [_prose(12, "Item 4471 is flagged 90% of the time.", question="What about item 4471?")]
     text = "The user established flag rates for item 4471 in turn 12 (see turn 12)."
     assert scrub_figures(text, records, through_turn=12) == (text, 0)
+
+
+def test_scrub_leaves_an_identifier_and_its_comma_alone():
+    records = [_prose(3, "SVC-4410 covers item 4471.")]
+    text = "Turn 3 said SVC-4410, item 4471 was flagged (see turn 3)."
+    assert scrub_figures(text, records, through_turn=3) == (
+        "Turn 3 said SVC-4410, item (see turn 3) was flagged (see turn 3).",
+        1,
+    )
+
+
+def test_scrub_keeps_the_comma_after_a_figure():
+    records = [_prose(2, "There are 12 of them.")]
+    assert scrub_figures("The count was 12, per turn 2.", records, 2) == (
+        "The count was (see turn 2), per turn 2.",
+        1,
+    )
 
 
 def test_a_figure_in_two_answers_cites_the_first():
