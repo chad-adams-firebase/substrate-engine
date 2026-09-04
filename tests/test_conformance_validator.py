@@ -235,3 +235,22 @@ def test_dictionary_map_conditional_cardinality_column_must_exist_on_the_path(
     assert check.status == "FAIL"
     assert any("findings.rule_nam" in d and "tripwire_unknown" in d for d in check.details)
     assert any("not on the path" in d and "tripwire_off_path" in d for d in check.details)
+
+
+def test_dictionary_map_entity_column_must_exist(fixture_pack, snapshot_duckdb):
+    """Backlog Pass: an entity kind names columns the dictionary knows —
+    a misspelt key column would make the key lint id-like on nothing
+    and the anchor harvest read a column no result ever carries."""
+    add_authored_artifacts(fixture_pack)
+    corrupt_line(
+        fixture_pack / "dictionary_map.yaml",
+        "key_columns: [invoices.id, invoices.invoice_number]",
+        "key_columns: [invoices.id, invoices.invoice_numbr]",
+    )
+    report = make_validator(snapshot_duckdb).validate(fixture_pack, "snapshot")
+    check = next(c for c in report.checks if "dictionary map" in c.name)
+    assert check.status == "FAIL"
+    assert any(
+        "entity 'invoice'" in d and "invoices.invoice_numbr" in d
+        for d in check.details
+    )

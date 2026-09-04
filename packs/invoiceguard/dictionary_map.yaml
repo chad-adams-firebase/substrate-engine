@@ -973,6 +973,40 @@ column_formats:
       - findings.amount
       - compliance_rules.amount
 
+# Entity kinds (Backlog Pass): the things a conversation refers back to
+# — "that invoice", "this rule" — and the columns that identify or name
+# one. Consumers: run_sql's key lint treats key_columns, with every
+# dictionary primary and foreign key, as id-like, so a literal on one
+# that no result, question, or grounding in the conversation carried
+# draws a challenge; the harness records the entity a turn's evidence
+# established from key ∪ name columns; the Verifier checks a follow-up's
+# declared entity against it. Name columns are never id-like. Rule
+# labels are name-only by ruling: a rule name is a label the model
+# legitimately spells from the docs on a first turn (26 distinct values,
+# above the enum scan cap, never rendered into the grounding), so a key
+# challenge there would be a false positive on correct SQL.
+entities:
+  - kind: invoice
+    synonyms: [invoice]
+    key_columns: [invoices.id, invoices.invoice_number]
+    name_columns: [invoices.invoice_number]
+  - kind: supplier
+    synonyms: [supplier, vendor]
+    key_columns: [suppliers.id, suppliers.code]
+    name_columns: [suppliers.name]
+  - kind: auditor
+    synonyms: [auditor, reviewer, user]
+    key_columns: [users.id, users.short_name]
+    name_columns: [users.short_name, invoice_history.actor]
+  - kind: rule
+    synonyms: [rule, audit rule, compliance rule]
+    key_columns: []
+    name_columns: [findings.rule_name, compliance_rules.rule_code]
+  - kind: item
+    synonyms: [item, item code, part]
+    key_columns: [invoice_lines.item_code, contracts.item_code]
+    name_columns: [invoice_lines.item_code]
+
 examples:
   - question: How many invoices received last week had findings?
     guidance: >-

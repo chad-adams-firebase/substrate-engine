@@ -281,3 +281,33 @@ def test_declared_cardinalities_hold_in_the_world(pack_map):
         ("invoices_to_history", "ok", 1)
     ] * 3
     assert all(c.matched_rows > 0 for c in checks)
+
+
+def test_the_pack_declares_its_entity_kinds(pack_map, pack_dictionary):
+    """Backlog Pass: the five kinds a conversation refers back to, every
+    column known to the dictionary (the validator test above proves the
+    same), every synonym lowercase so the anaphor scan can casefold the
+    question once."""
+    kinds = {entity.kind: entity for entity in pack_map.entities}
+    assert list(kinds) == ["invoice", "supplier", "auditor", "rule", "item"]
+    known = {(row.table_name, row.column_name) for row in pack_dictionary}
+    for entity in pack_map.entities:
+        for qualified in entity.columns:
+            table, _, column = qualified.partition(".")
+            assert (table, column) in known, qualified
+        assert entity.synonyms, entity.kind
+        assert all(s == s.lower() for s in entity.synonyms), entity.kind
+    assert kinds["invoice"].key_columns == ["invoices.id", "invoices.invoice_number"]
+    assert kinds["supplier"].name_columns == ["suppliers.name"]
+    assert "invoice_history.actor" in kinds["auditor"].name_columns
+
+
+def test_rule_labels_are_name_only_by_ruling(pack_map):
+    """The ruling-3 amendment: findings.rule_name has 26 distinct values
+    — above the enum scan cap, never rendered into the grounding — and
+    a first-turn `rule_name = 'duplicate_line'` spelled from the docs is
+    correct SQL. Declared as a key it would draw a false ungrounded-key
+    challenge; as a name it still anchors "that rule"."""
+    rule = next(e for e in pack_map.entities if e.kind == "rule")
+    assert rule.key_columns == []
+    assert rule.name_columns == ["findings.rule_name", "compliance_rules.rule_code"]

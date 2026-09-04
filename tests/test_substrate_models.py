@@ -137,3 +137,35 @@ def test_a_cardinality_condition_names_a_qualified_column_and_some_values():
         CardinalityCondition(column="a.b.c", values=["CLOSED"])
     with pytest.raises(ValidationError, match="at least one value"):
         CardinalityCondition(column="invoice_history.to_status", values=[])
+
+
+def test_an_entity_kind_names_qualified_columns_and_at_least_one_of_them():
+    """Backlog Pass: an entity kind is the pack's word for "that
+    invoice" — its columns are joined to the dictionary by the
+    validator, so their shape is checked at load like a cardinality
+    condition's; a kind with no column would anchor nothing."""
+    from engine.substrates.models import DictionaryMap, DocProvenance, EntityKind
+
+    rule = EntityKind(kind="rule", name_columns=["findings.rule_name"])
+    assert rule.key_columns == []
+    assert rule.columns == ["findings.rule_name"]
+    invoice = EntityKind(
+        kind="invoice",
+        synonyms=["invoice"],
+        key_columns=["invoices.id", "invoices.invoice_number"],
+        name_columns=["invoices.invoice_number"],
+    )
+    assert invoice.columns == ["invoices.id", "invoices.invoice_number"]
+    with pytest.raises(ValidationError, match="table.column"):
+        EntityKind(kind="invoice", key_columns=["id"])
+    with pytest.raises(ValidationError, match="table.column"):
+        EntityKind(kind="invoice", name_columns=["a.b.c"])
+    with pytest.raises(ValidationError, match="at least one key or name column"):
+        EntityKind(kind="invoice")
+    with pytest.raises(ValidationError, match="non-empty"):
+        EntityKind(kind="  ", key_columns=["invoices.id"])
+    provenance = DocProvenance(
+        source="machine", confidence=0.5, needs_validation=True, note="t"
+    )
+    assert DictionaryMap(provenance=provenance).entities == []
+    assert DictionaryMap(provenance=provenance, entities=[rule, invoice]).entities[1].kind == "invoice"

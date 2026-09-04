@@ -430,6 +430,52 @@ class ColumnFormatRule(BaseModel):
     format: Literal["money"]
 
 
+class EntityKind(BaseModel):
+    """A kind of thing a conversation refers back to — "that invoice",
+    "this rule" — as the pack author names it: the columns that identify
+    one (keys), the columns that name one (names), and the nouns a
+    question uses for it (Backlog Pass). Consumers: run_sql's key lint
+    reads key_columns, with every dictionary primary and foreign key, as
+    id-like — a literal on one that no result, question, or grounding in
+    the conversation carried draws a challenge; the harness records the
+    entity a turn's evidence established from key ∪ name columns; the
+    Verifier checks a follow-up's declared entity against that anchor.
+    Name columns are never id-like: a label the model legitimately
+    spells from the docs on a first turn (a rule name) must not draw a
+    key challenge — a ruling, recorded in the pass ledger."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    synonyms: list[str] = []
+    key_columns: list[str] = []  # "table.column"
+    name_columns: list[str] = []  # "table.column"
+    provenance: DocProvenance | None = None  # None inherits the document block
+
+    @model_validator(mode="after")
+    def _shape(self) -> "EntityKind":
+        if not self.kind.strip():
+            raise ValueError("entity kind must be a non-empty name")
+        for qualified in [*self.key_columns, *self.name_columns]:
+            table, dot, column = qualified.partition(".")
+            if not (table and dot and column) or "." in column:
+                raise ValueError(
+                    f"entity {self.kind!r}: column must be written "
+                    f"table.column, got {qualified!r}"
+                )
+        if not self.key_columns and not self.name_columns:
+            raise ValueError(
+                f"entity {self.kind!r} must declare at least one key or "
+                "name column"
+            )
+        return self
+
+    @property
+    def columns(self) -> list[str]:
+        """key ∪ name columns, keys first, in declaration order."""
+        return list(dict.fromkeys([*self.key_columns, *self.name_columns]))
+
+
 class DictionaryMap(BaseModel):
     """The Data Dictionary Map substrate (Brief §4.2): the semantic /
     routing layer over the dictionary. This whole artifact IS the
@@ -444,6 +490,7 @@ class DictionaryMap(BaseModel):
     gotchas: list[Gotcha] = []
     examples: list[WhereToLookExample] = []
     column_formats: list[ColumnFormatRule] = []
+    entities: list[EntityKind] = []
 
 
 class BusinessDoc(BaseModel):

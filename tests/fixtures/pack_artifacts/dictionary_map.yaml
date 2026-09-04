@@ -47,6 +47,23 @@ column_formats:
   - format: money
     columns: [invoices.opportunity, invoices.invoice_total, findings.amount]
 
+entities:
+  - kind: invoice
+    synonyms: [invoice]
+    key_columns: [invoices.id, invoices.invoice_number]
+    name_columns: [invoices.invoice_number]
+  - kind: supplier
+    synonyms: [supplier, vendor]
+    key_columns: [suppliers.id, suppliers.code]
+    name_columns: [suppliers.name]
+  - kind: auditor
+    synonyms: [auditor, reviewer, user]
+    key_columns: [users.id, users.short_name]
+    name_columns: [users.short_name, invoice_history.actor]
+  - kind: rule
+    synonyms: [rule, audit rule]
+    name_columns: [findings.rule_name]
+
 examples:
   - question: How many invoices had findings last week?
     guidance: >-

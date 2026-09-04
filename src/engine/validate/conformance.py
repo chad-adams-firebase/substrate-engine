@@ -336,6 +336,13 @@ class ConformanceValidator:
                         f"column format {rule.format!r}: unknown column "
                         f"{qualified}"
                     )
+        for entity in dictionary_map.entities:
+            for qualified in entity.columns:
+                table, _, column = qualified.partition(".")
+                if not column or (table, column) not in known_columns:
+                    details.append(
+                        f"entity {entity.kind!r}: unknown column {qualified}"
+                    )
         return CheckResult(
             name=name, status="FAIL" if details else "PASS", details=details
         )
