@@ -894,3 +894,175 @@ visible in the trail) and the one-turn-in-flight design would need a
 second in-flight operation, a design change, post-Phase-5; W4/W2 under
 ASSOC — association verification is the design item, the blocks keep;
 Table-MUST — S2's yes/no evidence stays here for the revisit.
+
+## Backlog Pass (2026-09-04, after the gate)
+
+Phase 6's opening backlog (gate verdict §7 items 1–2): the two
+wrong-but-verified answers of the developer's 30-turn browser session,
+both conversation-shaped, both invisible to every single-turn row.
+Planned against `c666c05` and the `2026-09-04-post-close` report, built
+in nine commits, 920 → 1005 tests, bank 65 → 67 rows (hash
+`2bc24a635736663d`). No model pin change; no full run in the pass —
+the developer's baseline run grades it, and it is the first run under
+the corrected U-WHO row. Read from the dev store (`packs/invoiceguard/
+work.db`, conversation 1), not from a relay:
+
+- **Turn 19 → 20, the placeholder key.** Turn 19's table carried
+  `invoice_number = INV-00002` and no id. "What was that invoice's
+  history?" drafted `ih.invoice_id = :invoice_id` (a parser error), then
+  `ih.invoice_id = 123 -- Replace 123 with the actual invoice ID`, which
+  executed, returned invoice 123's three transitions, and verified
+  (`table_passthrough`, `plausibility: []`). Nothing read comments;
+  nothing knew which literals the conversation had shown; run_sql saw
+  only the question.
+- **Turn 6 → 7 → 9, the anchor drift — and its root cause.** Turn 6's
+  table was `rule_name = line_note, fire_count = 505`. The history line
+  the router read at turn 7 was `[table: SELECT f.rule_name … LIMIT 1]`:
+  a table's cells never entered history, so the router searched the
+  docs for "the most frequently fired rule", the drafter described
+  `new_supplier`, and the Verifier — which checks that a claimed entity
+  exists, never that it is the one under discussion — verified it. Turn
+  8 refused (no CKG node `new_supplier`); turn 9 counted `rule_name =
+  'new_supplier'`, 197, verified.
+
+Four rulings shaped the build, and one amendment: a table turn's
+transcript may carry what its evidence established; MT-ANCHOR is three
+turns (turn 6, "Tell me more about that rule.", turn 9); id-like is the
+dictionary's primary and foreign keys plus map-declared key columns,
+**amended in planning so that rule labels are name-only** — a rule name
+is a label the model legitimately spells from the docs on a first turn
+(26 distinct values, above the enum scan cap, never rendered into the
+grounding), so a key challenge on `rule_name = 'duplicate_line'` would
+be a false positive on correct SQL, while a name column still anchors
+"that rule"; and a missing `about` is accepted, the check reading the
+answer instead. Two more from the plan's approval: planning figures are
+adopted only as the gold scripts reproduce them (they did:
+`--check-gold` PASS on INV-00426 / $43,117.71 / 5 / 2026-03-20 / ava
+and line_note / 505 / new_supplier / 197), and a row's note states its
+breach semantics in words.
+
+What landed, mechanism by mechanism:
+
+- **Entity kinds in the map** (`entities:` — invoice, supplier, auditor,
+  rule, item; synonyms, key columns, name columns; the validator refuses
+  an unknown column). The engine never learns "invoice" in code: the
+  catalog (`tools/entities.py`) resolves the declarations against the
+  dictionary, a foreign key to a declared key being that key's kind and
+  canonical column, so `invoice_history.invoice_id = 123` and
+  `invoices.id` compare like with like.
+- **The placeholder lint, hard.** An admission token in a `--` or
+  `/* */` comment, or a bind shape where a value belongs (`:name`, `?`,
+  `$1`, `{{…}}`, `<id>`), blocks on every attempt it fires with no
+  license to resend, until the repair budget exhausts and the tool
+  fails — the comment is the model's own confession. Comments are read
+  from the fenced block, since `extract_sql` pops leading comment lines.
+  `<>`, `a < b`, `x <= y` are operators, never placeholders (pinned
+  negatives, by amendment); `::` is a cast; a `--` inside a literal is
+  never a comment — the comment walk steps over literals. The
+  challenge names no table at all.
+- **The ungrounded-key lint.** An equality or IN predicate binding an
+  id-like column to a literal absent from every user question, every
+  key a result or filter carried, and the grounding text draws one
+  repair round; the licensed resend executes and
+  `run_sql.ungrounded_key_override` takes the badge. What the
+  conversation has shown reaches run_sql as a `TurnContext` through
+  `run_in_context` (the ABC's default is `run()`; only run_sql
+  overrides), never the tool's own question argument — at turn 9 the
+  router's paraphrase already carried the invented name. With no
+  context (direct tool use) the lint is silent.
+- **The grounding states the keys.** When a prior turn established an
+  entity, one section — `invoices.invoice_number = 'INV-00426' (invoice,
+  turn 1)` and "a follow-up about that entity filters on this key,
+  verbatim" — and none otherwise: the two golden prompts are
+  byte-identical, a third pins the anchored form. A rule's name is its
+  filter key and is listed too.
+- **`about` beside `reading`, and anchors on the history.** give_answer
+  declares the entity a follow-up is about; both answer shapes carry it;
+  every surface renders `About: <x>.` where the reading renders, the
+  eval's caption pool included (on prose too). At finalize the turn's
+  evidence is harvested — a kind is determinate when its entity is
+  single, every column of that kind single-valued and every filter
+  agreeing — and kept on the HistoryTurn with every key seen; the
+  transcript names it: `[table: About: rule line_note. Reading: … SQL]`.
+  Strings only, so the summary scrub has nothing to read; a legacy
+  checkpoint loads with none.
+- **The anchor check** (`anchor.entity_mismatch`, warn). When the
+  question names a kind with a singular demonstrative or a
+  back-reference and a prior turn established one entity of that kind,
+  the answer is read three ways in order — the declared about, a filter
+  literal on one of the kind's columns in this turn's SQL, and for
+  prose the anchor's name in the text — and the first that decides,
+  decides. Silent where it must be: no kind noun, no prior entity, an
+  ambiguous one, a table with no filter on the kind, a key column the
+  anchor never carried. Kind-less pronouns ("it", "its") are None on
+  purpose: "the rule that flags it" (MT3 turn 2) refers to a rule while
+  turn 1 established a supplier, and a comparison there would have
+  flagged a ten-run-green row; drift through "it" is caught at the
+  kind-bearing turn that begins it. The record carries no tool.
+- **Exposure replays per turn.** One accumulator per conversation, in
+  order; a turn with no statement (turn 7 was a docs search) still faces
+  the anchor check; the work-store arm hands the replay whole turns.
+
+Exposure, measured before landing (`engine eval exposure`, the three
+new checks, then every check):
+
+| source | statements | lint.placeholder | lint.ungrounded_key | anchor.entity_mismatch |
+|---|---|---|---|---|
+| `2026-09-04-post-close.jsonl` | 235 | 0 | 0 | 0 |
+| dev store, conversations 1 and 2 | 44 | 1 — conv 1 turn 20, the comment | 1 — conv 1 turn 20, `invoice_history.invoice_id = 123` | 1 — conv 1 turn 7, `line_note` established, never named |
+
+Every hit is one of the two findings that opened the pass; no clean
+turn is flagged, on either source; conversation 2 is clean. Turn 9 adds
+no anchor hit — "How many findings has it produced?" is kind-less — and
+is caught in the bank by MT-ANCHOR turn 3's gold instead. The
+unfiltered replay of the post-close report reads `(no hits)` under
+every guard. The post-close baseline is pinned in
+`tests/test_eval_exposure.py` beside the two earlier ones.
+
+The bank: **MT-KEY** (anchor by invoice number, as at turn 19; the
+wrong-invoice sentinel is a date regex — every transition of the
+anchored invoice falls on one day, and a history query carries no date
+literal, so the SQL caption cannot trip it; the count and the auditor
+are breach: false) and **MT-ANCHOR** (turn 6, then "Tell me more about
+that rule." with exits [0, 2, 3] — an honest refusal is allowed, another
+rule is not, and the About line must name line_note — then turn 9 with
+executed gold, where 197 is a contradicted breach). Both user-sourced,
+threshold 0.8, notes carrying the breach semantics.
+
+Recorded, not built:
+
+- Kind-less pronouns are unchecked (above).
+- A CTE alias before a key column (`FROM cte c WHERE c.invoice_id = 123`)
+  resolves to no real table and the key lint does not read it; a
+  literal-first predicate (`123 = ih.invoice_id`) is unread, as before.
+- The `<name with spaces>` bind shape is not a placeholder to the lint —
+  admitting spaces would read `a <b AND c> d`; `<invoice_id>` is.
+- Block comments stay invisible to the fan-out, enum and interval lints;
+  the two new lints strip them first.
+- An auditor established as `invoice_history.actor` and a follow-up
+  filtering `users.short_name` are different columns and never compared.
+- A grounding number (a row count, a stats range) grounds an id literal
+  that happens to equal it.
+- The work-store replay has no summary to ground on (the turn log does
+  not carry it); a report's replay does.
+- `USING` joins, recursive CTEs: opaque to the column resolver, as before.
+
+Predictions for the re-run (the first under bank `2bc24a635736663d`):
+
+| row | mechanism | prediction |
+|---|---|---|
+| MT-KEY | turn 1 surfaces `INV-00426` (a name, never the id 440); turn 2's grounding names that key, so the model filters on it; a rep that recalls a bare number is challenged and repairs, or overrides to [UNVERIFIED] and cannot breach | ≥ 4/5 |
+| MT-ANCHOR | turn 1's transcript carries `About: rule line_note.`; turn 2 declares or names it, or honestly refuses; turn 3 counts `rule_name = 'line_note'` | ≥ 4/5 |
+| U-WHO | the first run under the two-reading row | 5/5 |
+| MT1–MT4, W1 | messages unchanged except the optional `about` in the give_answer schema and MT3's turn-1 transcript line, which only helps | hold 5/5 |
+| every other row | one optional field in the tool schema; no grounding change for a first turn; the transcript changes only on turns whose table established one entity | unchanged; watch nudges (15) |
+| INVARIANT | no content path weakened; the lints see more, the Verifier sees more | ok |
+
+Watch-for: any `run_sql.ungrounded_key_override` outside MT-KEY; any
+`Placeholder check` in any trail; any `anchor.entity_mismatch` at all
+outside MT-ANCHOR; an `About:` line on a non-anaphoric turn; a
+`give_answer` nudge mentioning `about`; a first-turn row whose grounding
+carries a "Keys this conversation established" section (it cannot — a
+first turn has no prior turn); and the router declaring `about` on MT3
+turn 2 with the supplier rather than the rule, which the check does not
+read (kind-less) but the transcript would show.
