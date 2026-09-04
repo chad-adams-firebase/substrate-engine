@@ -188,7 +188,13 @@
       if (outcome.verification === "unverified") {
         box.appendChild(el("div", "badge", "UNVERIFIED — this answer could not be fully checked against its evidence"));
       }
-      if (outcome.body.kind === "table") box.appendChild(renderTable(outcome.body.table, outcome.body.caption));
+      if (outcome.body.kind === "table") {
+        // The reading the answer named, one sentence above the SQL —
+        // the same line the text surfaces print (outcomes.reading_line).
+        const readingLine = outcome.body.reading ? "Reading: " + outcome.body.reading + "." : "";
+        const caption = [readingLine, outcome.body.caption].filter(Boolean).join("\n");
+        box.appendChild(renderTable(outcome.body.table, caption));
+      }
       else box.appendChild(renderMarkdown(outcome.body.text));
       return box;
     }

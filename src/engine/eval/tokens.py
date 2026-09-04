@@ -14,7 +14,7 @@ about what "the answer said".
 import re
 
 from engine.eval.models import EmittedTokens
-from engine.harness.outcomes import TurnOutcome
+from engine.harness.outcomes import TurnOutcome, reading_line
 from engine.harness.render import format_cell
 from engine.tools.durations import UNIT_SECONDS, parse_clock
 
@@ -106,9 +106,13 @@ def answer_body(outcome: TurnOutcome | None) -> str:
 
 
 def answer_caption(outcome: TurnOutcome | None) -> str:
+    """A table's caption as the surfaces show it: the reading line the
+    answer named (Close Pass), then the SQL — the pool a `contains`
+    on a reading name reads."""
     if outcome is not None and outcome.kind == "answer":
         if outcome.body.kind == "table":
-            return outcome.body.caption
+            body = outcome.body
+            return "\n".join(part for part in (reading_line(body), body.caption) if part)
     return ""
 
 

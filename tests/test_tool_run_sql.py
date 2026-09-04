@@ -554,3 +554,23 @@ def test_run_sql_description_licenses_the_english_retry_after_a_bounce():
     assert "never a paraphrase" in RunSql.description
     assert "what the SQL asks" in RunSql.description
     assert "the licensed retry, not a paraphrase" in RunSql.description
+
+
+# --- Close Pass: a result declares the readings its question named ------
+
+
+def test_readings_carry_the_matched_metrics_interpretations(tool_pack):
+    """The router names a table answer's reading from a closed set: the
+    interpretations of the metrics the question matched, with their
+    meanings, ride on the run_sql output. A question naming no such
+    metric declares none."""
+    registry, _ = build_tool_registry(tool_pack, [REPAIRED, REPAIRED])
+    matched = registry.invoke("run_sql", {"question": METRIC_QUESTION})
+    assert matched.status == "ok", matched.error
+    assert [(r.name, r.meaning) for r in matched.output.readings] == [
+        ("all findings", "any finding row counts, bookkeeping included."),
+        ("substantive", "excludes category NOTE bookkeeping rows."),
+    ]
+    plain = registry.invoke("run_sql", {"question": "how many invoices?"})
+    assert plain.status == "ok", plain.error
+    assert plain.output.readings == []

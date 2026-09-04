@@ -592,3 +592,81 @@ def test_a_hallucinated_tool_gets_exactly_one_tool_message(tool_pack):
     assert "query_the_database" in m[-1].content
     assert "run_sql" in m[-1].content
     assert result.tools_used == []
+
+
+# --- Close Pass: a table answer names its reading -----------------------
+
+RUN_SQL_ON_THE_METRIC = tool_call(
+    "run_sql", {"question": "What is the flagged share of invoices?"}
+)
+COUNT_SQL = LLMResponse(
+    content="```sql\nSELECT COUNT(*) AS n FROM invoices\n```", model="scripted"
+)
+
+
+def test_a_table_answer_over_a_metric_with_readings_names_its_reading(tool_pack):
+    """The result lists the metric's readings; a declared name rides to
+    the answer as a typed field, and the Verifier still sees the
+    caption as the verbatim SQL — no sentence to re-verify."""
+    responses = [
+        RUN_SQL_ON_THE_METRIC,
+        COUNT_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "reading": "substantive"}),
+    ]
+    session, ports, verifier = build_ask_session(tool_pack, responses)
+    result = session.ask("What is the flagged share of invoices?")
+    assert result.outcome.kind == "answer" and result.outcome.body.kind == "table"
+    assert result.outcome.body.reading == "substantive"
+    assert result.outcome.body.caption == "SELECT COUNT(*) AS n FROM invoices"
+    (call,) = verifier.calls
+    assert call["draft"].text == "SELECT COUNT(*) AS n FROM invoices"
+    # The router saw the readings, names and meanings, in the tool result.
+    from engine.config.models import PortName
+
+    tool_message = ports.get(PortName.LLM).calls[2]["messages"][-1]
+    assert tool_message.role == "tool"
+    assert '"readings":[{"meaning":"any finding row counts, bookkeeping included.","name":"all findings"}' in tool_message.content
+
+
+def test_an_undeclared_reading_is_nudged_with_the_valid_set(tool_pack):
+    responses = [
+        RUN_SQL_ON_THE_METRIC,
+        COUNT_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "reading": "gross"}),
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "reading": "all findings"}),
+    ]
+    session, ports, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("What is the flagged share of invoices?")
+    assert result.outcome.body.reading == "all findings"
+    details = [event.detail for event in result.events]
+    assert "protocol violation — reading not declared — nudging" in details
+    from engine.config.models import PortName
+
+    nudge = ports.get(PortName.LLM).calls[3]["messages"][-1]
+    assert nudge.role == "user"
+    assert "reading 'gross' is not one this result lists" in nudge.content
+    assert "'all findings', 'substantive'" in nudge.content
+
+
+def test_a_missing_reading_is_accepted_and_an_unneeded_one_is_dropped(tool_pack):
+    """Lenient on missing (phrase matching over-reaches, and a forced
+    reading would be a wrong sentence on a right table); a reading
+    given where nothing is declared is dropped, not nudged."""
+    responses = [
+        RUN_SQL_ON_THE_METRIC,
+        COUNT_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("What is the flagged share of invoices?")
+    assert result.outcome.body.reading == ""
+    assert all("nudging" not in event.detail for event in result.events)
+
+    responses = [
+        STATS_CALL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "reading": "substantive"}),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("show me the stats")
+    assert result.outcome.body.kind == "table" and result.outcome.body.reading == ""
+    assert all("nudging" not in event.detail for event in result.events)

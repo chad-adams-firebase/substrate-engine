@@ -11,7 +11,7 @@ import json
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from engine.harness.state import RouteDecision, ToolSelection
 from engine.ports.types import LLMResponse, ToolCall, ToolSpec
@@ -37,6 +37,17 @@ class GiveAnswerArgs(BaseModel):
     # Which evidence item's output ships untouched when shape="table":
     # the index shown alongside each tool result in the loop feedback.
     evidence_index: int | None = None
+    # The reading the chosen result's SQL computed, from the readings
+    # that result lists (Close Pass). Validated by the graph, which has
+    # the evidence: an undeclared name is nudged, a missing one is not.
+    reading: str | None = Field(
+        default=None,
+        description=(
+            "shape='table' only: when the chosen run_sql result lists "
+            "readings, the name of the one its SQL computed, exactly as "
+            "listed."
+        ),
+    )
 
     @model_validator(mode="after")
     def _table_needs_an_index(self) -> "GiveAnswerArgs":
@@ -75,7 +86,9 @@ _CONTROL_DESCRIPTIONS = {
     "give_answer": (
         "The gathered evidence answers the question. shape='table' with "
         "evidence_index=N returns that tool result directly as a table, "
-        "untouched; shape='prose' drafts a grounded explanation."
+        "untouched; shape='prose' drafts a grounded explanation. When "
+        "the chosen run_sql result lists readings, also pass reading="
+        "<one of them>: the reading its SQL computed, exactly as listed."
     ),
     "refuse": (
         "The question is out of scope, asks for action rather than "
@@ -194,6 +207,7 @@ def parse_route(response: LLMResponse) -> RouteDecision:
             kind="answer",
             answer_shape=args.shape,
             evidence_index=args.evidence_index,
+            reading=args.reading,
             parsed_from_text=parsed_from_text,
         )
     if isinstance(args, RefuseArgs):

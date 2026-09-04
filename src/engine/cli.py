@@ -798,7 +798,7 @@ def _ask(
 ) -> int:
     import json
 
-    from engine.harness.outcomes import exit_code_of
+    from engine.harness.outcomes import exit_code_of, reading_line
     from engine.harness.session import UnknownConversationError
 
     session, ports = _build_session(pack_dir, _print_status)
@@ -826,6 +826,8 @@ def _ask(
             from engine.harness.render import render_table_text
 
             print(render_table_text(outcome.body.table))
+            if reading_line(outcome.body):
+                print(f"\n{reading_line(outcome.body)}")
             if outcome.body.caption:
                 print(f"\n({outcome.body.caption})")
         else:

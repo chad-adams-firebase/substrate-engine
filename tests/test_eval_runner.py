@@ -339,6 +339,7 @@ def test_nudges_and_lenient_parses_are_counted_from_the_trail(
                 StatusEvent(node="route", phase="finish", detail="protocol violation — nudging", at=now, raw_response="prose"),
                 StatusEvent(node="route", phase="finish", detail="protocol violation — nudging", at=now, raw_response="prose"),
                 StatusEvent(node="route", phase="finish", detail="text-form give_answer parsed as the call", at=now, raw_response='give_answer({"shape":"prose"})'),
+                StatusEvent(node="draft", phase="finish", detail="protocol violation — reading not declared — nudging", at=now),
                 StatusEvent(node="route", phase="finish", detail="decision: answer", at=now),
             ]
         }
@@ -351,7 +352,7 @@ def test_nudges_and_lenient_parses_are_counted_from_the_trail(
     assert run_bank(bank, pack_dir, out, status=quiet) == 0
     _, records = load_report(out)
     b5 = records[0].turns[0]
-    assert (b5.nudges, b5.lenient_parses) == (2, 1)
+    assert (b5.nudges, b5.lenient_parses) == (3, 1)  # a reading nudge counts
 
 
 def test_a_rows_context_override_reaches_the_session_and_the_summary_is_recorded(

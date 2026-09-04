@@ -44,7 +44,7 @@ from engine.tools.envelope import (
     ToolInvocation,
 )
 from engine.tools.enum_lint import lint_enum_literals
-from engine.tools.grounding import render_grounding
+from engine.tools.grounding import match_metrics, render_grounding
 from engine.tools.interval_lint import lint_interval_arithmetic
 from engine.tools.sql_lint import lint_fan_out
 
@@ -176,6 +176,7 @@ class RunSql(Tool):
             dialect=self._settings.dialect,
             question=params.question,
         )
+        readings = _declared_readings(match_metrics(params.question, dictionary_map))
         messages = [
             Message(role="system", content=prompt),
             Message(role="user", content=params.question),
@@ -261,6 +262,7 @@ class RunSql(Tool):
                             RunSqlOutput(
                                 sql=sql,
                                 table=self._to_table(rows, dictionary_map, sql),
+                                readings=readings,
                             ),
                             evidence=RunSqlEvidence(
                                 grounding_prompt=prompt, attempts=attempts
@@ -331,3 +333,19 @@ class RunSql(Tool):
                 sql=sql,
             ),
         )
+
+
+def _declared_readings(metrics) -> list:
+    """The interpretations the matched metrics declare, in declaration
+    order and deduplicated by name — the closed vocabulary a table
+    answer may name its reading from. Metrics only: match_metrics has
+    no concept matcher, and a term that matters here (W-F's "savings
+    realized") is a metric."""
+    readings = []
+    seen: set[str] = set()
+    for metric in metrics:
+        for interpretation in metric.interpretations:
+            if interpretation.name not in seen:
+                seen.add(interpretation.name)
+                readings.append(interpretation)
+    return readings

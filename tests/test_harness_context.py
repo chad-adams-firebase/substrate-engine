@@ -255,3 +255,18 @@ def test_a_thirty_turn_conversation_still_anchors_on_its_first_turn(
     last_fold = [c for c in llm.calls if "Turns to fold in:" in c["messages"][-1].content][-1]
     assert "Previous summary (through turn 24)" in last_fold["messages"][-1].content
     assert "Turn 26 — user: unrelated question 26" in last_fold["messages"][-1].content
+
+
+def test_a_table_turn_that_named_its_reading_says_so_in_the_transcript():
+    from engine.harness.outcomes import AnswerOutcome, TableAnswer
+    from engine.harness.state import transcript_text
+    from engine.tools.envelope import Table
+
+    table = Table(columns=["n"], rows=[{"n": 1}], total_row_count=1)
+    plain = AnswerOutcome(body=TableAnswer(table=table, caption="SELECT 1"), verification="verified")
+    named = AnswerOutcome(
+        body=TableAnswer(table=table, caption="SELECT 1", reading="substantive"),
+        verification="verified",
+    )
+    assert transcript_text(plain) == "[table: SELECT 1]"
+    assert transcript_text(named) == "[table: Reading: substantive. SELECT 1]"

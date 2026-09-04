@@ -90,6 +90,12 @@ def test_answers_render_as_bodies_not_cards():
     assert lines[0] == UNVERIFIED_BADGE
     assert "$8,308.92" in lines[3] and "—" in lines[3]
     assert lines[-1] == "(SELECT ...)"
+    # Close Pass: the reading, when named, is the line above the SQL.
+    named = table.model_copy(
+        update={"body": table.body.model_copy(update={"reading": "substantive"})}
+    )
+    named_lines = render_outcome_text(named).splitlines()
+    assert named_lines[-2:] == ["Reading: substantive.", "(SELECT ...)"]
 
 
 def test_the_page_repeats_the_card_vocabulary_verbatim():
@@ -301,3 +307,8 @@ def test_a_legacy_turn_gets_its_chip_from_the_trail():
         f"> {QUESTION_NOT_RECORDED}\n"
         f"{OUTCOME_NOT_RECORDED}\n"
     )
+
+
+def test_the_page_renders_the_reading_line_the_text_surfaces_print():
+    script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+    assert '"Reading: " + outcome.body.reading + "."' in script

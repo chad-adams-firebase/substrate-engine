@@ -30,6 +30,17 @@ class TableAnswer(BaseModel):
     kind: Literal["table"] = "table"
     table: Table
     caption: str = ""  # e.g. the SQL that produced it
+    # The reading the SQL computed, named from the readings the run_sql
+    # result declared (Close Pass) — never free text; "" when the
+    # question named no metric with readings or the router named none.
+    # Every surface renders it as one sentence above the caption.
+    reading: str = ""
+
+
+def reading_line(answer: TableAnswer) -> str:
+    """The sentence a table answer's reading renders as, on every
+    surface, or "" when it named none."""
+    return f"Reading: {answer.reading}." if answer.reading else ""
 
 
 AnswerBody = Annotated[MarkdownAnswer | TableAnswer, Field(discriminator="kind")]

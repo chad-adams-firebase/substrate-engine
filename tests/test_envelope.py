@@ -182,3 +182,26 @@ def test_known_items_output_round_trips():
     )
     [restored] = loads_turn_evidence(dumps_turn_evidence([invocation]))
     assert restored == invocation
+
+
+def test_run_sql_readings_round_trip_and_default_when_absent():
+    """Close Pass: readings ride on the run_sql output; a bundle
+    written before the field loads with none (extra="forbid" rejects
+    unknown keys, not absent ones — old reports stay readable)."""
+    import json
+
+    from engine.substrates.models import Interpretation
+
+    invocation = _run_sql_invocation()
+    invocation.output.readings = [
+        Interpretation(name="closed-invoice opportunity", meaning="the rollup")
+    ]
+    text = dumps_turn_evidence([invocation])
+    (restored,) = loads_turn_evidence(text)
+    assert restored.output.readings[0].name == "closed-invoice opportunity"
+    assert restored == invocation
+
+    legacy = json.loads(text)
+    del legacy[0]["output"]["readings"]
+    (older,) = loads_turn_evidence(json.dumps(legacy))
+    assert older.output.readings == []

@@ -62,6 +62,21 @@ def test_control_only_maps_to_typed_decisions():
     )
     assert answer.kind == "answer"
     assert answer.answer_shape == "table" and answer.evidence_index == 2
+    assert answer.reading is None
+    # Close Pass: the reading rides on the decision; the spec tells the
+    # router what it is for.
+    named = parse_route(
+        _response(
+            ToolCall(
+                name="give_answer",
+                arguments={"shape": "table", "evidence_index": 2, "reading": "substantive"},
+            )
+        )
+    )
+    assert named.reading == "substantive"
+    give_answer = next(s for s in control_specs() if s.name == "give_answer")
+    assert "reading" in give_answer.input_schema["properties"]["reading"]["description"]
+    assert "reading=" in give_answer.description
 
     refuse = parse_route(
         _response(

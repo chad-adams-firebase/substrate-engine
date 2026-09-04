@@ -76,6 +76,14 @@ def test_flatten_answer_shapes():
     refuse = RefuseOutcome(reason="no", what_would_work="ask counts")
     assert answer_body(table) == "supplier n\nRVX01 257"
     assert answer_caption(table) == "SELECT ..."
+    # Close Pass: the reading line is part of the caption pool (the
+    # surfaces show it), never of the body (it carries no value).
+    named = table.model_copy(
+        update={"body": table.body.model_copy(update={"reading": "closed-invoice opportunity"})}
+    )
+    assert answer_caption(named) == "Reading: closed-invoice opportunity.\nSELECT ..."
+    assert "closed-invoice" in flatten_answer(named)
+    assert answer_body(named) == "supplier n\nRVX01 257"
     assert answer_envelope(table) == "table"
     assert answer_envelope(prose) == "markdown"
     assert answer_envelope(refuse) == "refuse"

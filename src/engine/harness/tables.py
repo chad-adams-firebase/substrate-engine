@@ -54,3 +54,11 @@ def caption_for(output: ToolOutput) -> str:
     if isinstance(output, RunSqlOutput):
         return output.sql
     return ""
+
+
+def declared_readings(output: ToolOutput) -> list[str]:
+    """The reading names a result declares — the closed vocabulary
+    give_answer(shape='table', reading=...) is validated against."""
+    if isinstance(output, RunSqlOutput):
+        return [interpretation.name for interpretation in output.readings]
+    return []

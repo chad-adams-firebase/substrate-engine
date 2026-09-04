@@ -91,6 +91,14 @@ def test_table_answers_render_aligned_with_caption(monkeypatch, capsys, tool_pac
     out = capsys.readouterr().out
     assert "status" in out and "flagged" in out
     assert "SELECT status" in out
+    assert "Reading:" not in out
+    named = outcome.model_copy(
+        update={"body": outcome.body.model_copy(update={"reading": "substantive"})}
+    )
+    _patch(monkeypatch, named)
+    assert main(["ask", "--pack", str(tool_pack), "q"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("Reading: substantive.") < out.index("(SELECT status")
 
 
 def test_json_flag_dumps_the_turn_result(monkeypatch, capsys, tool_pack):

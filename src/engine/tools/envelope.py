@@ -41,6 +41,7 @@ from engine.substrates.models import (
     Concept,
     DictionaryRow,
     Gotcha,
+    Interpretation,
     JoinPath,
     StatsRow,
 )
@@ -151,6 +152,12 @@ class RunSqlOutput(BaseModel):
     kind: Literal["run_sql"] = "run_sql"
     sql: str
     table: Table
+    # The readings the canonical metrics the question named declare,
+    # names and meanings, in declaration order (Close Pass): the router
+    # names one on give_answer(shape='table') and the answer carries it,
+    # so a table answer can say which reading its SQL computed. Empty
+    # when the question named no metric with interpretations.
+    readings: list[Interpretation] = []
 
 
 class PrimerOutput(BaseModel):

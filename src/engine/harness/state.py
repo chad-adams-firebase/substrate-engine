@@ -21,6 +21,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from engine.harness.outcomes import (
+    reading_line,
     AnswerBody,
     AnswerOutcome,
     ClarifyOutcome,
@@ -64,7 +65,9 @@ def transcript_text(outcome: TurnOutcome) -> str:
     cells; the other outcomes contribute their message text."""
     if isinstance(outcome, AnswerOutcome):
         if isinstance(outcome.body, TableAnswer):
-            return f"[table: {outcome.body.caption or 'result set'}]"
+            line = reading_line(outcome.body)
+            caption = outcome.body.caption or "result set"
+            return f"[table: {line + ' ' if line else ''}{caption}]"
         return outcome.body.text
     if isinstance(outcome, RefuseOutcome):
         return f"[refused: {outcome.reason}]"
@@ -157,6 +160,7 @@ class RouteDecision(BaseModel):
     # untouched from evidence[evidence_index].
     answer_shape: Literal["prose", "table"] = "prose"
     evidence_index: int | None = None
+    reading: str | None = None  # the reading a table answer names
     reason: str = ""  # refuse / escalate
     question: str = ""  # clarify
     what_would_work: str = ""  # refuse

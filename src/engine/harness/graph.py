@@ -59,7 +59,7 @@ from engine.harness.summary import (
     scrub_figures,
     summary_problems,
 )
-from engine.harness.tables import caption_for, project_table
+from engine.harness.tables import caption_for, declared_readings, project_table
 from engine.harness.verifier_protocol import VerifierProtocol
 from engine.ports.llm import LLMPort
 from engine.ports.types import Message
@@ -414,9 +414,42 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                     )
                 ],
             }
+        # The reading (Close Pass): validated against what the result
+        # declares — an undeclared name is a protocol violation and is
+        # nudged with the valid set; a missing one is accepted without a
+        # reading, because phrase matching over-reaches (a count table
+        # under a metric whose readings are money) and a forced reading
+        # would be a wrong sentence on a right table.
+        declared = declared_readings(output)
+        reading = state.decision.reading
+        if reading is not None and declared and reading not in declared:
+            deps.events.emit(
+                "draft", "finish", "protocol violation — reading not declared — nudging"
+            )
+            listed = ", ".join(f"'{name}'" for name in declared)
+            return {
+                "decision": None,
+                "iterations": state.iterations + 1,
+                "scratch": state.scratch
+                + [
+                    Message(
+                        role="user",
+                        content=(
+                            f"give_answer(shape='table', evidence_index="
+                            f"{index}) failed: reading '{reading}' is not one "
+                            f"this result lists. Name one of {listed} — the "
+                            "reading that result's SQL computed — or omit it."
+                        ),
+                    )
+                ],
+            }
         deps.events.emit("draft", "finish", "table envelope ready")
         return {
-            "draft": TableAnswer(table=table, caption=caption_for(output))
+            "draft": TableAnswer(
+                table=table,
+                caption=caption_for(output),
+                reading=reading if reading is not None and declared else "",
+            )
         }
 
     def verify(state: TurnState) -> dict:
