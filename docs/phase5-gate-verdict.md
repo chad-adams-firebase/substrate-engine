@@ -52,6 +52,8 @@ Three breaches, one guard-caused. Each was root-caused from the committed report
 
 Across ten full runs (roughly 3,000 graded turns) the alarm raised four times; three were genuine and closed within the day; the fourth is a row that must declare its readings. The alarm has never been silent on a wrong verified answer the bank could see.
 
+*Gate rider (2026-09-04, after the verdict).* U-WHO now declares both readings: the closed-opportunity gold (ava, $564,386.36, executed against the pinned world beside the count gold's nova 390) and `name_from_gold` over either top name. The bank hash rotated with the row, so the post-Close report no longer grades against the committed bank; it stays committed as this gate's record, its five "unsupported" read as the row's lag, not the engine's error. Graded offline against the corrected row with only the header's hash patched, the same report reads U-WHO 5/5, 62 / 65 at threshold, `INVARIANT: ok` (B2 3/5 is the one threshold miss; W2 and W4 stay xfail). No re-run was made for the gate; Phase 6's baseline run grades the corrected row.
+
 What the bank cannot see is recorded in §5: the 30-turn browser session produced two wrong-but-verified answers of a class no single-turn row exercises.
 
 ## 4. Deferred, and why
@@ -75,7 +77,7 @@ From the live sessions, not the bank:
 | "Who closes the most reviews?" | Verified, nova 390, names not ids |
 | "How long from RECEIVED to READY?" | Verified, "1 hour" — humanized since Block 2, unit-safe since the Duration Pass |
 | "How do I use this chat?" | Answered, not refused, since the Coverage Pass |
-| "Who is our most productive reviewer?" | **Ambiguous and undeclared**: verified answers by count (nova) through 09-03, by dollars (ava, labeled with a reading from the wrong metric) on 09-04. The bank row must carry both readings with golds; reading validation must be per-metric |
+| "Who is our most productive reviewer?" | **Ambiguous and undeclared**: verified answers by count (nova) through 09-03, by dollars (ava, labeled with a reading from the wrong metric) on 09-04. The bank row must carry both readings with golds; reading validation must be per-metric. *Gate rider:* the row now carries both golds and accepts either name (§3); per-metric reading validation stays Phase 6 |
 | Multi-turn anchors | "The first supplier" and "the backlog total" resolved across the fold at turns 26–27. **But** "that rule" at turn 7 resolved to `new_supplier` when turn 6 had named `line_note` — three verified turns about the wrong rule; and "that invoice's history" at turn 20 ran `WHERE ih.invoice_id = 123 -- Replace 123 with the actual invoice ID` and returned another invoice's history, verified. These are the two wrong-but-verified outcomes of the live session |
 | "Summarize what we found today" | Verified shrug, exit 0 — the N7 shape through a phrasing the converter misses; and the summary describes queries asked, not findings, because table turns fold as `[table: SQL]` |
 | "Which auditor requested those?" | Verified table labeled `ignored_corrections` that counted distinct invoices (ava 3, sum 17) where the corrections count is ava 4, sum 18 — a unit mislabel |
@@ -90,7 +92,7 @@ substrate-engine `15118fc` · reports through `2026-09-04-post-close` (`cd14180`
 
 Every phasing.md done-check but one is met with executed or eyewitness evidence, the invariant has held on every run where the bank could see, and the interlude discipline — breach → root cause from the committed report → dedicated pass → full run — worked six times without a silent failure.
 
-**Condition of closure:** the nudge banner. `.banner[hidden] { display: none; }` (or a class toggle), plus a check that the banner text is set before it is shown; verified by opening the page fresh (no strip) and reaching the threshold (strip with text). This is the only done-check that failed in front of a human.
+**Condition of closure:** the nudge banner. `.banner[hidden] { display: none; }` (or a class toggle), plus a check that the banner text is set before it is shown; verified by opening the page fresh (no strip) and reaching the threshold (strip with text). This is the only done-check that failed in front of a human. *Met in the gate rider* (`060a0f9`): the rule and the text-before-show guard, pinned by `test_web_static` and executed by a jsdom smoke of the booted page — fresh: no strip (the smoke read `display: flex` before the change); opened at 12 of 10: strip with the turn count; dismissed: gone; below or without a threshold: hidden.
 
 **Carry-forward into Phase 6 as its opening backlog**, in this order, because they are the first wrong-but-verified outcomes found outside the bank since the fix-pass era and every one is conversation-shaped:
 

@@ -46,17 +46,28 @@
   provenance: user-sourced
   category: data
   question: "Who is our most productive reviewer?"
-  gold: gold/s3_top_closer.py
-  expected_gold: {name: nova, count: 390, next_tier: 130}
+  gold: gold/u_who_productive_reviewer.py
+  expected_gold: {name: nova, count: 390, next_tier: 130, opportunity_name: ava, closed_opportunity: 564386.36}
   threshold: 0.8
   expect:
     exit: [0]
     assertions:
       - {kind: nonempty}
-      - {kind: name_from_gold, field: name}
+      - {kind: name_from_gold, field: [name, opportunity_name]}
   note: >-
     The U7 class: person-shaped answers name people via the users
-    join, never a bare reviewer_id (grounding mandate, f709d9c).
+    join, never a bare reviewer_id (grounding mandate, f709d9c). A
+    two-reading row (Phase 5 gate verdict §3, §5, §7 item 5): "most
+    productive" is defensibly by reviews closed (nova, 390) or by the
+    recovery opportunity on the invoices closed (ava, $564,386.36),
+    both executed by the gold. Through 09-03 the fan-out lint
+    challenged the money shape inside its CTE, which suppressed the
+    second reading by accident; the Close Pass vouched that shape
+    (one terminal history row per invoice) and the post-close run
+    answered by dollars 5/5 — the invariant alarm the verdict
+    assessed as bank lag, not a wrong answer. Either reading's top
+    name passes; validating the reading name per metric is Phase 6
+    carry-forward.
 
 - id: U-META
   provenance: user-sourced
