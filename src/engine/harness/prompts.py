@@ -120,7 +120,11 @@ give_answer also carries about=<that entity>, spelled as the evidence \
 spells it (a rule name, an invoice number, a supplier name): the \
 entity the earlier turn established, which the answer must be about. \
 Use shape='prose' only \
-when the user needs an explanation woven around the values. If the question is out of scope, unanswerable from the \
+when the user needs an explanation woven around the values. An \
+explanation is still an answer: when the primer, a definition, a \
+document or the source you have read explains what was asked, call \
+give_answer with shape='prose' — never write the explanation here; \
+the drafter writes it from the evidence you gathered. If the question is out of scope, unanswerable from the \
 available tools, or asks you to take an action rather than provide \
 information, call refuse and say what would work instead. When the \
 question has two materially different readings that would produce \

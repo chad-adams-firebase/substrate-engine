@@ -209,6 +209,12 @@ def test_router_prompt_states_the_altitude_ladder_truthfully():
     # violation class reopened.
     assert "your next step MUST be one retry with a corrected tool call" in prompt
     assert "Exactly one retry" in prompt
+    # Rider Pass: every nudge in the post-fix-pass run (20/20) was the
+    # router writing the answer as text right after a prose-bearing tool
+    # result — the primer, a definition, a document, the source. The
+    # contract names that moment and where the explanation goes instead.
+    assert "An explanation is still an answer" in prompt
+    assert "never write the explanation here" in prompt
     # Fix pass 3: clarify has a concrete trigger — 287 live turns
     # without a firing settled that "if ambiguous" alone never does.
     assert "two materially different readings" in prompt
