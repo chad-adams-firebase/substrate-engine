@@ -16,6 +16,12 @@ dist/
 *.db-shm
 *.db-wal
 
+# The real target application's pack at work (config carries enterprise
+# identifiers) and the leakage pre-flight's term list on the personal
+# machine: neither ever enters the repository.
+packs/local-*/
+.leakage-terms
+
 # OS noise
 .DS_Store
 # Committed test fixture: a pre-Block-3 work store (tests/fixtures/legacy_work_db)
