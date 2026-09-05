@@ -20,8 +20,10 @@ simulation seed in its `fixture_manifest.json`).
 
 ## Building the InvoiceGuard pack from scratch
 
-The reference target application lives in its own repo. From this
-repo's parent directory:
+The full procedure — this path, proven by following it verbatim, and
+the path to a new application on the work machine — is
+`docs/pack-authoring-runbook.md`. In short: the reference target
+application lives in its own repo. From this repo's parent directory:
 
 ```
 git clone https://github.com/chad-adams-firebase/invoice-guard.git
