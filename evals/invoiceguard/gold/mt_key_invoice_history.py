@@ -3,7 +3,11 @@ invoice — the highest invoice total, unique in the world — and its
 history as executed: how many transitions, the one day they all fall
 on, and the auditor who worked it. The follow-up's rows are that
 invoice's, or the rep answered another invoice's history — which is
-what turn 20 did with `invoice_id = 123`."""
+what turn 20 did with `invoice_id = 123`. The id rides beside the
+number as a string (Rider Pass): an id is a legal way to identify an
+invoice — the post-fix-pass run's rep 1 projected `id, invoice_total`
+and pulled the right history off it — and a name assertion reads
+strings."""
 
 
 def gold(world):
@@ -31,7 +35,7 @@ def gold(world):
     return {
         "invoice_number": top["invoice_number"],
         "invoice_total": top["invoice_total"],
-        "invoice_id": top["id"],
+        "invoice_id": str(top["id"]),
         "ties": ties["n"],
         "transitions": len(rows),
         "days": days,

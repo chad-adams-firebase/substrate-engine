@@ -172,6 +172,10 @@ def test_backlog_pass_rows_reconstruct_the_sessions_two_findings():
     assert sentinel.regex and sentinel.breach and "03-20" in sentinel.pattern
     tolerant = [a for a in key.turns[1].expect.assertions if not a.breach]
     assert sorted(a.kind for a in tolerant) == ["name_from_gold", "pattern_count"]
+    # Rider Pass: either identifier names the invoice, both executed gold.
+    identity = next(a for a in key.turns[0].expect.assertions if a.kind == "name_from_gold")
+    assert identity.fields() == ["invoice_number", "invoice_id"] and not identity.forbid_bare_ids
+    assert isinstance(key.expected_gold["invoice_id"], str) and "false alarm" in key.note
     assert [t.question for t in anchor.turns] == [
         "Which rule fires most often?",
         "Tell me more about that rule.",
@@ -184,7 +188,14 @@ def test_backlog_pass_rows_reconstruct_the_sessions_two_findings():
     assert not re.search(about.pattern, "About: new_supplier.")
     drift = next(a for a in anchor.turns[1].expect.assertions if a.kind == "not_contains")
     assert drift.pattern == "new_supplier" and drift.breach
-    assert anchor.turns[2].expect.exit == [0]
+    # Rider Pass: the assertions admit the designed outcomes — they stand
+    # down only where the anchor check spoke, and turn 3 accepts the
+    # caught drift at exit 2 while 197 at exit 0 stays the breach.
+    assert about.unless_finding == drift.unless_finding == "anchor.entity_mismatch"
+    assert anchor.turns[2].expect.exit == [0, 2]
+    count = next(a for a in anchor.turns[2].expect.assertions if a.kind == "numeric_from_gold")
+    assert count.field == "fire_count" and count.breach and count.unless_finding == "anchor.entity_mismatch"
+    assert "wrong-count-caught passes" in anchor.note
 
 
 def test_fix_pass_row_shows_the_anchored_follow_ups_positive_path():

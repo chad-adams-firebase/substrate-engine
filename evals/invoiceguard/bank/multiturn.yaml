@@ -142,6 +142,7 @@
   gold: gold/mt_key_invoice_history.py
   expected_gold:
     invoice_number: INV-00426
+    invoice_id: "440"
     invoice_total: 43117.71
     ties: 1
     transitions: 5
@@ -154,7 +155,9 @@
         exit: [0]
         assertions:
           - {kind: nonempty}
-          - {kind: name_from_gold, field: invoice_number}
+          # Either identifier names the invoice (Rider Pass): the number,
+          # or the id a rep projects instead — both from the executed gold.
+          - {kind: name_from_gold, field: [invoice_number, invoice_id], forbid_bare_ids: false}
           - {kind: numeric_from_gold, field: invoice_total}
     - question: "What was that invoice's history?"
       expect:
@@ -184,7 +187,15 @@
     world change rots the row rather than silently passing it.
     Threshold 0.8: the anchor turn's SQL shape varies (the model may or
     may not project the id), and a rep that overrides the key challenge
-    ships [UNVERIFIED] — a miss, never a breach.
+    ships [UNVERIFIED] — a miss, never a breach. Rider Pass: the
+    post-fix-pass run's rep 1 answered turn 1 as {invoice_id,
+    invoice_total} and tripped the alarm — a false alarm, the alarm's
+    third: the id is a legal way to identify an invoice, and turn 2
+    pulled the right history off it. The name assertion now reads
+    either identifier, both from the executed gold. A general grading
+    gate ("name absent but gold numeric matched → non-breach") was
+    declined: it would someday mask a wrong entity wearing a
+    coincidentally right number. Per-instance fixes stay in the bank.
 
 - id: MT-ANCHOR
   provenance: user-sourced
@@ -215,14 +226,22 @@
           # the answer declares (or the anchor check would have caught).
           # An About may wear its kind noun ("rule line_note") since the
           # Fix Pass's strip-and-match; the bank accepts what the engine does.
-          - {kind: contains, pattern: "About: (?:(?:the|a|an) )?(?:(?:audit |compliance )?rule )?line_note\\.", regex: true, at_exit: [0, 2]}
-          - {kind: not_contains, pattern: new_supplier, at_exit: [0, 2]}
+          # Rider Pass: both stand down only on a turn the anchor check
+          # warned — the caught drift ships [UNVERIFIED] with the warn and
+          # passes; a wrong About at exit 2 WITHOUT the warn is the check
+          # going silent and fails the rep; at exit 0 a wrong About breaches.
+          - {kind: contains, pattern: "About: (?:(?:the|a|an) )?(?:(?:audit |compliance )?rule )?line_note\\.", regex: true, at_exit: [0, 2], unless_finding: anchor.entity_mismatch}
+          - {kind: not_contains, pattern: new_supplier, at_exit: [0, 2], unless_finding: anchor.entity_mismatch}
     - question: "How many findings has it produced?"
       expect:
-        exit: [0]
+        # Exit 2 is the caught drift (Rider Pass): after a turn-2 warn,
+        # "it" is read against the surviving anchor and another rule's
+        # count ships [UNVERIFIED] with the warn. 197 at exit 0 stays the
+        # breach sentinel; 197 at exit 2 without the warn fails the rep.
+        exit: [0, 2]
         assertions:
           - {kind: nonempty}
-          - {kind: numeric_from_gold, field: fire_count}
+          - {kind: numeric_from_gold, field: fire_count, unless_finding: anchor.entity_mismatch}
   note: >-
     Verdict §5, turns 6–9: turn 6 named line_note in a one-row table,
     the router saw only its SQL in the history, and turns 7 and 9
@@ -241,7 +260,14 @@
     became turn 3's anchor; now a warned turn establishes nothing, its
     transcript carries the correction, and "it" is read against the
     surviving anchor — a drifting turn 3 ships [UNVERIFIED], a miss,
-    never 197 at exit 0.
+    never 197 at exit 0. Rider Pass: the post-fix-pass run showed both
+    designed outcomes — rep 4 warned at turn 2 and recovered 505 at
+    turn 3; rep 5 warned at turn 2 and turn 3's 197 shipped
+    [UNVERIFIED] through the window — against assertions that predated
+    the machinery, 3/5. The content assertions now stand down only on
+    a turn whose verdict carries anchor.entity_mismatch. The encoding
+    in one line: wrong-count-verified breaches; wrong-count-caught
+    passes.
 
 - id: MT-ABOUT
   provenance: scripted
