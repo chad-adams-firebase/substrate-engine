@@ -246,3 +246,11 @@ class VerifierResult(BaseModel):
     plausibility: list[PlausibilityRecord] = []
     feedback: RegenerationFeedback | None = None
     judge_calls: int = 0
+    # The anchor value the answer was confirmed to be about when the
+    # router declared no about (Rider Pass): the anchor check's filter
+    # or prose arm matched it — never a table that filtered on nothing,
+    # never a silent check, never a warned turn. The verify node stamps
+    # it on the answer body as the About; whether the answer then ships
+    # verified or unverified for other reasons is the ladder's call, as
+    # for a declared about. None otherwise.
+    about_default: str | None = None

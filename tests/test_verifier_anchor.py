@@ -14,7 +14,7 @@ from engine.substrates.models import DictionaryRow
 from engine.substrates.pack_data import load_dictionary_map
 from engine.tools.entities import EntityCatalog
 from engine.tools.envelope import Anchor, RunSqlOutput, Table, ToolInvocation, TurnAnchors
-from engine.verifier.anchor import CHECK, check_anchor, is_kindless_pronoun, open_window, referent_kind
+from engine.verifier.anchor import CHECK, check_anchor, is_kindless_pronoun, open_window, read_anchor, referent_kind
 from engine.verifier.models import DraftAnswer, VerifyContext
 
 from tests.verifier_support import make_verifier
@@ -334,3 +334,145 @@ def test_two_kinds_coexist_and_only_the_warned_kind_is_read(catalog):
     assert finding is not None and "`rate_variance`" in finding.detail
     residue = run(catalog, question="How many invoices did it send?", about="RVX01", draft=TABLE, evidence=[by_supplier], prior=[turn_1, warned])
     assert residue is not None and residue.severity == "warn"
+
+
+# --- Rider Pass: what the check confirmed ---------------------------------
+
+
+def read(catalog, *, question, about=None, draft=PROSE_7, evidence=(), prior=(TURN_6,)):
+    return read_anchor(
+        question=question, about=about, draft=draft,
+        evidence=list(evidence), prior=list(prior), catalog=catalog,
+    )
+
+
+def test_read_anchor_reports_how_the_answer_was_confirmed(catalog):
+    """The same reading that warns knows which arm confirmed: the prose
+    naming the anchor, a filter on its key, the router's declaration —
+    and a table that filtered on nothing is silent without confirming."""
+    named = DraftAnswer(kind="prose", text="The line_note rule flags a line that carries a note.")
+    prose = read(catalog, question=TURN_7_QUESTION, draft=named)
+    assert (prose.kind, prose.turn) == ("rule", 6)
+    assert (prose.confirmed_by, prose.default_about, prose.finding) == ("prose", "line_note", None)
+    counted = read(catalog, question="How many findings has that rule produced?", draft=TABLE, evidence=[COUNT_505])
+    assert (counted.confirmed_by, counted.default_about) == ("filter", "line_note")
+    declared = read(catalog, question=TURN_7_QUESTION, about="rule line_note")
+    assert declared.confirmed_by == "declared" and declared.default_about == "" and declared.finding is None
+    grouped = sql_turn(
+        "SELECT rule_name, COUNT(*) AS n FROM findings GROUP BY rule_name",
+        ["rule_name", "n"], [{"rule_name": "line_note", "n": 505}, {"rule_name": "new_supplier", "n": 197}],
+    )
+    silent = read(catalog, question="How many findings has that rule produced?", draft=TABLE, evidence=[grouped])
+    assert silent.confirmed_by is None and silent.finding is None and silent.default_about == ""
+    drift = read(catalog, question=TURN_7_QUESTION)  # the recorded turn 7 never names line_note
+    assert drift.finding is not None and drift.confirmed_by is None and drift.default_about == ""
+    assert drift.finding.detail == check_anchor(
+        question=TURN_7_QUESTION, about=None, draft=PROSE_7, evidence=[], prior=[TURN_6], catalog=catalog
+    ).detail
+    assert read(catalog, question=IT_QUESTION, prior=[TURN_6]) is None  # no kind, no window
+    assert read(catalog, question=TURN_7_QUESTION, prior=[]) is None  # no prior
+
+
+def test_the_default_about_is_one_value_the_anchor_carries_and_replays_silent(catalog):
+    """Ruling: the injected About always equals a value the anchor
+    actually carries — never a paraphrase, never a join of two values —
+    so re-checking it as a declared about is silent, where the joined
+    form would warn."""
+    question = "What was that invoice's history?"
+    history = sql_turn(
+        "SELECT ih.from_status, ih.to_status FROM invoice_history ih WHERE ih.invoice_id = 440 ORDER BY ih.at",
+        ["from_status", "to_status"], [{"from_status": None, "to_status": "RECEIVED"}],
+    )
+    by_key = read(catalog, question=question, draft=TABLE, evidence=[history], prior=[MT_KEY_TURN_1])
+    assert (by_key.confirmed_by, by_key.default_about) == ("filter", "440")
+    by_number = read(
+        catalog, question=question, prior=[MT_KEY_TURN_1],
+        draft=DraftAnswer(kind="prose", text="Invoice INV-00426 moved through five statuses on one day."),
+    )
+    assert (by_number.confirmed_by, by_number.default_about) == ("prose", "INV-00426")
+    both = read(
+        catalog, question=question, prior=[MT_KEY_TURN_1],
+        draft=DraftAnswer(kind="prose", text="Invoice INV-00426 (id 440) moved through five statuses."),
+    )
+    assert both.default_about in {"440", "INV-00426"}
+    supplier = TurnAnchors(turn=1, entities=[
+        Anchor(kind="supplier", column="suppliers.code", value="RVX01", source="cell"),
+        Anchor(kind="supplier", column="suppliers.name", value="Ravenswood Extrusion", source="cell"),
+    ])
+    named = read(
+        catalog, question="What was that supplier's total again?", prior=[supplier],
+        draft=DraftAnswer(kind="prose", text="Ravenswood Extrusion (RVX01) billed the most."),
+    )
+    assert named.default_about == "Ravenswood Extrusion"  # the name before the id-like code
+    spelled = read(
+        catalog, question=TURN_7_QUESTION,
+        draft=DraftAnswer(kind="prose", text="The line note rule flags a line that carries a note."),
+    )
+    assert spelled.default_about == "line_note"  # the anchor's spelling, not the prose's
+    for reading_, q, prior in (
+        (by_key, question, [MT_KEY_TURN_1]), (by_number, question, [MT_KEY_TURN_1]),
+        (both, question, [MT_KEY_TURN_1]), (named, "What was that supplier's total again?", [supplier]),
+        (spelled, TURN_7_QUESTION, [TURN_6]),
+    ):
+        assert any(reading_.default_about == a.value for a in reading_.anchors)
+        assert run(catalog, question=q, about=reading_.default_about, prior=prior) is None
+    assert run(catalog, question=question, about="440 / INV-00426", prior=[MT_KEY_TURN_1]) is not None
+
+
+def test_the_prose_confirmation_needs_a_whole_word(catalog):
+    """A substring hit keeps the check silent, as before the pass — but it
+    confirms nothing: "ava" inside "available" must never become an
+    About the engine writes."""
+    auditor = TurnAnchors(turn=1, entities=[
+        Anchor(kind="auditor", column="invoice_history.actor", value="ava", source="cell"),
+    ])
+    question = "How many invoices did that auditor close?"
+    inside = read(
+        catalog, question=question, prior=[auditor],
+        draft=DraftAnswer(kind="prose", text="No closing data is available for the period."),
+    )
+    assert inside.finding is None and inside.confirmed_by is None and inside.default_about == ""
+    whole = read(
+        catalog, question=question, prior=[auditor],
+        draft=DraftAnswer(kind="prose", text="ava closed the most invoices in the period."),
+    )
+    assert (whole.confirmed_by, whole.default_about) == ("prose", "ava")
+    numbered = read(
+        catalog, question="What was that invoice's history?", prior=[MT_KEY_TURN_1],
+        draft=DraftAnswer(kind="prose", text="Invoice 1440 is unrelated."),
+    )
+    # "1440" is a substring hit on 440: silent, as before the pass — and
+    # unconfirmed, so no About is written for it.
+    assert numbered.finding is None and numbered.confirmed_by is None
+
+
+def test_through_the_verifier_the_default_rides_only_on_a_clean_undeclared_confirmation(catalog):
+    """Claim-free prose, so the anchor reading alone decides: an
+    undeclared answer the prose arm confirms carries the default; a
+    declared one, a drift, and a context-free call carry none; inside
+    the window the surviving anchor is the default."""
+    verifier, llm = make_verifier([], stats=[], catalog=catalog)
+    named = DraftAnswer(kind="prose", text="It is the line note rule, which flags a line carrying a note.")
+    confirmed = verifier.verify(
+        question=TURN_7_QUESTION, draft=named, evidence=[], attempt=1,
+        context=VerifyContext(prior=[TURN_6]),
+    )
+    assert confirmed.disposition == "verified" and confirmed.about_default == "line_note"
+    declared = verifier.verify(
+        question=TURN_7_QUESTION, draft=named, evidence=[], attempt=1,
+        context=VerifyContext(prior=[TURN_6], about="line_note"),
+    )
+    assert declared.disposition == "verified" and declared.about_default is None
+    drifted = DraftAnswer(kind="prose", text="It flags every invoice from a supplier in its first year.")
+    drift = verifier.verify(
+        question=TURN_7_QUESTION, draft=drifted, evidence=[], attempt=1,
+        context=VerifyContext(prior=[TURN_6]),
+    )
+    assert drift.disposition == "unverified" and drift.about_default is None
+    assert verifier.verify(question=TURN_7_QUESTION, draft=named, evidence=[], attempt=1).about_default is None
+    windowed = verifier.verify(
+        question=IT_QUESTION, draft=named, evidence=[], attempt=1,
+        context=VerifyContext(prior=[TURN_1, WARNED_2]),
+    )
+    assert windowed.disposition == "verified" and windowed.about_default == "line_note"
+    assert llm.calls == []

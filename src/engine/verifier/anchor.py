@@ -27,9 +27,22 @@ any kind — the newest entity being the pronoun's likeliest referent.
 A refusal establishes nothing and keeps the window open; a fixed turn
 count would close one record and not the other. Worst case inside the
 window is a warn, [UNVERIFIED], never a verified wrong count.
+
+What the check confirmed (Rider Pass): the same reading that warns
+also knows when an arm positively matched the anchor — a filter on
+its key, its name in the prose as a whole word. read_anchor returns
+that beside the finding, with the one anchor value the arm matched,
+bare, as the evidence spells it, so the harness can write it as the
+About the router did not declare. A table that filtered on nothing is
+silent but confirms nothing; a substring hit ("ava" in "available")
+stays silent, as before, but confirms nothing either. MT-ABOUT's
+turn 2 declared its About 3/5 with the content right 5/5: the check
+had already read `rate_variance` in the prose every time.
 """
 
 import re
+from dataclasses import dataclass
+from typing import Literal
 
 from engine.tools.entities import (
     EntityCatalog,
@@ -41,6 +54,24 @@ from engine.tools.envelope import Anchor, RunSqlOutput, ToolInvocation, TurnAnch
 from engine.verifier.models import DraftAnswer, PlausibilityFinding
 
 CHECK = "anchor.entity_mismatch"
+
+
+@dataclass(frozen=True)
+class AnchorReading:
+    """What the check read on an anaphoric turn with a prior anchor: the
+    anchor, the finding if an arm contradicted it, and — when an arm
+    positively confirmed the answer — which arm and the one anchor
+    value it confirmed. A finding and a confirmation are exclusive; a
+    table that filtered on nothing has neither. default_about is ""
+    unless confirmed_by is "filter" or "prose": a declared about needs
+    no default."""
+
+    kind: str
+    turn: int
+    anchors: tuple[Anchor, ...]
+    finding: PlausibilityFinding | None = None
+    confirmed_by: Literal["declared", "filter", "prose"] | None = None
+    default_about: str = ""
 
 
 def _norm(value: str) -> str:
@@ -103,7 +134,25 @@ def referent_kind(
     return None
 
 
-def check_anchor(
+def _whole_word(name: str, text: str) -> bool:
+    return re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text) is not None
+
+
+def _confirming_value(
+    anchors: list[Anchor], text: str, catalog: EntityCatalog
+) -> str | None:
+    """The anchor value the prose names as a whole word — a name column's
+    value before a key's when both appear, then column order — or None
+    when only a substring matched. One value, never a join: a joined
+    About would re-check as a warn."""
+    matched = [a for a in anchors if _whole_word(_norm(a.value), text)]
+    if not matched:
+        return None
+    matched.sort(key=lambda a: (catalog.is_id_like(a.column), a.column))
+    return matched[0].value
+
+
+def read_anchor(
     *,
     question: str,
     about: str | None,
@@ -111,7 +160,12 @@ def check_anchor(
     evidence: list[ToolInvocation],
     prior: list[TurnAnchors],
     catalog: EntityCatalog,
-) -> PlausibilityFinding | None:
+) -> AnchorReading | None:
+    """The check's full reading, or None when there is nothing to read:
+    no kind in the question and no open window, or no prior entity of
+    the kind. The three arms decide in order and the first that decides,
+    decides; each returns the reading with either a finding or a
+    confirmation."""
     kind = anaphor_kind(question, catalog)
     window: TurnAnchors | None = None
     if kind is None:
@@ -133,17 +187,22 @@ def check_anchor(
             f"turn {turn}'s evidence established `{shown}`"
         )
 
+    def reading(**fields) -> AnchorReading:
+        return AnchorReading(kind=kind, turn=turn, anchors=tuple(anchors), **fields)
+
+    def warn(detail: str) -> AnchorReading:
+        return reading(
+            finding=PlausibilityFinding(check=CHECK, severity="warn", detail=f"{established}, {detail}")
+        )
+
     if about:
         # The router may spell the about with its kind noun in front —
         # "invoice 440" for an anchor {440, INV-00426} (MT-KEY, 0/5 on
         # exactly this). One article and one synonym of the kind come
         # off, then equality with one anchor name (Fix Pass, R2).
         if _norm(strip_kind_noun(about, kind, catalog)) in names:
-            return None
-        return PlausibilityFinding(
-            check=CHECK, severity="warn",
-            detail=f"{established}, and this answer says it is about `{about}`",
-        )
+            return reading(confirmed_by="declared")
+        return warn(f"and this answer says it is about `{about}`")
 
     by_column = {a.column: a.value for a in anchors if a.column}
     for invocation in evidence:
@@ -155,21 +214,36 @@ def check_anchor(
             if len(literal.values) != 1:
                 continue
             if _norm(literal.values[0]) == _norm(by_column[literal.canonical]):
-                return None
-            return PlausibilityFinding(
-                check=CHECK, severity="warn",
-                detail=(
-                    f"{established}, and this answer filters on "
-                    f"`{literal.canonical} = '{literal.values[0]}'`"
-                ),
+                # The anchor's spelling, not the SQL's.
+                return reading(confirmed_by="filter", default_about=by_column[literal.canonical])
+            return warn(
+                f"and this answer filters on `{literal.canonical} = '{literal.values[0]}'`"
             )
 
     if draft.kind == "prose":
         text = _norm(draft.text)
         if any(name in text for name in names):
-            return None
-        return PlausibilityFinding(
-            check=CHECK, severity="warn",
-            detail=f"{established}, and this answer never names it",
-        )
-    return None
+            confirmed = _confirming_value(list(anchors), text, catalog)
+            if confirmed is None:
+                return reading()  # a substring hit: silent, as before, unconfirmed
+            return reading(confirmed_by="prose", default_about=confirmed)
+        return warn("and this answer never names it")
+    return reading()
+
+
+def check_anchor(
+    *,
+    question: str,
+    about: str | None,
+    draft: DraftAnswer,
+    evidence: list[ToolInvocation],
+    prior: list[TurnAnchors],
+    catalog: EntityCatalog,
+) -> PlausibilityFinding | None:
+    """The finding alone — what the Verifier's ladder and the exposure
+    replay read."""
+    result = read_anchor(
+        question=question, about=about, draft=draft,
+        evidence=evidence, prior=prior, catalog=catalog,
+    )
+    return result.finding if result is not None else None

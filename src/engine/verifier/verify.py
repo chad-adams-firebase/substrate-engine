@@ -25,7 +25,7 @@ from engine.ports.llm import LLMPort
 from engine.substrates.models import StatsRow
 from engine.tools.entities import EntityCatalog
 from engine.tools.envelope import ToolInvocation
-from engine.verifier.anchor import check_anchor
+from engine.verifier.anchor import read_anchor
 from engine.verifier.checks.base import CheckRegistry, PlausibilityContext
 from engine.verifier.checks.invocation import harvest_invocation
 from engine.verifier.claims import containing_sentence, extract_claims
@@ -241,10 +241,13 @@ class Verifier:
             unmatched_count=len(unmatched_pairs),
         )
         plausibility = self._plausibility(evidence)
+        about_default: str | None = None
         # The anchor check (Backlog Pass): conversation-level, so it
-        # rides beside the per-invocation findings with no tool.
+        # rides beside the per-invocation findings with no tool. When it
+        # confirms an undeclared answer (Rider Pass), it says which anchor
+        # value confirmed it, and the harness writes that as the About.
         if context is not None and self._catalog is not None:
-            finding = check_anchor(
+            reading = read_anchor(
                 question=question,
                 about=context.about,
                 draft=draft,
@@ -252,14 +255,21 @@ class Verifier:
                 prior=context.prior,
                 catalog=self._catalog,
             )
-            if finding is not None:
+            if reading is not None and reading.finding is not None:
                 plausibility.append(
                     PlausibilityRecord(
-                        check=finding.check,
-                        severity=finding.severity,
-                        detail=finding.detail,
+                        check=reading.finding.check,
+                        severity=reading.finding.severity,
+                        detail=reading.finding.detail,
                     )
                 )
+            if (
+                reading is not None
+                and context.about is None
+                and reading.finding is None
+                and reading.confirmed_by in ("filter", "prose")
+            ):
+                about_default = reading.default_about
         disposition = decide(
             len(unmatched_pairs), plausibility, attempt, self._settings
         )
@@ -272,4 +282,5 @@ class Verifier:
             plausibility=plausibility,
             feedback=feedback,
             judge_calls=judge.calls_made,
+            about_default=about_default,
         )
