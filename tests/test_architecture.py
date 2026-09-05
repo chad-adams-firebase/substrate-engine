@@ -53,9 +53,10 @@ def test_core_never_imports_adapters():
 def test_generators_and_validator_touch_no_storage_engines():
     """Generators and the validator are core: they consume ports, so
     they may not import adapters OR concrete storage modules (duckdb,
-    sqlite3). engine.packtools is the sanctioned exception — it
-    manufactures the artifact the DuckDB adapter serves, and is
-    adapter-category code by design (its docstring says so)."""
+    sqlite3). engine.packtools is the sanctioned exception — its two
+    modules (convert_sqlite, pull_databricks) manufacture the artifact
+    the DuckDB adapter serves, and are adapter-category code by design
+    (their docstrings say so)."""
     violations = []
     for package in ("generators", "validate"):
         for path in (SRC_ENGINE / package).rglob("*.py"):

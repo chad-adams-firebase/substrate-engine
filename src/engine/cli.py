@@ -22,6 +22,7 @@ paths inside a pack's config.yaml resolve against the pack directory.
 
 import argparse
 import subprocess
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -60,6 +61,19 @@ def main(argv: list[str] | None = None) -> int:
     )
     convert.add_argument(
         "--seed", type=int, help="Override generation.simulation_seed."
+    )
+
+    pull = subparsers.add_parser(
+        "pull",
+        help="Copy the pack's tables from the warehouse into its DuckDB "
+        "database (work-side; needs DATABRICKS_HOST and DATABRICKS_TOKEN).",
+    )
+    pull.add_argument("--pack", required=True)
+    pull.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the statements the pull would run. No network, no "
+        "credentials.",
     )
 
     generate = subparsers.add_parser(
@@ -328,6 +342,8 @@ def main(argv: list[str] | None = None) -> int:
             return _info(args.pack)
         if args.command == "convert":
             return _convert(args.pack, args.sqlite, args.seed)
+        if args.command == "pull":
+            return _pull(args.pack, args.dry_run)
         if args.command == "generate":
             return _generate(args.pack, args.source, args.only, args.check)
         if args.command == "validate":
@@ -458,6 +474,65 @@ def _convert(pack_dir: str, sqlite_override: str | None, seed_override: int | No
         f"converted {sqlite_path.name} -> {duckdb_path} "
         f"({len(manifest.source_tables)} tables, manifest {manifest.manifest_id})"
     )
+    return 0
+
+
+def _pull(pack_dir: str, dry_run: bool) -> int:
+    from engine.packtools.pull_databricks import (
+        HOST_ENV_VAR,
+        TOKEN_ENV_VAR,
+        PullError,
+        plan_statements,
+        pull,
+    )
+    from engine.substrates.manifest import save_manifest
+
+    pack = load_pack(pack_dir)
+    config = pack.config.pull
+    if config is None:
+        raise CliError(
+            f"{pack.root}/config.yaml has no 'pull:' section — engine pull "
+            f"needs one (docs/pack-authoring-runbook.md shows the block)."
+        )
+    sql_selection = pack.config.adapters.get(PortName.SQL)
+    if sql_selection is None or "database" not in sql_selection.settings:
+        raise CliError("the pack's sql adapter declares no database path.")
+    duckdb_path = _pack_path(pack.root, sql_selection.settings["database"])
+
+    if dry_run:
+        for line in plan_statements(config):
+            print(line)
+        return 0
+
+    host = os.environ.get(HOST_ENV_VAR)
+    token = os.environ.get(TOKEN_ENV_VAR)
+    if not host:
+        raise CliError(
+            f"set the {HOST_ENV_VAR} environment variable "
+            f"(https://<workspace host>) in this shell."
+        )
+    if not token:
+        raise CliError(f"set the {TOKEN_ENV_VAR} environment variable in this shell.")
+    try:
+        outcome = pull(
+            config,
+            duckdb_path,
+            host=host,
+            token=token,
+            status=lambda line: print(line, file=sys.stderr),
+        )
+    except PullError as exc:
+        raise CliError(str(exc))
+    save_manifest(
+        pack.root / "substrates" / "manifests" / "databricks_pull.json",
+        outcome.manifest,
+    )
+    # The screen summary: one line per table, photographed at work.
+    print(f"pulled {config.catalog}.{config.schema_name} -> {duckdb_path}")
+    for table in outcome.tables:
+        version = f"v{table.version}" if table.version is not None else "unversioned"
+        print(f"  {table.name:<24} {table.rows:>10,} rows  {version}")
+    print(f"manifest {outcome.manifest.manifest_id}")
     return 0
 
 
