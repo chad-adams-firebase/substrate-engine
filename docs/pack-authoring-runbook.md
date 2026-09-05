@@ -89,7 +89,10 @@ uv sync
 uv run pytest
 ```
 
-Expect every test to pass offline; the count is the last line.
+Expect every test to pass offline; the count is the last line. Eight
+tests report `skipped` at this point — the pack-integration tests, which
+need the `app.duckdb` that A3 builds; after A3, `uv run pytest` again shows
+them passing and no skips.
 
 **A3. The world and the substrates.**
 
@@ -107,6 +110,11 @@ it with the committed files: `check: 6 substrate files byte-identical` is the
 proof that this machine reproduces the pack. `generate` then writes them; the
 only change `git status` shows is the `extracted_at` line of each manifest.
 `validate` prints the conformance report and ends `RESULT: PASS`.
+`generate` on InvoiceGuard prints a dozen `matches no component` warnings
+for its `models` modules and one `has no member modules`; they are known
+(the reference pack maps components to the spine and the platform, not to
+the model layer) and harmless. Then `uv run pytest` once more: every test
+passes, none skipped.
 
 **A4. One question through the whole engine.** Needs `OPENROUTER_API_KEY`.
 
