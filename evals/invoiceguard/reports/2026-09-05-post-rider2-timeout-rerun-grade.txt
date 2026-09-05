@@ -1,0 +1,9 @@
+Eval grade — pack: invoiceguard · report: 2026-09-05-post-rider2-timeout-rerun.jsonl
+engine 682c644da4a3 · target 761a18e9b925 · seed 42 · model openai/gpt-4o-2024-11-20 · bank 51135d86460f665b
+
+INVARIANT: ok — no wrong-but-verified occurrence
+
+[   ok] C1b        5/5  threshold 1.00
+[   ok] C2         5/5  threshold 0.80
+
+RESULT: PASS
