@@ -1493,3 +1493,151 @@ defaulted` on a turn that is neither kind-bearing nor in a window; any
 `give_answer(shape='prose')` — before the source or the document was
 read — surfacing as a content miss on B2, MT-ABOUT's turn 2 or MT3's
 turn 2.
+
+## Rider 2 (2026-09-05, after the post-rider run)
+
+The post-rider run (`2026-09-04-post-rider`, engine `8739d42`, bank
+`51135d86460f665b`, committed `f37c201` beside its FAIL grade) landed
+the Rider Pass's predictions but one. `INVARIANT: ok`, zero
+occurrences; MT-ANCHOR 5/5 — the caught shape in every rep: turn 2
+warned and shipped [UNVERIFIED], turn 3 counted `line_note`, 505, at
+exit 0, five recoveries; MT-ABOUT 5/5 with the About defaulted in 5/5
+— the run's five `about defaulted` events, all MT-ABOUT turn 2, all
+`rate_variance`, each on a kind-bearing ("that rule"), undeclared turn
+the prose arm confirmed against turn 1's filter anchor — the watch-for
+satisfied and three-condition-clean; U-WHO 5/5; nudges 20 → 3 (MT4 1,
+B2 2), the prose-reply class at zero; no `197@0`; no anchor warn
+outside the MT rows. The one miss: **MT-KEY 0/5, deterministic,
+safe-direction** — exit 2 at turn 2 in every rep, on a correct
+history. Two commits (`3cce723` and this one), 1034 → 1036 tests, bank
+untouched — the hash stays `51135d86460f665b` and no report becomes
+ungradeable. No model pin change; no full run in the pass — the
+developer's run grades it. The push is the developer's step.
+
+- **MT-KEY 0/5 — the join-echo.** Turn 1's table transcript renders
+  the harvested anchors joined, one kind per entry and every column's
+  value: `About: invoice 440 / INV-00426.` The router — effectively
+  deterministic under the loop-contract sentence — echoed that
+  spelling verbatim as its declared About in 5/5 reps, where the
+  post-fix-pass run had declared `invoice 440` in 5/5: the one-sentence
+  prompt change re-rolled the About spelling wholesale. R2's declared
+  arm strips one kind noun and compares one name; `440 / INV-00426` is
+  in no name set; warn ×5 (*the question refers to that invoice; turn
+  1's evidence established `440 / INV-00426`, and this answer says it
+  is about `invoice 440 / INV-00426`*). Reproduced offline, against the
+  anchor `{440, INV-00426}`, before any code changed:
+
+  | declared about | before | after |
+  |---|---|---|
+  | `invoice 440 / INV-00426` | warn | silent |
+  | `440 / INV-00426` | warn | silent |
+  | `invoice 440`, `INV-00426`, `440` | silent | silent |
+  | `440 / INV-00427`, `invoice 441 / INV-00426`, `440 / RVX01` | warn | warn |
+  | `440 / ` (dangling), `440 /  / INV-00426` (doubled) | warn | warn |
+  | `440 / 440` | warn | silent |
+
+  The engine teaches a spelling its checker rejects — the same
+  meta-pattern as the kind-noun gap, one layer up.
+- **The fix: read the join, never emit it.**
+  `verifier/anchor.py::_declared_matches`, used by the declared arm
+  alone: the kind noun comes off (R2), the whole remainder is compared
+  first — byte-identical for everything that matched before, including
+  a value that itself contains ` / ` — then, when the remainder splits
+  on `" / "`, every component, stripped and normalized on its own, must
+  be one of the anchor's names. A stranger, another kind's value, a
+  list (`440 and INV-00426`), a dangling separator (`440 /` after the
+  strip's trailing trim: one component, no name) or a doubled one (an
+  empty component, and no anchor carries an empty name) warn exactly
+  as before; a repeated component is silent. A confirming echo is
+  `confirmed_by="declared"`, so no default is stamped and nothing
+  reaches the harness's injection path. The seam review's ruling
+  stands — the injected About is one bare value the anchor carries,
+  never the join — now for the reason that the join is the
+  transcript's rendering of several columns, not a value any column
+  carries; the rendering itself (`anchors_text`) is untouched, since
+  it legitimately emits the join on every multi-column anchor. Probes
+  pinned in `tests/test_verifier_anchor.py` (the table above, plus the
+  pack's three-column kind — a supplier's id, code and name — read the
+  same way); the seam review's own pin that the joined form warns is
+  retired with its reason.
+- **The meta-pattern, counted.** This is the second instance of *the
+  engine teaches a spelling its checker rejects*: the kind noun (Fix
+  Pass, R2), then the join (Rider 2). **A third instance triggers a
+  design pass on the render/match split — one rendering read by one
+  matcher, or a matcher that reads whatever the renderer writes by
+  construction — instead of another patch.**
+- **The join's shadow — recorded, not built; the candidate third
+  instance.** Once a join-echoed About confirms, finalize stores it as
+  it stores any declaration (`strip_kind_noun`, then one declared
+  anchor): one anchor whose value is the join itself, `440 /
+  INV-00426`, kind invoice, no column. On a turn whose evidence carried
+  no column of the kind — a SQL-less prose follow-up — that anchor
+  shadows turn 1 for `_anchor_of`, and a third anaphoric turn's
+  declared `invoice 440`, or a prose naming only `440`, warns again.
+  Trigger shape, verbatim, for a play session to produce deliberately:
+  **join-echo → SQL-less prose follow-up → third anaphoric turn.**
+  Ruled out as a patch: a both-sides read (every anchor value split
+  into components) would let that stored join become the confirming
+  anchor for a later undeclared prose turn, and `default_about` would
+  stamp the join as a bare About — the seam ruling broken through the
+  back door; making it safe touches the default-emission path too,
+  which is the design pass arriving disguised as three lines. If it
+  bites live, the design pass starts from a written position:
+  symmetric join reading on both sides, plus a guard that a default is
+  never a stored join.
+- **Exposure (rule 4), predicted before and replayed after.** Checks
+  `anchor.entity_mismatch`, `lint.placeholder`, `lint.ungrounded_key`:
+
+  | source | anchor.entity_mismatch | note |
+  |---|---|---|
+  | post-rider report (`f37c201`) | **10 → 5** | removed: MT-KEY turn 2, reps 1–5, the join-echo; surviving: MT-ANCHOR turn 2, reps 1–5, "never names it", byte-identical |
+  | post-backlog report | **2 → 2** | rep 4's turn 2 and turn 3 untouched |
+  | post-close report | **0 → 0** | |
+  | placeholder / ungrounded_key, all three | 0 → 0 | this rider touches neither |
+
+  Actuals matched the prediction line for line. The post-rider report
+  is now pinned in `tests/test_eval_exposure.py` beside post-backlog
+  and post-close (265 statements, five hits, all MT-ANCHOR turn 2).
+  Dev-store replay optional and developer-attested: the recorded
+  abouts there carry no join, so expect unchanged.
+- **Two knob behaviours, from the static relay.** `unless_finding`
+  (`eval/grade.py`, `_has_finding`) matches the check's name at any
+  severity and at any exit ≠ 0. So (1) a fail-severity record of the
+  named check would stand the assertion down as a warn does — within
+  spec, and the anchor check emits only warn, so no live witness; and
+  (2) the waiver applies at exit 3 too, but MT-ANCHOR's turn-2
+  assertions carry `at_exit: [0, 2]` and turn 3 admits `[0, 2]`, so no
+  exit-3 turn ever reaches it — within spec, no live witness.
+- **MT-ANCHOR turn 2, the experience note.** The modal outcome moved
+  from honest refusal (post-fix-pass: refuse ×3 at exit 3, drift ×2 at
+  exit 2) to labeled-unverified drift (post-rider: drift ×5 at exit 2
+  with the warn, every rep recovering at turn 3). Accepted as
+  documented cost, the sentence untouched: prompt surgery re-rolls
+  phrasing wholesale — MT-KEY's About went from `invoice 440` to
+  `invoice 440 / INV-00426` in 5/5 on one added sentence — and the
+  reader sees [UNVERIFIED] with the anchor named either way. True
+  cause substrate-side: `line_note` is undescribed in the pack — no
+  rules-engine function, no business doc — so "tell me more about that
+  rule" has nothing to be about; that is the gap a published Unit of
+  Work would fill, and a possible Phase 6 demo beat.
+- **Process line, the push convention.** Rider Pass: Claude pushed
+  `8739d42` after pre-flight and the developer verified origin-first.
+  From Rider 2 the push is the developer's step: Claude lands the
+  commits, states `HEAD` against `origin/main` from a fresh fetch, and
+  hands off; the developer pre-flights, pushes, and runs the bank.
+
+Predictions for the re-run (bank `51135d86460f665b`, unchanged):
+
+| row | mechanism | prediction |
+|---|---|---|
+| MT-KEY | the echoed join reads as the anchor; turn 2 confirms as a declaration at exit 0 | 5/5 |
+| MT-ANCHOR, MT-ABOUT, U-WHO | untouched | 5/5 each |
+| all 65 pre-existing rows | one matcher arm reads more; nothing else changes | hold |
+| INVARIANT | no content path weakened; a join confirms only when every component names the anchor | ok, zero occurrences |
+| nudges | the sentence stands | ≈ 3 |
+| `about defaulted` events | the default's conditions unchanged | all three-condition-clean |
+
+Watch-for: any `anchor.entity_mismatch` on MT-KEY; any About carrying
+` / ` on a row other than MT-KEY (note where — the join spreads
+wherever a multi-column anchor renders); the shadow's trigger shape in
+any trail. If it lands, the fix-pass arc closes and the line un-stops.
