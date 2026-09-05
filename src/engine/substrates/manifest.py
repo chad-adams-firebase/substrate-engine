@@ -23,16 +23,21 @@ def build_manifest(
     source_commit_sha: str | None = None,
     simulation_seed: int | None = None,
     source_tables: list[str] | None = None,
+    source_snapshot: str | None = None,
     extracted_at: datetime | None = None,
 ) -> Manifest:
     tables = sorted(source_tables or [])
-    pinning = {
+    pinning: dict = {
         "generator": generator,
         "generator_version": generator_version,
         "source_commit_sha": source_commit_sha,
         "simulation_seed": simulation_seed,
         "source_tables": tables,
     }
+    if source_snapshot is not None:
+        # Added for pulled worlds; absent from the hash otherwise so
+        # every earlier manifest id stands.
+        pinning["source_snapshot"] = source_snapshot
     canonical = json.dumps(pinning, sort_keys=True, separators=(",", ":"))
     manifest_id = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
     return Manifest(
@@ -42,6 +47,7 @@ def build_manifest(
         source_commit_sha=source_commit_sha,
         simulation_seed=simulation_seed,
         source_tables=tables,
+        source_snapshot=source_snapshot,
         extracted_at=extracted_at or datetime.now(UTC),
     )
 

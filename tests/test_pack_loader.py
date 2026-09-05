@@ -139,3 +139,44 @@ def test_verifier_settings_typo_rejected(make_pack):
     config["verifier"] = {"plausibility": {"row_count_tolerence_pct": 5}}  # typo
     with pytest.raises(PackLoadError, match="row_count_tolerence_pct"):
         load_pack(make_pack(config))
+
+
+def test_pull_block_loads_and_typos_fail(make_pack):
+    """`engine pull` reads its table list from the pack; `schema` is the
+    yaml key (the attribute is schema_name); unknown keys are typos."""
+    config = copy.deepcopy(VALID_CONFIG)
+    config["pull"] = {
+        "warehouse_id": "abc123",
+        "catalog": "main",
+        "schema": "app",
+        "tables": [
+            {"name": "invoices", "key": "id"},
+            {"name": "v_suppliers", "versioned": False, "where": "active = true"},
+        ],
+    }
+    pack = load_pack(make_pack(config))
+    pull = pack.config.pull
+    assert (pull.warehouse_id, pull.catalog, pull.schema_name) == ("abc123", "main", "app")
+    assert pull.page_rows == 20000
+    assert [(t.name, t.key, t.versioned, t.where) for t in pull.tables] == [
+        ("invoices", "id", True, None),
+        ("v_suppliers", None, False, "active = true"),
+    ]
+
+    config["pull"]["tables"][0]["primary_key"] = "id"
+    with pytest.raises(PackLoadError, match="primary_key"):
+        load_pack(make_pack(config, name="pack2"))
+
+
+def test_generation_without_a_simulation_source_loads(make_pack):
+    """A real application has no SQLite export and no simulation seed:
+    the generation block still carries what the generators need."""
+    config = copy.deepcopy(VALID_CONFIG)
+    config["generation"] = {
+        "component_id_prefix": "app",
+        "source_globs": ["src/**/*.py"],
+    }
+    pack = load_pack(make_pack(config))
+    assert pack.config.generation.source_sqlite is None
+    assert pack.config.generation.simulation_seed is None
+    assert pack.config.generation.component_id_prefix == "app"

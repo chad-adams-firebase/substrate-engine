@@ -52,3 +52,38 @@ def test_save_load_round_trip(tmp_path):
     path = tmp_path / "manifests" / "sqlite_convert.json"
     save_manifest(path, manifest)
     assert load_manifest(path) == manifest
+
+
+def test_source_snapshot_pins_a_pulled_world_without_moving_older_ids():
+    """A pulled world's pin is the warehouse schema plus each table's
+    Delta version. It joins the hash only when present, so every
+    manifest written before the field existed keeps its id (the
+    fixtures and reports pin those ids)."""
+    without = build_manifest("dictionary", "1.0.0", source_tables=["invoices"])
+    explicit_none = build_manifest(
+        "dictionary", "1.0.0", source_tables=["invoices"], source_snapshot=None
+    )
+    assert without.manifest_id == explicit_none.manifest_id
+    assert without.source_snapshot is None
+
+    pulled = build_manifest(
+        "databricks_pull",
+        "1.0.0",
+        source_tables=["invoices"],
+        source_snapshot="cat.sch|invoices@17",
+    )
+    again = build_manifest(
+        "databricks_pull",
+        "1.0.0",
+        source_tables=["invoices"],
+        source_snapshot="cat.sch|invoices@17",
+    )
+    moved = build_manifest(
+        "databricks_pull",
+        "1.0.0",
+        source_tables=["invoices"],
+        source_snapshot="cat.sch|invoices@18",
+    )
+    assert pulled.manifest_id == again.manifest_id
+    assert pulled.manifest_id != moved.manifest_id
+    assert pulled.source_snapshot == "cat.sch|invoices@17"

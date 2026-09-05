@@ -434,9 +434,14 @@ def _convert(pack_dir: str, sqlite_override: str | None, seed_override: int | No
         source_selection.settings.get("commit_sha") if source_selection else None
     )
 
-    sqlite_path = _pack_path(
-        pack.root, sqlite_override or generation.source_sqlite
-    )
+    sqlite_source = sqlite_override or generation.source_sqlite
+    if sqlite_source is None:
+        raise CliError(
+            "convert needs a SQLite database: set generation.source_sqlite "
+            "in config.yaml or pass --sqlite. A pack whose database comes "
+            "from the warehouse uses `engine pull` instead."
+        )
+    sqlite_path = _pack_path(pack.root, sqlite_source)
     duckdb_path = _pack_path(pack.root, sql_selection.settings["database"])
     seed = seed_override if seed_override is not None else generation.simulation_seed
 

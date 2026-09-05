@@ -82,12 +82,14 @@ class GenerationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     # The target app's SQLite database (input to `engine convert`),
-    # pack-relative or absolute.
-    source_sqlite: str
+    # pack-relative or absolute. Absent for a pack whose database
+    # arrives through `engine pull` instead.
+    source_sqlite: str | None = None
     # The seed its simulation ran with. Trusted config — the database
     # cannot prove its own seed — recorded into every manifest as half
-    # of the (commit SHA, seed) pinning pair.
-    simulation_seed: int
+    # of the (commit SHA, seed) pinning pair. Absent for a real
+    # application: nothing simulated it.
+    simulation_seed: int | None = None
     # Component ids look like "<prefix>.<group>.<slug>".
     component_id_prefix: str
     # Which files the CKG extraction covers, relative to the source
@@ -99,6 +101,45 @@ class GenerationConfig(BaseModel):
     # enum candidate. Threshold is config because it will be tuned at
     # work against real schemas.
     enum_scan_max_distinct: int = 12
+
+
+class PullTable(BaseModel):
+    """One table `engine pull` copies from the warehouse into the pack's
+    DuckDB file."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    # A unique, sortable column: with it the pull pages by key (the
+    # intended path for any large table); without it, by offset over
+    # ORDER BY ALL, correct on a versioned snapshot but slower.
+    key: str | None = None
+    # Read the table VERSION AS OF its current Delta version, so every
+    # page sees one snapshot and the manifest can name it. Off for a
+    # view or a non-Delta source, which have no history.
+    versioned: bool = True
+    # An optional slice ("received_at >= '2026-01-01'") for a demo world
+    # smaller than the table.
+    where: str | None = None
+
+
+class PullConfig(BaseModel):
+    """`engine pull`: where the target application's tables live in the
+    warehouse. Enterprise identifiers — they belong in a local pack
+    that never enters the repo (packs/local-*/ is gitignored). The
+    workspace host and token come from the environment."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    warehouse_id: str
+    catalog: str
+    # `schema` in the yaml; the attribute is schema_name because a
+    # field literally named schema shadows BaseModel.schema.
+    schema_name: str = Field(alias="schema")
+    tables: list[PullTable]
+    # Rows per statement. Each page must stay under the Statement
+    # Execution API's 25 MiB inline cap; lower it for wide rows.
+    page_rows: int = 20000
 
 
 class RunSqlSettings(BaseModel):
@@ -503,3 +544,4 @@ class PackConfig(BaseModel):
     display: DisplaySettings = DisplaySettings()
     ui: UiSettings = UiSettings()
     generation: GenerationConfig | None = None
+    pull: PullConfig | None = None

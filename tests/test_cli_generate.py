@@ -146,3 +146,17 @@ def test_sha_mismatch_refuses(cli_pack, tmp_path, capsys):
     code = main(["generate", "--pack", str(cli_pack), "--source", str(clone)])
     assert code == 1
     assert "pins" in capsys.readouterr().err
+
+
+def test_convert_without_a_sqlite_source_is_legible(cli_pack, capsys):
+    """A pack whose database comes from the warehouse has no
+    source_sqlite; asking it to convert must name the fix, not crash
+    on a missing path."""
+    config_path = cli_pack / "config.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    del config["generation"]["source_sqlite"]
+    config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    assert main(["convert", "--pack", str(cli_pack)]) == 1
+    err = capsys.readouterr().err
+    assert "generation.source_sqlite" in err and "engine pull" in err

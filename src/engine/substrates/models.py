@@ -66,12 +66,20 @@ class Manifest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     manifest_id: str
-    generator: Literal["dictionary", "stats", "ckg", "sqlite_convert"]
+    generator: Literal[
+        "dictionary", "stats", "ckg", "sqlite_convert", "databricks_pull"
+    ]
     generator_version: str
     source_commit_sha: str | None = None
     simulation_seed: int | None = None
     # DB-derived substrates: the tables actually read.
     source_tables: list[str] = []
+    # A pulled world's pin: which warehouse schema, and each table's
+    # Delta version, the pull read ("cat.sch|invoices@17,suppliers@3").
+    # Hashed into manifest_id only when set, so every manifest that
+    # predates it keeps its id (consumer: engine pull; the eval
+    # preflight compares world manifest ids).
+    source_snapshot: str | None = None
     extracted_at: datetime
 
 
