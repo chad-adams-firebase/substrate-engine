@@ -935,3 +935,176 @@ def test_with_the_real_verifier_a_drift_after_a_warning_ships_unverified_never_v
             assert finding.detail.startswith("the question's pronoun follows turn 2's anchor warning")
         else:
             assert anchor_findings == []
+
+
+# --- Rider Pass: an undeclared follow-up wears the anchor it was confirmed
+# --- about -----------------------------------------------------------------
+
+def confirmed_result(about: str):
+    from engine.verifier.models import AttemptRecord, VerifierResult
+
+    return VerifierResult(
+        disposition="verified",
+        attempt_record=AttemptRecord(attempt=1, claims=[], unmatched_count=0),
+        about_default=about,
+    )
+
+
+def top_rule_name(tool_pack) -> str:
+    from engine.eval.world import World
+
+    (top,) = World.from_pack(tool_pack).sql(
+        "SELECT rule_name FROM findings GROUP BY rule_name ORDER BY COUNT(*) DESC, rule_name LIMIT 1"
+    )
+    return top["rule_name"]
+
+
+TOP_RULE_TURN = [TOP_RULE_CALL, TOP_RULE_SQL, tool_call("give_answer", {"shape": "table", "evidence_index": 0})]
+
+
+def test_an_undeclared_follow_up_wears_the_anchors_name_and_stores_it_declared(tool_pack):
+    """MT-ABOUT reps 1 and 4: the router answered about the anchor and
+    declared nothing. The check confirmed it, so verify writes the About
+    the router did not, provenance says so, and finalize keeps it as a
+    declaration — stripped, column-less, contradiction-free."""
+    from tests.harness_support import verified_result
+
+    name = top_rule_name(tool_pack)
+    responses = TOP_RULE_TURN + [
+        STATS_CALL, GIVE_PROSE,
+        LLMResponse(content=f"The {name} rule flags a line that carries a note.", model="s"),
+    ]
+    verifier = StubVerifier([verified_result(), confirmed_result(name)])
+    session, _, _ = build_ask_session(tool_pack, responses, verifier=verifier)
+    first = session.ask("Which rule fires most often?")
+    assert first.outcome.body.about == ""  # a first turn has no anchor to confirm
+    second = session.ask("Tell me more about that rule.", conversation_id=first.conversation_id)
+    assert second.outcome.kind == "answer" and second.outcome.body.about == name
+    assert verifier.calls[1]["context"].about is None
+    assert f"about defaulted to `{name}` — the anchor check confirmed it" in [e.detail for e in second.events]
+    _, two = checkpoint_history(session, first.conversation_id)
+    (declared,) = two.anchors.entities
+    assert (declared.kind, declared.column, declared.value, declared.source) == ("rule", "", name, "declared")
+    assert two.anchors.contradiction == "" and two.answer == second.outcome.body.text
+
+
+def test_with_the_real_verifier_an_undeclared_count_of_the_anchor_wears_its_about(tool_pack):
+    """The filter arm, live: "that rule" counted with a filter on the
+    anchor's name and no declaration ships verified with the anchor as
+    its About, and the transcript names it as it always did."""
+    name = top_rule_name(tool_pack)
+    responses = TOP_RULE_TURN + [
+        tool_call("run_sql", {"question": "How many findings has that rule produced?"}),
+        LLMResponse(content=f"```sql\nSELECT COUNT(*) AS n FROM findings f WHERE f.rule_name = '{name}'\n```", model="scripted"),
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses, real_verifier=True)
+    first = session.ask("Which rule fires most often?")
+    second = session.ask("How many findings has that rule produced?", conversation_id=first.conversation_id)
+    assert second.outcome.verification == "verified" and second.outcome.body.about == name
+    assert not any(p.check == "anchor.entity_mismatch" for p in second.verdict.plausibility)
+    _, two = checkpoint_history(session, first.conversation_id)
+    assert two.answer.startswith(f"[table: About: rule {name}. SELECT COUNT(*)")
+    assert {(a.column, a.source) for a in two.anchors.entities} == {("findings.rule_name", "filter"), ("", "declared")}
+
+
+def test_a_table_that_filters_on_nothing_gets_no_default_about(tool_pack):
+    """Silence is not confirmation: a grouped table with no filter on the
+    kind passes the check as before and wears no About."""
+    responses = TOP_RULE_TURN + TOP_RULE_TURN
+    session, _, _ = build_ask_session(tool_pack, responses, real_verifier=True)
+    first = session.ask("Which rule fires most often?")
+    second = session.ask("Tell me more about that rule.", conversation_id=first.conversation_id)
+    assert second.outcome.kind == "answer" and second.outcome.body.about == ""
+    assert not any(e.detail.startswith("about defaulted") for e in second.events)
+
+
+def test_the_default_comes_from_the_final_attempt_only(tool_pack):
+    """A retry discards its attempt's confirmation with the draft; the
+    About is written once, on the body the final attempt verified."""
+    from engine.verifier.models import AttemptRecord, VerifierResult
+    from tests.harness_support import verified_result
+
+    name = top_rule_name(tool_pack)
+    feedback = RegenerationFeedback(
+        items=[FeedbackItem(surface="14,600", sentence="There were 14,600 rows.", kind="numeric")]
+    )
+    retry = VerifierResult(
+        disposition="retry",
+        attempt_record=AttemptRecord(attempt=1, claims=[], unmatched_count=1),
+        feedback=feedback,
+        about_default=name,
+    )
+    verifier = StubVerifier([verified_result(), retry, confirmed_result(name)])
+    responses = TOP_RULE_TURN + [
+        STATS_CALL, GIVE_PROSE,
+        LLMResponse(content=f"The {name} rule flagged 14,600 lines.", model="s"),
+        LLMResponse(content=f"The {name} rule flags a line that carries a note.", model="s"),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses, verifier=verifier)
+    first = session.ask("Which rule fires most often?")
+    second = session.ask("Tell me more about that rule.", conversation_id=first.conversation_id)
+    assert second.outcome.verification == "verified" and second.outcome.body.about == name
+    assert second.outcome.body.text == f"The {name} rule flags a line that carries a note."
+    assert [c["attempt"] for c in verifier.calls[1:]] == [1, 2]
+    assert all(c["context"].about is None for c in verifier.calls[1:])
+    assert sum(e.detail.startswith("about defaulted") for e in second.events) == 1
+
+
+def test_a_content_free_draft_is_refused_even_when_the_anchor_confirmed_it(tool_pack):
+    """Addendum N7 outranks the default: an insufficiency draft that
+    names the anchor passes the prose arm, and the refusal card it
+    becomes wears no About and establishes nothing."""
+    from tests.harness_support import verified_result
+
+    name = top_rule_name(tool_pack)
+    responses = TOP_RULE_TURN + [
+        STATS_CALL, GIVE_PROSE,
+        LLMResponse(content=f"The evidence does not show what the {name} rule checks.", model="s"),
+    ]
+    verifier = StubVerifier([verified_result(), confirmed_result(name)])
+    session, _, _ = build_ask_session(tool_pack, responses, verifier=verifier)
+    first = session.ask("Which rule fires most often?")
+    second = session.ask("Tell me more about that rule.", conversation_id=first.conversation_id)
+    assert second.outcome.kind == "refuse"
+    assert not any(e.detail.startswith("about defaulted") for e in second.events)
+    _, two = checkpoint_history(session, first.conversation_id)
+    assert two.anchors.entities == []
+
+
+def test_a_verifier_refusal_carries_no_about(tool_pack):
+    from tests.harness_support import verified_result
+
+    name = top_rule_name(tool_pack)
+    responses = TOP_RULE_TURN + [
+        STATS_CALL, GIVE_PROSE,
+        LLMResponse(content=f"The {name} rule flags a line that carries a note.", model="s"),
+    ]
+    refusal = refused_result().model_copy(update={"about_default": name})
+    session, _, _ = build_ask_session(tool_pack, responses, verifier=StubVerifier([verified_result(), refusal]))
+    first = session.ask("Which rule fires most often?")
+    second = session.ask("Tell me more about that rule.", conversation_id=first.conversation_id)
+    assert second.outcome.kind == "refuse"
+    assert not any(e.detail.startswith("about defaulted") for e in second.events)
+
+
+def test_a_declared_about_is_never_overwritten(tool_pack):
+    """The router's declaration wins byte for byte; the default fills an
+    absence and nothing else."""
+    from tests.harness_support import verified_result
+
+    name = top_rule_name(tool_pack)
+    responses = TOP_RULE_TURN + [
+        STATS_CALL,
+        tool_call("give_answer", {"shape": "prose", "about": f"rule {name}"}),
+        LLMResponse(content=f"The {name} rule flags a line that carries a note.", model="s"),
+    ]
+    verifier = StubVerifier([verified_result(), confirmed_result(name)])
+    session, _, _ = build_ask_session(tool_pack, responses, verifier=verifier)
+    first = session.ask("Which rule fires most often?")
+    second = session.ask("Tell me more about that rule.", conversation_id=first.conversation_id)
+    assert second.outcome.body.about == f"rule {name}"
+    assert not any(e.detail.startswith("about defaulted") for e in second.events)
+    _, two = checkpoint_history(session, first.conversation_id)
+    (declared,) = two.anchors.entities
+    assert declared.value == name and declared.source == "declared"  # stripped, as before

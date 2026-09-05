@@ -574,9 +574,25 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 ),
             )
         else:
-            outcome = AnswerOutcome(
-                body=state.draft, verification=result.disposition
-            )
+            body = state.draft
+            if result.about_default and not body.about:
+                # The About the router did not declare (Rider Pass): the
+                # anchor check confirmed this answer is about the prior
+                # anchor — a filter on its key, or its name in the prose
+                # — so the engine writes what the check read, exactly
+                # where a declaration would sit; finalize keeps it as
+                # one. Only on this branch: a warned turn carries no
+                # default, a refusal wears no About, and a redraft is
+                # verified again before anything is written.
+                deps.events.emit(
+                    "verify",
+                    "finish",
+                    f"about defaulted to `{result.about_default}` "
+                    "— the anchor check confirmed it",
+                )
+                body = body.model_copy(update={"about": result.about_default})
+            outcome = AnswerOutcome(body=body, verification=result.disposition)
+            return base | {"verdict": verdict, "outcome": outcome, "draft": body}
         return base | {"verdict": verdict, "outcome": outcome}
 
     def finalize(state: TurnState) -> dict:
@@ -599,8 +615,10 @@ def build_graph(deps: GraphDeps, checkpointer=None):
                 )
         deps.events.emit("finalize", "finish", outcome.kind)
         # What this turn established (Backlog Pass): harvested from the
-        # evidence with the pack's entity kinds, the router's declared
-        # about beside it, and kept on the history for the transcript,
+        # evidence with the pack's entity kinds, the About beside it —
+        # the router's declaration, or the one verify wrote from the
+        # anchor check's confirmation (Rider Pass), read alike — and
+        # kept on the history for the transcript,
         # the next turn's grounding, and the Verifier's anchor check.
         # A warned turn establishes nothing (Fix Pass): MT-ANCHOR rep 4
         # warned at turn 2 and the drift still became turn 3's anchor,
