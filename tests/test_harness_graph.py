@@ -892,3 +892,46 @@ def test_a_refusal_after_a_one_row_query_keeps_its_keys_and_establishes_nothing(
     assert record.anchors.entities == []
     assert {k.column for k in record.anchors.keys} == {"invoices.id", "invoices.invoice_number"}
     assert record.answer.startswith("[refused: ")
+
+
+def test_with_the_real_verifier_a_drift_after_a_warning_ships_unverified_never_verified(tool_pack):
+    """The breach, end to end: turn 1 the top rule (line_note in the
+    pack; the snapshot world names its own); turn 2 "that rule" counts
+    another rule and is warned; turn 3 "it" counts that other rule
+    again — the window reads it against the anchor, [UNVERIFIED], exit
+    2 — where the post-backlog run verified 197 at exit 0. The twin
+    that reads the correction and counts the anchor verifies."""
+    from engine.eval.world import World
+
+    (top,) = World.from_pack(tool_pack).sql(
+        "SELECT rule_name FROM findings GROUP BY rule_name ORDER BY COUNT(*) DESC, rule_name LIMIT 1"
+    )
+    anchor = top["rule_name"]
+    other = "new_supplier" if anchor != "new_supplier" else "line_note"
+
+    def responses(third_rule: str):
+        return [
+            TOP_RULE_CALL, TOP_RULE_SQL,
+            tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+            tool_call("run_sql", {"question": f"How many findings has the rule '{other}' produced?"}),
+            LLMResponse(content=f"```sql\nSELECT COUNT(*) AS n FROM findings f WHERE f.rule_name = '{other}'\n```", model="scripted"),
+            tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+            tool_call("run_sql", {"question": "How many findings has it produced?"}),
+            LLMResponse(content=f"```sql\nSELECT COUNT(*) AS n FROM findings f WHERE f.rule_name = '{third_rule}'\n```", model="scripted"),
+            tool_call("give_answer", {"shape": "table", "evidence_index": 0, "about": third_rule}),
+        ]
+
+    for third_rule, expected in ((other, "unverified"), (anchor, "verified")):
+        session, _, _ = build_ask_session(tool_pack, responses(third_rule), real_verifier=True)
+        first = session.ask("Which rule fires most often?")
+        second = session.ask("How many findings has that rule produced?", conversation_id=first.conversation_id)
+        assert second.outcome.verification == "unverified"
+        assert any(p.check == "anchor.entity_mismatch" for p in second.verdict.plausibility)
+        third = session.ask("How many findings has it produced?", conversation_id=first.conversation_id)
+        assert third.outcome.kind == "answer" and third.outcome.verification == expected, third_rule
+        anchor_findings = [p for p in third.verdict.plausibility if p.check == "anchor.entity_mismatch"]
+        if expected == "unverified":
+            (finding,) = anchor_findings
+            assert finding.detail.startswith("the question's pronoun follows turn 2's anchor warning")
+        else:
+            assert anchor_findings == []

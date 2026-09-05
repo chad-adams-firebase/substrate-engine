@@ -14,7 +14,22 @@ that decides, decides. A contradiction is a warn: the answer ships
 No kind in the question, no prior entity of that kind, or an ambiguous
 one (a multi-row table) is silent — the check must not manufacture
 refusals of clean turns.
+
+The pronoun window (Fix Pass, R1 b′): kind-less pronouns — "it",
+"its" — are unchecked by design, since "the rule that flags it" refers
+to a rule while the prior turn established a supplier. But after an
+anchor warn the drift is live in the conversation: the bank's breach
+was warn → "How many findings has it produced?" → 197 verified; the
+session's was warn → refusal → the same. So once a turn has been
+warned, a kind-less pronoun is read against the surviving anchor of
+the warned kind, until an unwarned answer establishes a new entity of
+any kind — the newest entity being the pronoun's likeliest referent.
+A refusal establishes nothing and keeps the window open; a fixed turn
+count would close one record and not the other. Worst case inside the
+window is a warn, [UNVERIFIED], never a verified wrong count.
 """
+
+import re
 
 from engine.tools.entities import (
     EntityCatalog,
@@ -47,6 +62,47 @@ def _anchor_of(kind: str, prior: list[TurnAnchors]) -> tuple[int, list[Anchor]] 
     return None
 
 
+_PRONOUN = re.compile(r"\b(?:it|its)\b")
+
+
+def is_kindless_pronoun(question: str) -> bool:
+    """Whether the question refers back with "it" or "its" — the
+    pronouns the window reads. "They", "those", "that" alone are not
+    read: their referents are plural or clausal."""
+    return _PRONOUN.search(question.casefold()) is not None
+
+
+def open_window(prior: list[TurnAnchors]) -> TurnAnchors | None:
+    """The warned record whose window is still open, or None. Newest
+    first, the first record that either was warned (open, that kind)
+    or established a column-bearing anchor of any kind (closed)
+    decides. A warned turn wrote no anchors, so an anchor found after
+    a warn came from an unwarned answer and is trusted."""
+    for anchors in reversed(prior):
+        if anchors.contradicted_kind:
+            return anchors
+        if any(anchor.column for anchor in anchors.entities):
+            return None
+    return None
+
+
+def referent_kind(
+    question: str, prior: list[TurnAnchors], catalog: EntityCatalog
+) -> str | None:
+    """The kind the question refers back to: the kind noun it names,
+    else — for a kind-less pronoun inside an open window — the kind
+    the warn was about. One reading, shared by the check, the
+    harness's finalize (the declared about's kind) and the replay."""
+    kind = anaphor_kind(question, catalog)
+    if kind is not None:
+        return kind
+    if is_kindless_pronoun(question):
+        window = open_window(prior)
+        if window is not None:
+            return window.contradicted_kind
+    return None
+
+
 def check_anchor(
     *,
     question: str,
@@ -57,15 +113,25 @@ def check_anchor(
     catalog: EntityCatalog,
 ) -> PlausibilityFinding | None:
     kind = anaphor_kind(question, catalog)
+    window: TurnAnchors | None = None
     if kind is None:
-        return None
+        window = open_window(prior) if is_kindless_pronoun(question) else None
+        if window is None:
+            return None
+        kind = window.contradicted_kind
     found = _anchor_of(kind, prior)
     if found is None:
         return None
     turn, anchors = found
     names = {_norm(a.value) for a in anchors}
     shown = " / ".join(dict.fromkeys(a.value for a in anchors))
-    established = f"the question refers to that {kind}; turn {turn}'s evidence established `{shown}`"
+    if window is None:
+        established = f"the question refers to that {kind}; turn {turn}'s evidence established `{shown}`"
+    else:
+        established = (
+            f"the question's pronoun follows turn {window.turn}'s anchor warning; "
+            f"turn {turn}'s evidence established `{shown}`"
+        )
 
     if about:
         # The router may spell the about with its kind noun in front —

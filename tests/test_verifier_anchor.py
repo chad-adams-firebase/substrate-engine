@@ -14,7 +14,7 @@ from engine.substrates.models import DictionaryRow
 from engine.substrates.pack_data import load_dictionary_map
 from engine.tools.entities import EntityCatalog
 from engine.tools.envelope import Anchor, RunSqlOutput, Table, ToolInvocation, TurnAnchors
-from engine.verifier.anchor import CHECK, check_anchor
+from engine.verifier.anchor import CHECK, check_anchor, is_kindless_pronoun, open_window, referent_kind
 from engine.verifier.models import DraftAnswer, VerifyContext
 
 from tests.verifier_support import make_verifier
@@ -226,3 +226,111 @@ def test_through_the_verifier_the_contradiction_is_a_warn_with_no_tool(catalog):
         question=TURN_7_QUESTION, draft=prose, evidence=[], attempt=1,
         context=VerifyContext(prior=[TURN_6], about="new_supplier"),
     ).disposition == "verified"
+
+
+# --- Fix Pass R1 (b′): the pronoun window ---------------------------------
+
+WARN_2 = "the question refers to that rule; turn 1's evidence established `line_note`, and this answer never names it"
+TURN_1 = TurnAnchors(turn=1, entities=[
+    Anchor(kind="rule", column="findings.rule_name", value="line_note", source="cell"),
+])
+WARNED_2 = TurnAnchors(turn=2, contradicted_kind="rule", contradiction=WARN_2)
+TABLE = DraftAnswer(kind="table_passthrough", text="SELECT ...")
+COUNT_197 = sql_turn("SELECT COUNT(*) AS n FROM findings WHERE rule_name = 'new_supplier'", ["n"], [{"n": 197}])
+COUNT_505 = sql_turn("SELECT COUNT(*) AS n FROM findings WHERE rule_name = 'line_note'", ["n"], [{"n": 505}])
+IT_QUESTION = "How many findings has it produced?"
+
+
+def test_the_recorded_breach_turn_is_flagged_inside_the_window(catalog):
+    """MT-ANCHOR rep 4 turn 3, reconstructed: turn 1 line_note, turn 2
+    warned, "How many findings has it produced?" about new_supplier at
+    197. All three readings decide as they do for a kind-bearing turn,
+    and the detail names the warning the pronoun follows."""
+    prior = [TURN_1, WARNED_2]
+    declared = run(catalog, question=IT_QUESTION, about="new_supplier", draft=TABLE, evidence=[COUNT_197], prior=prior)
+    assert declared is not None and declared.severity == "warn"
+    assert declared.detail == (
+        "the question's pronoun follows turn 2's anchor warning; turn 1's evidence "
+        "established `line_note`, and this answer says it is about `new_supplier`"
+    )
+    filtered = run(catalog, question=IT_QUESTION, draft=TABLE, evidence=[COUNT_197], prior=prior)
+    assert filtered is not None and filtered.detail.endswith("filters on `findings.rule_name = 'new_supplier'`")
+    prose = run(catalog, question="What does its source look like?", draft=PROSE_7, prior=prior)
+    assert prose is not None and prose.detail.endswith("and this answer never names it")
+    # The clean path: the correction was read.
+    assert run(catalog, question=IT_QUESTION, about="line_note", draft=TABLE, evidence=[COUNT_505], prior=prior) is None
+    assert run(catalog, question=IT_QUESTION, draft=TABLE, evidence=[COUNT_505], prior=prior) is None
+    assert run(catalog, question=IT_QUESTION, about="rule line_note", draft=TABLE, evidence=[COUNT_197], prior=prior) is None
+
+
+def test_the_window_survives_a_refusal_and_closes_on_any_kinds_anchor(catalog):
+    """The session's shape: warn at 7, refusal at 8, "it" at 9 — a
+    refusal establishes nothing, so the window is open at 9. Then any
+    unwarned answer that establishes an entity, of any kind, closes it:
+    turn 10 established an auditor, and turn 19's "Show me an example
+    invoice for it" faced no check (the dev-store replay stays at 2)."""
+    refusal = TurnAnchors(turn=8)
+    assert open_window([TURN_1, WARNED_2, refusal]) is WARNED_2
+    assert run(catalog, question=IT_QUESTION, draft=TABLE, evidence=[COUNT_197], prior=[TURN_1, WARNED_2, refusal]) is not None
+    auditor = TurnAnchors(turn=10, entities=[
+        Anchor(kind="auditor", column="invoice_history.actor", value="nova", source="cell"),
+    ])
+    assert open_window([TURN_1, WARNED_2, refusal, auditor]) is None
+    assert run(catalog, question=IT_QUESTION, draft=TABLE, evidence=[COUNT_197], prior=[TURN_1, WARNED_2, refusal, auditor]) is None
+    # A declared-only record does not close it: nothing column-bearing was established.
+    declared_only = TurnAnchors(turn=8, entities=[Anchor(kind="rule", column="", value="line_note", source="declared")])
+    assert open_window([TURN_1, WARNED_2, declared_only]) is WARNED_2
+    # A second warn inside the window keeps it open on the newest warn.
+    warned_9 = TurnAnchors(turn=9, contradicted_kind="rule", contradiction="…")
+    assert open_window([TURN_1, WARNED_2, refusal, warned_9]) is warned_9
+    assert referent_kind(IT_QUESTION, [TURN_1, WARNED_2, refusal, warned_9], catalog) == "rule"
+    assert referent_kind(IT_QUESTION, [TURN_1, WARNED_2, refusal, auditor], catalog) is None
+    assert referent_kind(TURN_7_QUESTION, [TURN_1, WARNED_2, refusal, auditor], catalog) == "rule"
+
+
+def test_no_window_without_a_warn_so_the_green_rows_are_untouched(catalog):
+    """MT3's turn 2 ("the rule that flags it") after a turn that
+    established both a supplier and the rule; MT4's kind-bearing turn 4;
+    a first turn; MT1/MT2's "those": none opens a window, because none
+    was ever warned."""
+    mt3_turn_1 = TurnAnchors(turn=1, entities=[
+        Anchor(kind="supplier", column="suppliers.code", value="RVX01", source="cell"),
+        Anchor(kind="supplier", column="suppliers.name", value="Ravenswood Extrusion", source="cell"),
+        Anchor(kind="rule", column="findings.rule_name", value="rate_variance", source="filter"),
+    ])
+    source = DraftAnswer(kind="prose", text="def rule_rate_variance(session, clock, invoice, line, contracts, config): ...")
+    assert run(catalog, question="Show me the source of the rule that flags it", draft=source, prior=[mt3_turn_1]) is None
+    assert referent_kind("Show me the source of the rule that flags it", [mt3_turn_1], catalog) is None
+    assert run(catalog, question=IT_QUESTION, draft=TABLE, evidence=[COUNT_197], prior=[TURN_1]) is None
+    assert run(catalog, question=IT_QUESTION, draft=TABLE, evidence=[COUNT_197], prior=[]) is None
+    assert run(catalog, question="How many of those arrived in each month?", draft=TABLE, prior=[mt3_turn_1, WARNED_2]) is None
+    for question, pronoun in (
+        ("How many findings has it produced?", True), ("Show me its source", True), ("Is it flagged?", True),
+        ("How many of those arrived in each month?", False), ("What did they close?", False),
+        ("Show me the item's lines", False), ("Which rule fires most often?", False),
+    ):
+        assert is_kindless_pronoun(question) is pronoun, question
+
+
+def test_two_kinds_coexist_and_only_the_warned_kind_is_read(catalog):
+    """Turn 1 established supplier S and rule R; "that rule" was warned at
+    turn 2. "It" at turn 3 is read against R alone: a filter on S's
+    columns carries no literal on the rule's, so it is silent; a filter
+    on another rule is not. An about naming S is the documented residue
+    — [UNVERIFIED] on a turn that meant the supplier — recorded, not
+    hidden."""
+    turn_1 = TurnAnchors(turn=1, entities=[
+        Anchor(kind="supplier", column="suppliers.code", value="RVX01", source="cell"),
+        Anchor(kind="rule", column="findings.rule_name", value="rate_variance", source="filter"),
+    ])
+    warned = TurnAnchors(turn=2, contradicted_kind="rule", contradiction="…")
+    by_supplier = sql_turn(
+        "SELECT COUNT(*) AS n FROM invoices i JOIN suppliers s ON s.id = i.supplier_id WHERE s.code = 'RVX01'",
+        ["n"], [{"n": 126}],
+    )
+    assert run(catalog, question="How many invoices did it send?", draft=TABLE, evidence=[by_supplier], prior=[turn_1, warned]) is None
+    other_rule = sql_turn("SELECT COUNT(*) AS n FROM findings WHERE rule_name = 'line_note'", ["n"], [{"n": 505}])
+    finding = run(catalog, question=IT_QUESTION, draft=TABLE, evidence=[other_rule], prior=[turn_1, warned])
+    assert finding is not None and "`rate_variance`" in finding.detail
+    residue = run(catalog, question="How many invoices did it send?", about="RVX01", draft=TABLE, evidence=[by_supplier], prior=[turn_1, warned])
+    assert residue is not None and residue.severity == "warn"

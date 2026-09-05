@@ -52,7 +52,6 @@ from engine.ports.work_store import WorkStorePort
 from engine.substrates.models import DictionaryMap, DictionaryRow, StatsRow
 from engine.tools.entities import (
     EntityCatalog,
-    anaphor_kind,
     harvest_turn_anchors,
     known_values,
 )
@@ -69,7 +68,7 @@ from engine.tools.interval_lint import lint_interval_arithmetic
 from engine.tools.key_lint import lint_placeholders, lint_ungrounded_keys
 from engine.tools.run_sql import fenced_block
 from engine.tools.sql_lint import lint_fan_out
-from engine.verifier.anchor import check_anchor
+from engine.verifier.anchor import check_anchor, referent_kind
 from engine.verifier.checks.base import PlausibilityContext
 from engine.verifier.checks.run_sql import RunSqlCheck
 from engine.verifier.models import DraftAnswer
@@ -395,7 +394,7 @@ def expose(
         # The harness's bookkeeping, replayed (Fix Pass): a warned turn
         # and a non-answer establish nothing, so the replay's prior
         # anchors are the ones a live conversation would have carried.
-        kind = anaphor_kind(turn.question, catalog) if turn.question else None
+        kind = referent_kind(turn.question, thread.prior, catalog) if turn.question else None
         anchors = harvest_turn_anchors(
             list(turn.invocations),
             catalog,

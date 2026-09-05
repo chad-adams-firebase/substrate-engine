@@ -63,10 +63,11 @@ from engine.harness.tables import caption_for, declared_readings, project_table
 from engine.harness.verifier_protocol import VerifierProtocol
 from engine.ports.llm import LLMPort
 from engine.ports.types import Message
-from engine.tools.entities import EntityCatalog, anaphor_kind, harvest_turn_anchors
+from engine.tools.entities import EntityCatalog, harvest_turn_anchors
 from engine.tools.envelope import TurnAnchors, TurnContext
 from engine.tools.registry import ToolRegistry
 from engine.verifier.anchor import CHECK as ANCHOR_CHECK
+from engine.verifier.anchor import referent_kind
 from engine.verifier.models import DraftAnswer, VerifyContext
 from engine.verifier.verdict import finalize as finalize_verdict
 from engine.verifier.verdict import render_feedback
@@ -613,7 +614,9 @@ def build_graph(deps: GraphDeps, checkpointer=None):
         )
         anchors = TurnAnchors(turn=state.turn)
         if deps.catalog is not None:
-            kind = anaphor_kind(state.question, deps.catalog)
+            kind = referent_kind(
+                state.question, [record.anchors for record in state.history], deps.catalog
+            )
             anchors = harvest_turn_anchors(
                 state.evidence,
                 deps.catalog,

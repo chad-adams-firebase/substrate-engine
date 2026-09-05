@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 POST_DURATION = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-02-post-duration.jsonl"
 POST_BLOCK4 = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-block4.jsonl"
 POST_CLOSE = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-close.jsonl"
+POST_BACKLOG = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-backlog.jsonl"
 PACK = ROOT / "packs" / "invoiceguard"
 
 EMPTY_MAP = DictionaryMap(
@@ -472,6 +473,84 @@ def test_a_warned_turns_drift_and_a_refusals_evidence_never_become_the_anchor():
     )
     assert [(h.turn_index, h.check) for h in report.hits] == [(1, "anchor.entity_mismatch")]
     assert "this answer says it is about `new_supplier`" in report.hits[0].detail
+
+
+def test_the_sessions_turn_9_is_exposed_after_turn_7s_warning_and_turn_8s_refusal():
+    """Fix Pass R1(b′): the session's own shape. Turn 6 line_note; turn
+    7 warned (prose about new_supplier); turn 8 refused; turn 9 "How
+    many findings has it produced?" counted new_supplier — the second
+    hit the dev-store replay now shows. Turn 10 establishes an auditor
+    and closes the window, so a later "it" faces no check."""
+    from engine.harness.outcomes import AnswerOutcome, MarkdownAnswer, RefuseOutcome
+    from tests.test_tool_entities import T6, T9, invocation
+    from tests.test_verifier_anchor import TURN_7_TEXT
+
+    stats, dictionary, dictionary_map = _pack_substrates()
+    closer = invocation(
+        "SELECT ih.actor AS actor, COUNT(*) AS closed FROM invoice_history ih WHERE ih.to_status = 'CLOSED' "
+        "GROUP BY ih.actor ORDER BY closed DESC LIMIT 1",
+        ["actor", "closed"], [{"actor": "nova", "closed": 300}],
+    )
+    later = invocation("SELECT COUNT(*) AS n FROM findings WHERE rule_name = 'new_supplier'", ["n"], [{"n": 197}])
+    record = _conversation("SESSION", [
+        ("Which rule fires most often?", _table_outcome(T6), [T6]),
+        ("What does that rule check?", AnswerOutcome(body=MarkdownAnswer(text=TURN_7_TEXT), verification="verified"), []),
+        ("Show me its source", RefuseOutcome(reason="no CKG node"), []),
+        ("How many findings has it produced?", _table_outcome(T9), [T9]),
+        ("Who closes the most reviews?", _table_outcome(closer), [closer]),
+        ("How many findings has it produced?", _table_outcome(later), [later]),
+    ])
+    report = expose(
+        [record], stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(), checks=["anchor.entity_mismatch"],
+    )
+    assert [(h.turn_index, h.invocation_index) for h in report.hits] == [(1, -1), (3, -1)]
+    assert report.hits[0].detail.endswith("and this answer never names it")
+    assert report.hits[1].detail == (
+        "the question's pronoun follows turn 2's anchor warning; turn 1's evidence "
+        "established `line_note`, and this answer filters on `findings.rule_name = 'new_supplier'`"
+    )
+
+
+@pytest.mark.skipif(not POST_BACKLOG.is_file(), reason="the committed report is absent")
+def test_the_post_backlog_report_exposes_exactly_the_recorded_breach_turn():
+    """The Fix Pass's baseline, after it: 262 executed statements; the
+    five MT-KEY warns are gone (the declared about wore its kind noun);
+    what remains is MT-ANCHOR rep 4 — its turn-2 warn as recorded, and
+    its turn 3, the recorded breach, now read through the window that
+    warn opened. Six hits before the pass, two after."""
+    import json
+
+    from engine.eval.grade import pack_world_manifests
+    from engine.eval.models import RunRecord, RunReportHeader
+
+    stats, dictionary, dictionary_map = _pack_substrates()
+    lines = POST_BACKLOG.read_text(encoding="utf-8").splitlines()
+    header = RunReportHeader.model_validate(json.loads(lines[0]))
+    check_world(header, pack_world_manifests(PACK))
+    records = [RunRecord.model_validate(json.loads(line)) for line in lines[1:] if line.strip()]
+    report = expose(
+        records, stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(),
+        checks=["lint.placeholder", "lint.ungrounded_key", "anchor.entity_mismatch"],
+    )
+    assert report.statements == 262
+    assert report.counts() == {
+        "lint.placeholder": 0,
+        "lint.ungrounded_key": 0,
+        "anchor.entity_mismatch": 2,
+    }
+    warned, breached = report.hits
+    assert (warned.row_id, warned.rep, warned.turn_index, warned.invocation_index) == ("MT-ANCHOR", 4, 1, -1)
+    assert warned.detail == (
+        "the question refers to that rule; turn 1's evidence established `line_note`, "
+        "and this answer never names it"
+    )
+    assert (breached.row_id, breached.rep, breached.turn_index, breached.invocation_index) == ("MT-ANCHOR", 4, 2, -1)
+    assert breached.detail == (
+        "the question's pronoun follows turn 2's anchor warning; turn 1's evidence "
+        "established `line_note`, and this answer says it is about `new_supplier`"
+    )
 
 
 @pytest.mark.skipif(not POST_CLOSE.is_file(), reason="the committed report is absent")
