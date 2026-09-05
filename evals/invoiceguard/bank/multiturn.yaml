@@ -213,7 +213,9 @@
         assertions:
           # The mechanism assertion this row exists for: the About line
           # the answer declares (or the anchor check would have caught).
-          - {kind: contains, pattern: "About: line_note.", at_exit: [0, 2]}
+          # An About may wear its kind noun ("rule line_note") since the
+          # Fix Pass's strip-and-match; the bank accepts what the engine does.
+          - {kind: contains, pattern: "About: (?:(?:the|a|an) )?(?:(?:audit |compliance )?rule )?line_note\\.", regex: true, at_exit: [0, 2]}
           - {kind: not_contains, pattern: new_supplier, at_exit: [0, 2]}
     - question: "How many findings has it produced?"
       expect:
@@ -233,4 +235,67 @@
     rule (197 is new_supplier's) at exit 0 is a contradicted breach.
     A turn-2 refusal is not drift and passes. Threshold 0.8: turn 2's
     answer source is open (the CKG constant, the dictionary, a
-    re-query) and a rep may clarify instead, which is a miss.
+    re-query) and a rep may clarify instead, which is a miss. Fix Pass:
+    the post-backlog run breached here (rep 4: turn 2 warned, turn 3
+    counted new_supplier, 197 verified) because the warned drift
+    became turn 3's anchor; now a warned turn establishes nothing, its
+    transcript carries the correction, and "it" is read against the
+    surviving anchor — a drifting turn 3 ships [UNVERIFIED], a miss,
+    never 197 at exit 0.
+
+- id: MT-ABOUT
+  provenance: scripted
+  category: multiturn
+  gold: gold/mt_about_rate_variance.py
+  expected_gold:
+    rule: rate_variance
+    fire_count: 383
+    supplier: RVX01
+    supplier_name: Ravenswood Extrusion
+    supplier_count: 257
+    runner_up: QUILL8
+    rule_function: invoiceguard.spine.rules_engine.rule_rate_variance
+  threshold: 0.8
+  turns:
+    - question: "How many findings has the rate_variance rule produced?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: numeric_from_gold, field: fire_count}
+    - question: "Tell me more about that rule."
+      expect:
+        # The positive path MT-ANCHOR never showed (its turn 2 passed
+        # 0/5 by answering): this rule has evidence — the threshold
+        # memo and the CKG rule function — so a refusal is a miss here.
+        exit: [0, 2]
+        assertions:
+          - {kind: nonempty}
+          - {kind: contains, pattern: "About: (?:(?:the|a|an) )?(?:(?:audit |compliance )?rule )?rate_variance\\.", regex: true, at_exit: [0, 2]}
+          # An About naming anything but the anchor is the drift.
+          - {kind: not_contains, pattern: "About: (?!(?:(?:the|a|an) )?(?:(?:audit |compliance )?rule )?rate_variance\\.)", regex: true, at_exit: [0, 2]}
+          # Content from the evidence: the memo and the docstring both
+          # describe the rule against the contract rate.
+          - {kind: contains, pattern: "contract", at_exit: [0, 2]}
+    - question: "Which supplier does it flag most often?"
+      expect:
+        exit: [0]
+        assertions:
+          - {kind: nonempty}
+          - {kind: route, mode: must_include, tools: [run_sql]}
+          - {kind: name_from_gold, field: [supplier, supplier_name]}
+          - {kind: numeric_from_gold, field: supplier_count, breach: false}
+  note: >-
+    Fix Pass R4: MT-ANCHOR's turn-2 success path was observed 0/5 —
+    line_note has no memo and no rules-engine function, so the
+    feature's showcase (a follow-up answer wearing its About line)
+    passed only via refusals. This row anchors a rule that has both.
+    Turn 1's filter on rule_name establishes rate_variance; turn 2
+    must answer about it — an About naming any other rule at exit 0
+    breaches (not_contains), the same at exit 2 or a refusal fails the
+    rep as a miss; turn 3 asks about "it" on the clean path, where the
+    pronoun window is closed and the anchor check is silent — another
+    supplier at exit 0 is the drift-class breach (name_from_gold), a
+    rep that names the supplier without its count is a miss. Threshold
+    0.8: turn 2's answer source is open (the memo, the docstring, both)
+    and a rep may clarify instead. Every figure from executed gold.

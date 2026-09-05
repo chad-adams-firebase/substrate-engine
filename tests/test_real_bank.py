@@ -4,6 +4,7 @@ passed while a malformed row edit would surface only at grade time on
 the Mac. This module also pins the pass's row shapes and the one
 CLAUDE.md line the pass wrote into law."""
 
+import re
 from pathlib import Path
 
 from engine.eval.bank import load_bank
@@ -154,9 +155,9 @@ def test_mt4_exercises_the_summary_live():
 def test_backlog_pass_rows_reconstruct_the_sessions_two_findings():
     """Backlog Pass: MT-KEY and MT-ANCHOR carry the 30-turn session's
     wrong-but-verified shapes with executed gold and breach semantics
-    stated in their notes; the bank is 67 rows."""
+    stated in their notes; the bank is 68 rows since the Fix Pass."""
     bank = load_bank(ROOT / "evals" / "invoiceguard")
-    assert len(bank.rows) == 67
+    assert len(bank.rows) == 68
     key = next(r for r in bank.rows if r.id == "MT-KEY")
     anchor = next(r for r in bank.rows if r.id == "MT-ANCHOR")
     for row in (key, anchor):
@@ -178,7 +179,34 @@ def test_backlog_pass_rows_reconstruct_the_sessions_two_findings():
     ]
     assert anchor.turns[1].expect.exit == [0, 2, 3]
     about = next(a for a in anchor.turns[1].expect.assertions if a.kind == "contains")
-    assert about.pattern == "About: line_note." and about.at_exit == [0, 2]
+    assert about.regex and about.pattern.endswith("line_note\\.") and about.at_exit == [0, 2]
+    assert re.search(about.pattern, "About: line_note.") and re.search(about.pattern, "About: rule line_note.")
+    assert not re.search(about.pattern, "About: new_supplier.")
     drift = next(a for a in anchor.turns[1].expect.assertions if a.kind == "not_contains")
     assert drift.pattern == "new_supplier" and drift.breach
     assert anchor.turns[2].expect.exit == [0]
+
+
+def test_fix_pass_row_shows_the_anchored_follow_ups_positive_path():
+    """Fix Pass R4: MT-ABOUT anchors a rule with evidence to describe,
+    so turn 2 answering — About line, content — is the modal outcome
+    and a refusal is a miss; turn 3's "it" runs on the clean path."""
+    bank = load_bank(ROOT / "evals" / "invoiceguard")
+    row = next(r for r in bank.rows if r.id == "MT-ABOUT")
+    assert row.provenance == "scripted" and row.threshold == 0.8 and row.context is None
+    assert [t.question for t in row.turns] == [
+        "How many findings has the rate_variance rule produced?",
+        "Tell me more about that rule.",
+        "Which supplier does it flag most often?",
+    ]
+    assert row.turns[1].expect.exit == [0, 2]
+    about = next(a for a in row.turns[1].expect.assertions if a.kind == "contains" and a.regex)
+    assert re.search(about.pattern, "About: rate_variance.") and re.search(about.pattern, "About: the rule rate_variance.")
+    drift = next(a for a in row.turns[1].expect.assertions if a.kind == "not_contains")
+    assert drift.regex and drift.breach and drift.at_exit == [0, 2]
+    assert re.search(drift.pattern, "About: new_supplier.") and not re.search(drift.pattern, "About: rule rate_variance.")
+    count = next(a for a in row.turns[2].expect.assertions if a.kind == "numeric_from_gold")
+    assert not count.breach
+    name = next(a for a in row.turns[2].expect.assertions if a.kind == "name_from_gold")
+    assert name.breach
+    assert "miss" in row.note and "breach" in row.note
