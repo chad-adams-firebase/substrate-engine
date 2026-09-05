@@ -1641,3 +1641,170 @@ Watch-for: any `anchor.entity_mismatch` on MT-KEY; any About carrying
 ` / ` on a row other than MT-KEY (note where — the join spreads
 wherever a multi-column anchor renders); the shadow's trigger shape in
 any trail. If it lands, the fix-pass arc closes and the line un-stops.
+
+## Fix-pass arc — coda (2026-09-05, after the post-rider-2 run)
+
+The post-rider-2 run (`2026-09-05-post-rider2`, engine `b6a44f4`, bank
+`51135d86460f665b`, committed `682c644` beside its FAIL grade) landed
+Rider 2's prediction line for line: MT-KEY 5/5, MT-ANCHOR 5/5,
+MT-ABOUT 5/5, U-WHO 5/5, `INVARIANT: ok`, zero occurrences, every
+pre-existing row holding. The two misses were not the engine's: C1b
+4/5 and C2 1/5, five reps at exit 1 with `APITimeoutError` on turn 0,
+re-run in `2026-09-05-post-rider2-timeout-rerun` (engine `682c644`,
+committed `4d62cbf`) at 5/5 and 5/5, `RESULT: PASS`. The arc that
+opened on the post-backlog breach is closed on this record; the line
+un-stops.
+
+- **MT-ANCHOR's positive path, first.** The arc opened on this row:
+  the post-backlog run (`1ccceaa`, bank `2bc24a635736663d`) breached
+  the invariant at MT-ANCHOR rep 4 turn 2 — a verified `197` where
+  gold said `505` — and the row sat at 4/5. The Fix Pass made a
+  warned turn establish nothing; the post-fixpass run (`96c26d2`,
+  bank `0c699d410c4024bb`) showed the fix working and the row at 3/5,
+  with a new breach at MT-KEY rep 1 turn 0 and MT-ABOUT at 3/5. The
+  post-rider run (`8739d42`, bank `51135d86460f665b`) put MT-ANCHOR
+  at 5/5 in its positive shape — turn 2 warned and shipped
+  [UNVERIFIED], turn 3 counted `line_note`, 505, at exit 0, five
+  recoveries — and MT-ABOUT at 5/5; post-rider-2 held both. Four
+  runs: breach, breach-elsewhere, thresholds, thresholds-by-timeout;
+  the invariant clean in the last two and the mechanism rows 5/5 in
+  the last.
+- **MT-KEY, the last mechanism to land.** 0/5 at exit 2 (post-backlog),
+  4/5 with the unsupported-name breach (post-fixpass), 0/5 at exit 2
+  on a correct history (post-rider, the join-echo), 5/5 (post-rider-2,
+  the matcher reading the join). The tripwire count stays at two;
+  the recorded shadow (Rider 2) did not fire in the post-rider-2
+  trails.
+- **Clarify's first live firing, in the arc.** The bank's own note
+  dates clarify's first firing ever to 2026-08-30 (AMB2, 3 of 5
+  reps). Read across these four runs from the reports: AMB2 fired at
+  exit 4 in one rep of five in the post-backlog run, in none of the
+  post-fixpass run, and in five of five in the post-rider and
+  post-rider-2 runs — the first runs in which the clarify arm fired
+  in every rep, the two-readings assertion holding each time.
+- **The timeout note, in its true shape.** The five reps read the
+  same from the JSONL: C2 reps 1–4 at 16,313–16,499 ms of wall with
+  zero completed calls; C1b rep 5 at 18,020 ms after two calls of
+  roughly 750 ms. That is the SDK's connect phase — a 5 s connect
+  budget, three attempts with backoff — not a slow read: the provider
+  was unreachable for about a minute, twice. The hand re-run was the
+  workaround; the Migration-Readiness Block below makes the runner
+  replay such a rep once on the port's own timeout, so a brownout
+  costs a run a minute, not its headline.
+
+## Migration-Readiness Block (2026-09-05, after the post-rider-2 run)
+
+The objective moved from the bank to the demo: the developer pulls
+this repo onto the work machine, follows a written procedure, and
+ends with `engine serve` answering questions about the target
+application on real data, locally. Eleven commits (`c9292a8` `cd7a5b1`
+`0770146` `670d3f9` `f09cf03` `4469088` `30ed091` `0396ed5` `202bf1a`
+`309db5c` and this one), 1036 → 1102 tests, bank untouched (hash
+`51135d86460f665b`), no pin change, nothing model-facing moved —
+`git diff --stat 4d62cbf..HEAD` over the prompts, the verifier, the
+tools, the dictionary map, the pack config and the bank is empty. No
+run in the block; no test contacts a live endpoint. The push is the
+developer's step.
+
+- **What was built.** `LLMTimeoutError` on the port, translated from
+  the SDK's timeout by both adapters; connect and read timeouts as
+  separate settings, because the failures on record were
+  connect-phase. The eval runner replays a rep once on that error
+  (fresh conversation, from turn 0), `attempts` on the record, the
+  grade text naming retried reps only when there were any —
+  re-grading the committed post-rider-2 report renders identically
+  save the grader's engine-drift warning. `llm_databricks_fm.py`, a
+  complete sibling of the OpenRouter file (Brief §3), host and token
+  from the environment, a twin test holding the two request shapes
+  identical; `scripts/fm_smoke.py` as the runbook's step 0.
+  `engine pull`: the target's tables copied once through the SQL
+  Statement Execution API over `httpx2` — no new dependency — each
+  table `VERSION AS OF` its Delta version, keyset paging by `key`,
+  offset over `ORDER BY ALL` as the fallback, a COUNT guarding the
+  landing, `DECIMAL` landing as `DOUBLE`, the manifest pinned by
+  `schema|table@version` in a new `source_snapshot` field hashed only
+  when set. A pack whose generation block has no SQLite export and no
+  seed. `scripts/wheel_audit.py` and `docs/wheel-audit.md`: 57 of 57
+  reachable packages ship a cp312/win_amd64 wheel, the suite keeps the
+  report current. `scripts/leakage_grep.py` with its terms in an
+  untracked file; `packs/local-*/` ignored. The conformance report
+  bounded to one screen. `docs/pack-authoring-runbook.md`,
+  `docs/real-adapter-notes.md`, `docs/deployment-notes.md`.
+- **Rulings from the clarifying round.** REST over the connector (zero
+  dependencies; failures a chat assistant can read) — the connector
+  named once as break-glass. A standalone adapter file plus the twin
+  test, not a shared base. The real pack in gitignored `packs/local-*/`
+  and the grep script reading an untracked term list. The real pack
+  ships without `check_execution`; Splunk is a deployment note. Zero
+  egress from the work machine — not even pushes — so every result is
+  photographed off the screen and every failure section is written
+  for Glean to read and Copilot to investigate: file, function,
+  observable, question. The work sequence starts with the InvoiceGuard
+  rehearsal (Phase 1 already green there). The target's source is a
+  local directory pinned by `git init` and one commit. Substrate
+  break-glass is an appendix: hand-built rows carry `source=human`,
+  `needs_validation=true`, no manifest id. In flight: no GitHub PAT
+  while the repo is public — the Databricks PAT is the only token;
+  Appendix D on verifying a QA session at work (engine verdict;
+  executed gold SQL against the snapshot; Genie for spot-checks and
+  second opinions, never gold); a runbook sentence on last-cents drift
+  from the DECIMAL mapping; keyset-first paging guidance with the
+  `ORDER BY ALL` failure entry.
+- **Deliberately work-side-only.** The Brief §18 checklist, row by
+  row: LLM egress — proven on the prior project, re-verified by the
+  smoke script at step 0; Splunk — out of scope, deployment note;
+  peer-visibility ACL — pack config, unchanged; personal GitHub on the
+  corporate laptop — pull-only, anonymous while public, never a push;
+  the PAT for the repo — not needed while public (ruling 2026-09-05);
+  the Databricks PAT is the one token and lives in the environment;
+  verifier thresholds — tuned at work in the local pack; Databricks
+  Apps — out of scope, deployment note; the SQLite→DuckDB decision —
+  stands, and the real application's data arrives by pull instead.
+  The pull-only flow, plainly: `git pull` in; nothing out; photographs
+  of `pytest`'s last line, the smoke script, the pull summary, the
+  `--check` line, the conformance report and the first answer travel
+  back; a fix is described in chat, made on the Mac, pulled back.
+- **The runbook proof, as executed.** Part A followed in a fresh clone
+  under the scratch directory with the target application as its
+  sibling: A1 clone at `761a18e9`, `uv sync`, `simulate --seed 42`
+  (`simout/invoiceguard.db`, `simout/logs/invoiceguard.log`); A2 the
+  engine cloned from the local repository rather than GitHub because
+  the commits under proof were unpushed (a deviation of the proof, not
+  a defect of the document), `uv sync`, `pytest`: 1093 passed, 8
+  skipped — **defect 1**, the document promised passes only, the
+  skips are the pack-integration tests waiting for `app.duckdb`; A3
+  `convert` → manifest `ac4b8abd4eb9c07e`, `generate --check` →
+  `check: 6 substrate files byte-identical`, `generate`, `validate` →
+  `RESULT: PASS`; `git status` showed every manifest changed by a
+  `"source_snapshot": null` line beside its timestamp — **defect 2**,
+  the document's "only the timestamp" was false, fixed in code
+  (`202bf1a`: a None field is absent from the file), and the
+  InvoiceGuard `generate` warnings the document did not mention were
+  added to it (`309db5c`); after the fixes, regenerate → three
+  manifests, timestamp lines only; `pytest` → 1102 passed, 0 skipped;
+  A5 `serve --port 5050` → HTTP 200, the page titled Knowledge Engine,
+  stopped. **A4, the one live two-tool ask, is pending:** this session
+  had no OpenRouter key; the developer runs the printed command in the
+  fresh clone and its question, tools used and exit code are appended
+  here — the proof is complete only then.
+- **Process line.** The push is the developer's step; the pre-flight
+  fetched and compared before the first commit and after the last.
+  Figures in this section were read from the committed reports at
+  land time, not from the plan.
+
+Predictions for the next model-facing run (bank `51135d86460f665b`,
+unchanged; InvoiceGuard stays on its OpenRouter pin):
+
+| row | mechanism | prediction |
+|---|---|---|
+| all 68 rows | nothing model-facing moved | hold, line for line |
+| INVARIANT | untouched | ok, zero occurrences |
+| any rep the provider drops | the runner replays it once from turn 0 | graded like any other; named in a `Retried reps` line |
+| `attempts` | 1 unless a replay happened | absent from the grade text otherwise |
+
+Watch-for: a `Retried reps` line in a grade (the mechanism working;
+note the wall time and the call count of the first attempt); a
+verified badge missing with nothing else wrong (a judge timeout,
+silent by design); at work, the smoke script's `tool_calls` line, the
+pull summary's versions, `check: 6 substrate files byte-identical` on
+the rehearsal, and `RESULT: PASS` on the real pack.
