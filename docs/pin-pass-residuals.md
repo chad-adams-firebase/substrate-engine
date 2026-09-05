@@ -1066,3 +1066,201 @@ carries a "Keys this conversation established" section (it cannot — a
 first turn has no prior turn); and the router declaring `about` on MT3
 turn 2 with the supplier rather than the rule, which the check does not
 read (kind-less) but the transcript would show.
+
+## Fix Pass (2026-09-04, after the post-backlog run)
+
+The first breach since the fix-pass era closed. The post-backlog run
+(`2026-09-04-post-backlog`, engine `1ccceaa`, bank `2bc24a635736663d`,
+the report committed at `e60ba4f` beside its FAIL grade) breached the
+wrong-but-verified invariant at **MT-ANCHOR rep 4, turn 3: `197`
+verified at exit 0** — the shape the row pre-declared. Planned against
+`e60ba4f`, built in six commits, 1005 → 1022 tests, bank 67 → 68 rows
+(hash `0c699d410c4024bb`). No model pin change; no full run in the
+pass — the developer's run grades it. Read from the report and the dev
+store, not from a relay:
+
+- **Rep 4, turn by turn.** Turn 1 anchored `rule line_note` (505).
+  Turn 2, "Tell me more about that rule.": the router searched the
+  dictionary and the docs for `line_note` — correctly — and the docs
+  returned the supplier-onboarding note, whose text names
+  `new_supplier`; the drafter described that rule; the anchor check
+  fired (prose never names `line_note`; warn, [UNVERIFIED], exit 2).
+  Then `finalize` harvested the turn unconditionally, the drift
+  overwrote the anchor on the history, and turn 3's router paraphrase
+  already read "the rule 'new_supplier'" before any tool ran: 197,
+  `table_passthrough`, verified. Per-turn detection, cross-turn
+  propagation. The session's original shape was one turn wider —
+  warn at 7, honest refusal at 8, breach at 9: the drift survives a
+  refusal.
+- **MT-KEY 0/5 with the engine correct.** All five reps grounded
+  `ih.invoice_id = 440`, the right history, zero challenges — Finding
+  1's machinery worked five times out of five. The router declared
+  `about: "invoice 440"`; the check compared it by set equality
+  against `{440, INV-00426}`; the kind noun failed it; warn, exit 2,
+  and the row's `exit: [0]` failed. A check false positive at 100% on
+  the shape.
+- **F1 from the static relay.** The placeholder lint's admission
+  vocabulary fired on `specific`, `actual`, `assum*`, `sample`,
+  `example` in any comment, hard: `-- the specific invoice the user
+  asked about` (literal fully grounded) and `-- actual receipt time,
+  not scored_at` (no literal at all) both blocked, the second with a
+  reason about a value that does not exist. Safe direction; repair
+  rounds wasted, budget-refusal risk for a comment-happy drafter.
+
+Four rulings, binding, and four more from the plan's questions:
+
+- **R1 — (a) + (b′), not a redraft ladder.** (a) A turn whose verdict
+  carries `anchor.entity_mismatch` writes no entity anchors: the prior
+  anchor survives on the history and in the next turn's grounding,
+  and the transcript entry carries the contradiction the Verifier
+  printed in the About sentence's slot — `[table: Unverified: the
+  question refers to that rule; turn 1's evidence established
+  `line_note`, and this answer never names it. <SQL>]`, or
+  `[unverified: …] <prose>` — never the declared About, which is the
+  drift itself. (b′) After a warn, kind-less pronouns ("it", "its")
+  are read against the surviving anchor of the warned kind, by the
+  same three readings, until an unwarned answer establishes a new
+  entity; a refusal establishes nothing and keeps the window open.
+  Not a fixed turn count: the bank's breach was warn → breach, the
+  session's warn → refusal → breach, and a one-turn window closes one
+  record and not the other. (c) — feeding the warn back as a redraft
+  challenge — declined: it changes the documented warn semantics, and
+  the modal honest outcome of an evidence-poor follow-up is a refusal;
+  a redraft demand would pressure toward hallucination. Worst case
+  inside the window is [UNVERIFIED], never a verified wrong count.
+- **R2 — strip-and-match.** One leading article and one leading
+  synonym of the question's kind — the pack's declared synonyms, never
+  a hardcoded noun — come off the declared about, then equality with
+  any single anchor name under the existing casefold. Not containment:
+  `invoice 440`, `the invoice INV-00426`, `440` are silent; `invoice
+  441` warns; `440 and 441` warns (no partial credit for a list);
+  `supplier 440` warns (another kind's noun is not stripped). The
+  declared anchor is harvested without its noun too, so a later
+  declared-only fallback compares like with like.
+- **R3 — narrow AND gate.** The vocabulary is the confessions —
+  replace, placeholder, substitute, fill in, todo, dummy,
+  hypothetical — and a comment admission fires only when the
+  statement compares something to a literal: every comparison
+  operator, IN, LIKE, BETWEEN, typed dates included, since a confessed
+  threshold is still a confession. Bind shapes stay unconditional.
+  Turn 20's recorded attempts still fire; both F1 probes are silent;
+  `-- todo: use the real id` fires beside `id = 7` and is silent on a
+  literal-free statement.
+- **R4 — MT-ABOUT.** The positive path, on a rule that has evidence
+  to describe (rate_variance: the threshold memo and the CKG rule
+  function): its finding count → "Tell me more about that rule." →
+  "Which supplier does it flag most often?", threshold 0.8. Turn 2 at
+  exit [0, 2]: a refusal is a miss, an About naming another rule
+  breaches at exit 0 and fails at exit 2. Turn 3 breaches on another
+  supplier and misses on an omitted count.
+- **From the plan's questions.** The window closes on any kind's
+  determinate anchor — the newest entity is the pronoun's likeliest
+  referent (conv 1's turn 10 closes the window turn 9 left open, so
+  turn 19's "Show me an example invoice for it" faces no check); the
+  literal gate reads every comparison operator; MT-ABOUT's turn 3 is
+  the supplier, not the summed amount (the excepted-amount gotcha
+  makes that figure reading-dependent); and only an answer
+  establishes an entity — a refusal, clarify or escalate after a
+  one-row query keeps its keys (the model saw them) and no entity (the
+  user saw nothing), which makes "refusals harvest nothing" literally
+  true rather than usually true.
+
+What landed, mechanism by mechanism:
+
+- **The lint** (`tools/key_lint.py`): `_ADMISSION` narrowed;
+  `_COMPARES_LITERAL`, read on the comment-stripped, literal-blanked
+  statement, gates it.
+- **The about** (`tools/entities.py::strip_kind_noun`; the check's
+  declared arm; the harvest's declared anchor).
+- **The record.** `TurnAnchors.contradicted_kind` and `.contradiction`
+  (defaults, so a legacy checkpoint loads with neither);
+  `harvest_turn_anchors(answered=, contradiction=)`; `finalize` reads
+  the verdict's plausibility for the check and hands both in;
+  `transcript_text` renders the contradiction; the replay does the
+  same bookkeeping, so exposure's prior anchors are the live
+  conversation's.
+- **The window** (`verifier/anchor.py`: `open_window`,
+  `referent_kind`, `is_kindless_pronoun`), shared by the check,
+  `finalize` (the declared about's kind) and the replay. The finding
+  names the warning the pronoun follows: "the question's pronoun
+  follows turn 2's anchor warning; turn 1's evidence established
+  `line_note`, and this answer says it is about `new_supplier`".
+- **Why the green rows never open a window** (tested, row by row):
+  MT1/MT2's "those" name no kind and no pronoun; MT3's turn 1
+  establishes a supplier and the rule together, and its turn 2
+  carries "it" but no warn precedes it; MT4's turn 4 is the
+  kind-bearing arm, unchanged; W1's turn 1 is multi-row and
+  establishes nothing; MT-KEY is silent under R2; every single-turn
+  row has no prior. With two kinds' anchors coexisting and one warned,
+  only the warned kind is read. Pinned end to end with the real
+  Verifier: warn → "it" counting the drift ships [UNVERIFIED]; "it"
+  counting the anchor verifies.
+
+Exposure, replayed read-only after the code commits and before the
+bank row (`engine eval exposure`, the three checks, then every check):
+
+| source | statements | before → after | attribution |
+|---|---|---|---|
+| `2026-09-04-post-backlog.jsonl` | 262 | anchor 6 → **2**; placeholder 0 → 0; key 0 → 0 | MT-KEY ×5 turn 2 gone (R2); MT-ANCHOR rep 4 turn 2 as recorded, and its turn 3 — the breach — now flagged through the window |
+| `2026-09-04-post-close.jsonl` | 235 | 0 → 0, all three; unfiltered `(no hits)` | — |
+| dev store, conversations 1 and 2 | 44 | anchor 1 → **2**; placeholder 1; key 1 | conv 1 turns 7 and 9 (the session's original breach turn, after turn 8's refusal); turn 20's comment (contains `Replace`, binds 123) unchanged; conv 2 clean |
+
+A correction to the pass's brief: it stated the post-backlog baseline
+as five anchor hits; the executed replay measured six (MT-KEY ×5 plus
+rep 4's turn 2), and the executed count won — the prediction table was
+restated against it before any code landed, and the after-count is
+two, not one, because rep 4's turn-2 warn is a finding the report
+carries and the replay reproduces. The unfiltered replays add only
+what the report or the store already carried under checks this pass
+never touched (three `run_sql.empty_result` warns on MT-ANCHOR's
+refusal reps; conv 1 turn 12's fan-out). Both baselines are pinned in
+`tests/test_eval_exposure.py`.
+
+The dry-run (one rep of MT-ABOUT alone, into the scratchpad, not
+committed): three turns at exit 0, `INVARIANT: ok`, one router nudge
+at turn 2. Turn 2 declared `about: "rule rate_variance"` — the
+kind-noun spelling R2 legalized, on the feature's first live
+observation of its positive path; under the pre-pass check it would
+have warned. Its content came from the CKG function and its docstring
+("contracted rate"); turn 3 declared no about and counted Ravenswood
+Extrusion / 257.
+
+Recorded, not built:
+
+- The false-downgrade residue of b′: an in-window kind-less turn
+  whose prose legitimately omits the anchor's name warns — safe
+  direction, [UNVERIFIED]; the window is narrow and closes on the
+  next established entity — and the next play session should try to
+  produce it. Likewise an "it" that means another kind's entity while
+  the window is open: an about naming that entity warns, a filter on
+  its columns is silent.
+- Pronouns beyond "it"/"its" — "they", "that" alone, "those" — are
+  not read; an about wearing two nouns is not stripped.
+- A literal-first predicate, the `<name with spaces>` bind shape,
+  `USING` joins, the old records' missing about: as before.
+
+Two process notes from the Test Chat: the report pair was committed
+correctly despite its FAIL grade — a breach report is the evidence,
+and the pass reads from it; and the claim that the Backlog Pass was
+pushed was false for some hours — pre-flight now runs `git fetch` and
+compares `HEAD` to `origin/main` before anything else (this pass: both
+at `e60ba4f`).
+
+Predictions for the re-run (the first under bank `0c699d410c4024bb`):
+
+| row | mechanism | prediction |
+|---|---|---|
+| MT-KEY | `about: "invoice 440"` is silent under R2; the machinery was already 5/5 | 5/5 |
+| MT-ANCHOR | a turn-2 warn leaves turn 3 the correction in its transcript; a drifting turn 3 is read through the window and ships [UNVERIFIED] | ≥ 4/5; any miss an honest refusal or an [UNVERIFIED] — never a wrong About or a wrong count at exit 0 |
+| MT-ABOUT | the dry-run's shape | ≥ 4/5 |
+| U-WHO | unchanged | 5/5 |
+| MT1–MT4, W1 | no warn ever, so no window; messages unchanged | hold 5/5 |
+| every other row | the lint narrows, the check reads more, nothing else changes | unchanged; nudges ≈ 15 |
+| INVARIANT | no content path weakened | ok |
+
+Watch-for: any `anchor.entity_mismatch` outside MT-KEY, MT-ANCHOR and
+MT-ABOUT; any `Placeholder check` in any trail; any `[unverified:` or
+`Unverified:` transcript lead outside MT-ANCHOR; an About wearing a
+kind noun (legal now — note where); an in-window kind-less turn
+downgraded on prose that omitted the name (the residue above); nudges
+rising above the run's ~15.
