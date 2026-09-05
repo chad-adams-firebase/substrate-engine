@@ -1,0 +1,87 @@
+Eval grade — pack: invoiceguard · report: 2026-09-05-post-rider2.jsonl
+engine b6a44f4fc950 · target 761a18e9b925 · seed 42 · model openai/gpt-4o-2024-11-20 · bank 51135d86460f665b
+
+INVARIANT: ok — no undocumented wrong-but-verified occurrence
+  documented WBV misses (breach: false, threshold-gated): 6 — W2 ×6
+
+[   ok] AMB1       5/5  threshold 1.00
+[   ok] AMB2       5/5  threshold 1.00
+[   ok] HN-DIDRUN  5/5  threshold 0.80
+[   ok] HN-ERRORS  5/5  threshold 1.00
+[   ok] ZT-CR147   5/5  threshold 1.00
+[   ok] FO-EXCEPT  5/5  threshold 1.00
+[   ok] MT1        5/5  threshold 0.80
+[   ok] MT2        5/5  threshold 1.00
+[   ok] MT3        5/5  threshold 1.00
+[   ok] MT4        5/5  threshold 0.80
+        - router: 1 nudge
+[   ok] MT-KEY     5/5  threshold 0.80
+[   ok] MT-ANCHOR  5/5  threshold 0.80
+[   ok] MT-ABOUT   5/5  threshold 0.80
+[   ok] W1         5/5  threshold 0.60
+[XFAIL] W2         0/5  threshold 0.60 (ASSOC)  failures: numeric_from_gold
+[   ok] W3         5/5  threshold 0.80
+[   ok] W5         5/5  threshold 0.60
+[   ok] W6         5/5  threshold 0.60
+[   ok] PLAY-R1    5/5  threshold 0.80
+[   ok] PLAY-R3    5/5  threshold 0.80
+[   ok] PLAY-R4    5/5  threshold 0.80
+[   ok] PLAY-R6    5/5  threshold 0.80
+[XFAIL] W4         0/5  threshold 0.80 (ASSOC)  reached 5/5  failures: exit(2 not in [0]), contains
+[   ok] W-A        5/5  threshold 0.60
+[   ok] W-B        5/5  threshold 0.60
+[   ok] W-C        5/5  threshold 0.80
+[   ok] R-A        5/5  threshold 0.60
+[   ok] F1         5/5  threshold 0.60
+[   ok] W-D        5/5  threshold 0.80
+[   ok] W-E        5/5  threshold 0.60
+[   ok] W-F        5/5  threshold 0.60
+[   ok] P-L3Q      5/5  threshold 1.00
+[   ok] REC-SQL    5/5  threshold 0.60
+[   ok] REC-CKG    5/5  threshold 0.60
+[   ok] RT-fires   5/5  threshold 1.00
+[   ok] B1         5/5  threshold 1.00
+[   ok] B2         5/5  threshold 0.80
+        - router: 1 nudge
+[   ok] B3         5/5  threshold 1.00
+[   ok] B4         5/5  threshold 1.00
+[   ok] B5         5/5  threshold 1.00
+[   ok] B6         5/5  threshold 1.00
+[   ok] C1         5/5  threshold 1.00
+[ FAIL] C1b        4/5  threshold 1.00  failures: exit(1 not in [0]), nonempty, route, contains
+[ FAIL] C2         1/5  threshold 0.80  failures: exit(1 not in [0]), nonempty, route, contains
+[   ok] C3         5/5  threshold 1.00
+[   ok] C4         5/5  threshold 1.00
+[   ok] C5         5/5  threshold 1.00
+[   ok] S2         4/5  threshold 0.80  failures: exit(2 not in [0])
+[   ok] S3         5/5  threshold 0.80
+[   ok] S4         5/5  threshold 1.00
+[   ok] S5         5/5  threshold 0.60
+[   ok] S6         5/5  threshold 0.60
+[   ok] S7         5/5  threshold 0.80
+[   ok] NP1        5/5  threshold 1.00
+[   ok] NP2        5/5  threshold 1.00
+[   ok] NP3        5/5  threshold 1.00
+[   ok] NP4        5/5  threshold 1.00
+[   ok] NP5        5/5  threshold 1.00
+[   ok] NP6        3/5  threshold 0.60  failures: exit(2 not in [0])
+[   ok] NP7        5/5  threshold 1.00
+[   ok] R1         5/5  threshold 1.00
+        - router: 1 nudge
+[   ok] R2         5/5  threshold 0.80
+[   ok] A1         5/5  threshold 1.00
+[   ok] SEN-MONTH  5/5  threshold 1.00
+[   ok] U5         5/5  threshold 0.80
+[   ok] U6         5/5  threshold 0.80
+[   ok] U-WHO      5/5  threshold 0.80
+[   ok] U-META     5/5  threshold 0.80
+
+Router channel habit: 3 nudge(s), 0 text-form call(s) parsed across the run
+
+Route pairs (first-decision tool must agree):
+  rule_metric [RT-fires, U5, U6]: run_sql ×15 — consistent
+
+Xfail ledger:
+  ASSOC: W2, W4 (kept until association verification)
+
+RESULT: FAIL (thresholds)
