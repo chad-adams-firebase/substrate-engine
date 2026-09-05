@@ -22,6 +22,7 @@ from typing import Any
 
 from engine.adapters.execution_log_logfmt import LogfmtExecutionLog, LogfmtSettings
 from engine.adapters.identity_fake import FakeUserIdentity, FakeUserSettings
+from engine.adapters.llm_databricks_fm import DatabricksFmLLM, DatabricksFmSettings
 from engine.adapters.llm_openrouter import OpenRouterLLM, OpenRouterSettings
 from engine.adapters.source_code_local import LocalDirectorySource, LocalSourceSettings
 from engine.adapters.sql_duckdb import DuckDbSettings, DuckDbSql
@@ -69,6 +70,12 @@ def _pack_path(value: str, pack_root: Path) -> str:
 
 def _make_openrouter(settings: dict[str, Any], pack_root: Path) -> OpenRouterLLM:
     return OpenRouterLLM(OpenRouterSettings.model_validate(settings))
+
+
+def _make_databricks_fm(
+    settings: dict[str, Any], pack_root: Path
+) -> DatabricksFmLLM:
+    return DatabricksFmLLM(DatabricksFmSettings.model_validate(settings))
 
 
 def _make_duckdb(settings: dict[str, Any], pack_root: Path) -> DuckDbSql:
@@ -122,11 +129,14 @@ def _make_logfmt_execution_log(
 
 
 def default_registry() -> AdapterRegistry:
-    """The Phase 1 local adapters. Real adapters (Databricks FM,
-    databricks-sql-connector, Delta, Splunk, git clone) register here
-    in a later phase."""
+    """The local adapters plus the one work-side adapter the demo needs
+    (Databricks FM serving; the data reaches the DuckDB adapter through
+    `engine pull` instead of a live SqlPort). Deployment-era adapters
+    (Delta stores, Splunk, forwarded-token identity) are design notes
+    in docs/deployment-notes.md, not code."""
     registry = AdapterRegistry()
     registry.register(PortName.LLM, "openrouter", _make_openrouter)
+    registry.register(PortName.LLM, "databricks_fm", _make_databricks_fm)
     registry.register(PortName.SQL, "duckdb", _make_duckdb)
     registry.register(PortName.WORK_STORE, "sqlite", _make_sqlite_work_store)
     registry.register(PortName.IDENTITY, "fake_user", _make_fake_user)
