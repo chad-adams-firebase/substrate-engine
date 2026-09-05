@@ -119,6 +119,16 @@ def render(report: GradeReport) -> str:
             "call(s) parsed across the run"
         )
 
+    if report.retried_reps:
+        # A provider brownout the runner absorbed: named so the grade
+        # text carries it, absent from every grade where it never
+        # happened (older reports render byte-identically).
+        lines.append("")
+        lines.append(
+            "Retried reps (LLM timeout, replayed from turn 0): "
+            + ", ".join(report.retried_reps)
+        )
+
     if report.route_pairs:
         lines.append("")
         lines.append("Route pairs (first-decision tool must agree):")

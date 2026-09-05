@@ -183,6 +183,30 @@ def test_happy_path_passes(tmp_path):
     assert "INVARIANT: ok" in text and "RESULT: PASS" in text
 
 
+def test_retried_reps_are_named_only_when_there_were_any(tmp_path):
+    """The runner's one replay after a port timeout is informational:
+    the replayed rep grades like any other, the grade text names it,
+    and a report with no replays renders exactly as before."""
+    bank, header, world, pack = make_env(tmp_path, ROW_DATA)
+    records = [
+        make_record("B5", 1, make_turn()),
+        make_record("B5", 2, make_turn("Exactly 146 of them.")),
+    ]
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.retried_reps == []
+    assert "Retried reps" not in render(result)
+
+    records[1] = records[1].model_copy(update={"attempts": 2})
+    result = grade(bank, header, records, world, pack_root=pack)
+    assert result.retried_reps == ["B5 rep 2"]
+    (row,) = result.rows
+    assert (row.status, row.passes, row.reps) == ("ok", 2, 2)
+    assert (
+        "Retried reps (LLM timeout, replayed from turn 0): B5 rep 2"
+        in render(result)
+    )
+
+
 def test_threshold_failure_without_breach(tmp_path):
     bank, header, world, pack = make_env(tmp_path, ROW_DATA)
     records = [

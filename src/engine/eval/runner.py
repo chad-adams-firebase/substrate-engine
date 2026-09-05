@@ -31,6 +31,7 @@ from engine.eval.models import (
 )
 from engine.eval.tokens import detect, flatten_answer
 from engine.harness.outcomes import exit_code_of
+from engine.ports.llm import LLMTimeoutError
 from engine.runtime.container import ResolvedPorts, build
 from engine.tools.envelope import loads_turn_evidence
 
@@ -268,12 +269,53 @@ def run_bank(
     return 0
 
 
+# A provider brownout is not an engine result. A rep whose turn raised
+# the port's LLM timeout is played once more, from turn 0 in a fresh
+# conversation; the record carries the attempt count (Migration
+# Readiness). Any other exception, and a second timeout, are recorded
+# as before: one bad turn marks the rep and the sweep goes on.
+REP_ATTEMPTS = 2
+
+
 def _execute_rep(
     session, work_store, meter: MeteringLLM, row: BankRow, rep: int,
     runs: int, status,
 ) -> RunRecord:
     started = datetime.now(UTC)
     rep_t0 = time.perf_counter()
+    attempt = 0
+    while True:
+        attempt += 1
+        turns, retry = _play_turns(
+            session, work_store, meter, row, rep, runs, status,
+            final=attempt >= REP_ATTEMPTS,
+        )
+        if not retry:
+            break
+        status(
+            f"[{row.id} rep {rep}/{runs}] LLM timeout — replaying the rep "
+            f"from turn 0 (attempt {attempt + 1}/{REP_ATTEMPTS})"
+        )
+
+    return RunRecord(
+        row_id=row.id,
+        rep=rep,
+        started_at=started,
+        wall_ms_total=int((time.perf_counter() - rep_t0) * 1000),
+        attempts=attempt,
+        turns=turns,
+    )
+
+
+def _play_turns(
+    session, work_store, meter: MeteringLLM, row: BankRow, rep: int,
+    runs: int, status, *, final: bool,
+) -> tuple[list[TurnRecord], bool]:
+    """One pass over the row's turns in one conversation. Returns
+    (turns, retry): retry is True only when the port's LLM timeout
+    ended the pass and another attempt is allowed — the caller plays
+    the rep again. On the final attempt a timeout is recorded like any
+    other error."""
     turns: list[TurnRecord] = []
     conversation_id: int | None = None
 
@@ -286,19 +328,15 @@ def _execute_rep(
                 conversation_id=conversation_id,
                 context=row.context,
             )
+        except LLMTimeoutError as exc:
+            if not final:
+                status(f"[{row.id} rep {rep}/{runs}] turn {index}: LLM timeout {exc}")
+                return turns, True
+            turns.append(_error_turn(index, turn, conversation_id, turn_t0, meter, exc))
+            status(f"[{row.id} rep {rep}/{runs}] turn {index}: ERROR {exc}")
+            break  # must not sink the sweep, but later turns anchor on it
         except Exception as exc:  # record and move on: one bad turn
-            wall_ms = int((time.perf_counter() - turn_t0) * 1000)
-            turns.append(
-                TurnRecord(
-                    turn_index=index,
-                    question=turn.question,
-                    conversation_id=conversation_id,
-                    exit_equiv=1,
-                    wall_ms=wall_ms,
-                    llm=meter.stats(),
-                    error=f"{type(exc).__name__}: {exc}",
-                )
-            )
+            turns.append(_error_turn(index, turn, conversation_id, turn_t0, meter, exc))
             status(f"[{row.id} rep {rep}/{runs}] turn {index}: ERROR {exc}")
             break  # must not sink the sweep, but later turns anchor on it
         wall_ms = int((time.perf_counter() - turn_t0) * 1000)
@@ -366,10 +404,19 @@ def _execute_rep(
             f"{turns[-1].llm.calls} llm calls"
         )
 
-    return RunRecord(
-        row_id=row.id,
-        rep=rep,
-        started_at=started,
-        wall_ms_total=int((time.perf_counter() - rep_t0) * 1000),
-        turns=turns,
+    return turns, False
+
+
+def _error_turn(
+    index: int, turn, conversation_id: int | None, turn_t0: float,
+    meter: MeteringLLM, exc: BaseException,
+) -> TurnRecord:
+    return TurnRecord(
+        turn_index=index,
+        question=turn.question,
+        conversation_id=conversation_id,
+        exit_equiv=1,
+        wall_ms=int((time.perf_counter() - turn_t0) * 1000),
+        llm=meter.stats(),
+        error=f"{type(exc).__name__}: {exc}",
     )

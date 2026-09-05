@@ -14,6 +14,7 @@ from engine.eval import runner
 from engine.eval.bank import load_bank
 from engine.eval.metering import MeteringLLM
 from engine.eval.runner import RunnerError, load_report, run_bank
+from engine.ports.llm import LLMTimeoutError
 from engine.harness.outcomes import (
     AnswerOutcome,
     MarkdownAnswer,
@@ -244,6 +245,111 @@ def test_ask_error_is_recorded_and_the_sweep_continues(
     assert failed.turns[0].outcome is None
     assert healthy.row_id == "MT1"
     assert [t.exit_equiv for t in healthy.turns] == [0, 0]
+    assert failed.attempts == 1  # only the port's timeout earns a replay
+
+
+# --- The one retry (Migration Readiness) ---------------------------------
+
+
+def test_a_port_timeout_replays_the_rep_once_from_turn_0(
+    monkeypatch, bank, pack_dir, tmp_path
+):
+    """A provider brownout is not an engine result: the rep is played
+    again, and the record says so — the grader reads nothing of it."""
+    session = install_session(
+        monkeypatch,
+        [
+            LLMTimeoutError("m: Request timed out."),
+            make_result(1, 1, "146 last week."),
+            make_result(2, 1, "b"),
+            make_result(2, 2, "c"),
+        ],
+    )
+    out = tmp_path / "report.jsonl"
+    lines: list[str] = []
+    assert run_bank(bank, pack_dir, out, status=lines.append) == 0
+
+    _, records = load_report(out)
+    b5, mt1 = records
+    assert (b5.attempts, b5.turns[0].exit_equiv, b5.turns[0].error) == (2, 0, None)
+    assert b5.turns[0].outcome.body.text == "146 last week."
+    assert mt1.attempts == 1
+    # Asked twice, both times as a fresh conversation.
+    assert session.calls[:2] == [
+        ("How many invoices received last week had findings?", None),
+        ("How many invoices received last week had findings?", None),
+    ]
+    assert any("replaying the rep from turn 0" in line for line in lines)
+
+
+def test_a_second_timeout_is_recorded_like_any_error(
+    monkeypatch, bank, pack_dir, tmp_path
+):
+    install_session(
+        monkeypatch,
+        [
+            LLMTimeoutError("m: slow"),
+            LLMTimeoutError("m: still slow"),
+            make_result(2, 1, "b"),
+            make_result(2, 2, "c"),
+        ],
+    )
+    out = tmp_path / "report.jsonl"
+    run_bank(bank, pack_dir, out, status=quiet)
+
+    _, records = load_report(out)
+    b5 = records[0]
+    assert b5.attempts == 2
+    assert b5.turns[0].exit_equiv == 1
+    assert b5.turns[0].error == "LLMTimeoutError: m: still slow"
+
+
+def test_a_multiturn_timeout_restarts_the_conversation(
+    monkeypatch, bank, pack_dir, tmp_path
+):
+    """Turn 2 timing out replays turn 1 as well: the anchors a later
+    turn reads were established in the conversation that died."""
+    session = install_session(
+        monkeypatch,
+        [
+            make_result(1, 1, "a"),
+            make_result(2, 1, "b"),
+            LLMTimeoutError("m: slow"),
+            make_result(3, 1, "b again"),
+            make_result(3, 2, "c"),
+        ],
+    )
+    out = tmp_path / "report.jsonl"
+    run_bank(bank, pack_dir, out, status=quiet)
+
+    assert session.calls[1:] == [
+        ("How many invoices arrived per month?", None),
+        ("How many of those had findings?", 2),
+        ("How many invoices arrived per month?", None),
+        ("How many of those had findings?", 3),
+    ]
+    _, records = load_report(out)
+    mt1 = records[1]
+    assert mt1.attempts == 2
+    assert [t.conversation_id for t in mt1.turns] == [3, 3]
+    assert [t.outcome.body.text for t in mt1.turns] == ["b again", "c"]
+
+
+def test_a_report_written_before_attempts_existed_still_loads(
+    monkeypatch, bank, pack_dir, tmp_path
+):
+    install_session(monkeypatch, [make_result(1, 1, "a")] * 3)
+    out = tmp_path / "report.jsonl"
+    run_bank(bank, pack_dir, out, status=quiet)
+    stripped = []
+    for line in out.read_text(encoding="utf-8").splitlines():
+        record = json.loads(line)
+        record.pop("attempts", None)
+        stripped.append(json.dumps(record))
+    out.write_text("\n".join(stripped) + "\n", encoding="utf-8")
+
+    _, records = load_report(out)
+    assert [record.attempts for record in records] == [1, 1]
 
 
 def test_rows_filter_and_header_records_it(

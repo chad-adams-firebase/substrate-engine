@@ -659,6 +659,11 @@ class RunRecord(BaseModel):
     rep: int  # 1-based
     started_at: datetime
     wall_ms_total: int = 0
+    # How many times the runner played this rep: 2 when the first
+    # attempt ended in the port's LLM timeout and the rep was replayed
+    # from turn 0 (Migration Readiness). The grader never reads it;
+    # the grade text names retried reps only when there were any.
+    attempts: int = 1
     turns: list[TurnRecord]
 
 

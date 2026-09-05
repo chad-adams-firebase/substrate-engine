@@ -147,6 +147,9 @@ class GradeReport(BaseModel):
     documented_misses: list[DocumentedMiss] = []
     rows: list[RowGrade] = []
     route_pairs: list[RoutePairGrade] = []
+    # Reps the runner replayed after the port's LLM timeout ("C2 rep 1").
+    # Informational: the replayed rep graded like any other.
+    retried_reps: list[str] = []
 
     def exit_code(self) -> int:
         """4 breach (dominates) · 3 bank rot · 2 threshold failures ·
@@ -1019,6 +1022,11 @@ def grade(
         documented_misses=documented_misses,
         rows=row_grades,
         route_pairs=route_pairs,
+        retried_reps=[
+            f"{record.row_id} rep {record.rep}"
+            for record in records
+            if record.attempts > 1
+        ],
     )
 
 
