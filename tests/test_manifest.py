@@ -87,3 +87,17 @@ def test_source_snapshot_pins_a_pulled_world_without_moving_older_ids():
     assert pulled.manifest_id == again.manifest_id
     assert pulled.manifest_id != moved.manifest_id
     assert pulled.source_snapshot == "cat.sch|invoices@17"
+
+
+def test_a_none_field_is_absent_from_the_file(tmp_path):
+    """Regeneration's honest one-line diff (the timestamp) must not grow
+    a "source_snapshot": null line on every manifest that predates the
+    field — found by following the runbook in a fresh clone."""
+    import json
+
+    manifest = build_manifest("stats", "1.0.0", source_commit_sha="761a18e9", simulation_seed=42)
+    path = tmp_path / "stats.json"
+    save_manifest(path, manifest)
+    written = json.loads(path.read_text(encoding="utf-8"))
+    assert "source_snapshot" not in written
+    assert load_manifest(path) == manifest

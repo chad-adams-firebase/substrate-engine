@@ -53,7 +53,10 @@ def build_manifest(
 
 
 def save_manifest(path: Path, manifest: Manifest) -> None:
-    payload = manifest.model_dump(mode="json")
+    # A field that is None is absent from the file: a manifest written
+    # before a field existed and one written after read the same, and
+    # regeneration keeps its one-line (timestamp) diff.
+    payload = manifest.model_dump(mode="json", exclude_none=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, sort_keys=True, indent=2) + "\n",
