@@ -100,6 +100,29 @@ def test_an_answer_about_the_anchor_is_silent_however_it_says_so(catalog):
     assert run(catalog, question=TURN_7_QUESTION, about="line_note", draft=table, evidence=[wrong_sql]) is None
 
 
+MT_KEY_TURN_1 = TurnAnchors(turn=1, entities=[
+    Anchor(kind="invoice", column="invoices.id", value="440", source="cell"),
+    Anchor(kind="invoice", column="invoices.invoice_number", value="INV-00426", source="cell"),
+])
+
+
+def test_a_declared_about_may_wear_its_kind_noun(catalog):
+    """Fix Pass R2 (MT-KEY 0/5 with the engine correct): the router said
+    `invoice 440`, set equality against {440, INV-00426} failed. One
+    article and one synonym of the question's kind come off, then
+    equality with one name — never containment, so a list of two and
+    another number still warn, and another kind's noun is not stripped."""
+    question = "What was that invoice's history?"
+    for about in ("invoice 440", "the invoice INV-00426", "440", "Invoice INV-00426", "`invoice 440`"):
+        assert run(catalog, question=question, about=about, prior=[MT_KEY_TURN_1]) is None, about
+    for about in ("invoice 441", "440 and 441", "invoice 440 and 441", "supplier 440", "invoice"):
+        finding = run(catalog, question=question, about=about, prior=[MT_KEY_TURN_1])
+        assert finding is not None and finding.detail.endswith(f"about `{about}`"), about
+    assert run(catalog, question=TURN_7_QUESTION, about="rule line_note") is None
+    assert run(catalog, question=TURN_7_QUESTION, about="the audit rule line_note") is None
+    assert run(catalog, question=TURN_7_QUESTION, about="rule new_supplier") is not None
+
+
 def test_no_kind_no_anchor_or_an_ambiguous_anchor_is_silent(catalog):
     """Kind-less pronouns, a first turn, a refusal before, a multi-row
     table: none manufactures a warn."""

@@ -17,6 +17,7 @@ from engine.tools.entities import (
     equality_literals,
     harvest_turn_anchors,
     known_values,
+    strip_kind_noun,
     tokens_of,
 )
 from engine.tools.envelope import Anchor, KnownKey, RunSqlOutput, Table, ToolInvocation
@@ -227,6 +228,30 @@ def test_a_failed_invocation_contributes_nothing_and_a_declared_about_rides_alon
     anchors = harvest_turn_anchors([failed], catalog, about="new_supplier", question_kind="rule", turn=7)
     assert anchors.entities == [Anchor(kind="rule", column="", value="new_supplier", source="declared")]
     assert harvest_turn_anchors([], catalog, about=None).entities == []
+
+
+def test_strip_kind_noun_takes_one_article_and_one_noun_of_the_kind(catalog):
+    """Fix Pass R2: pack synonyms only, longest first, the value's own
+    spelling kept; nothing inside the value is touched."""
+    assert strip_kind_noun("invoice 440", "invoice", catalog) == "440"
+    assert strip_kind_noun("the invoice INV-00426", "invoice", catalog) == "INV-00426"
+    assert strip_kind_noun("The Vendor Ravenswood Extrusion", "supplier", catalog) == "Ravenswood Extrusion"
+    assert strip_kind_noun("compliance rule CR-147", "rule", catalog) == "CR-147"
+    assert strip_kind_noun("audit_rule line_note", "rule", catalog) == "line_note"
+    assert strip_kind_noun("`item code SVC-4410`", "item", catalog) == "SVC-4410"
+    # Unchanged: a list, another kind's noun, a bare noun, no kind, a noun inside the value.
+    assert strip_kind_noun("440 and 441", "invoice", catalog) == "440 and 441"
+    assert strip_kind_noun("supplier 440", "invoice", catalog) == "supplier 440"
+    assert strip_kind_noun("invoice", "invoice", catalog) == "invoice"
+    assert strip_kind_noun("invoice 440", None, catalog) == "invoice 440"
+    assert strip_kind_noun("Aldergate Industrial Supply", "supplier", catalog) == "Aldergate Industrial Supply"
+
+
+def test_a_declared_about_is_stored_without_its_kind_noun(catalog):
+    anchors = harvest_turn_anchors([], catalog, about="invoice 440", question_kind="invoice", turn=2)
+    assert anchors.entities == [Anchor(kind="invoice", column="", value="440", source="declared")]
+    anchors = harvest_turn_anchors([], catalog, about="invoice 440", question_kind=None, turn=2)
+    assert anchors.entities == [Anchor(kind="", column="", value="invoice 440", source="declared")]
 
 
 @pytest.mark.parametrize(

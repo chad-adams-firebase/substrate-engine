@@ -339,8 +339,15 @@ def harvest_turn_anchors(
                 Anchor(kind=kind, column=column, value=next(iter(values)), source=source)
             )
     if about:
+        # Stored without its kind noun, so a later turn's declared
+        # fallback compares like with like (Fix Pass, R2).
         entities.append(
-            Anchor(kind=question_kind or "", column="", value=about, source="declared")
+            Anchor(
+                kind=question_kind or "",
+                column="",
+                value=strip_kind_noun(about, question_kind, catalog) or about,
+                source="declared",
+            )
         )
     return TurnAnchors(
         turn=turn,
@@ -374,6 +381,37 @@ def anaphor_kind(question: str, catalog: EntityCatalog) -> str | None:
     if match is None:
         return None
     return catalog.synonyms[match.group("noun")]
+
+
+_ARTICLE = re.compile(r"^(?:the|a|an)\s+")
+
+
+def strip_kind_noun(about: str, kind: str | None, catalog: EntityCatalog) -> str:
+    """A declared about without the kind noun the router may have put
+    in front of it (Fix Pass, R2): one optional leading article, then
+    one leading synonym of `kind` from the pack's declarations — so
+    "invoice 440" and "the invoice INV-00426" read 440 and INV-00426,
+    while "440 and 441" (a list) and "supplier 440" (another kind's
+    noun) read unchanged. Strip-and-match, never containment: a list
+    gets no partial credit. The remainder keeps the value's own
+    spelling; the caller normalizes for comparison."""
+    text = about.strip().strip("`'\"")
+    lowered = text.lower().replace("_", " ")
+    offset = 0
+    article = _ARTICLE.match(lowered)
+    if article:
+        offset = article.end()
+    if kind:
+        nouns = sorted(
+            (noun for noun, of_kind in catalog.synonyms.items() if of_kind == kind),
+            key=len,
+            reverse=True,
+        )
+        for noun in nouns:
+            if lowered.startswith(noun + " ", offset):
+                offset += len(noun) + 1
+                break
+    return text[offset:].strip()
 
 
 _TOKEN = re.compile(r"[A-Za-z0-9_][\w.\-]*")

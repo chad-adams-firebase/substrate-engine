@@ -16,7 +16,12 @@ one (a multi-row table) is silent — the check must not manufacture
 refusals of clean turns.
 """
 
-from engine.tools.entities import EntityCatalog, anaphor_kind, equality_literals
+from engine.tools.entities import (
+    EntityCatalog,
+    anaphor_kind,
+    equality_literals,
+    strip_kind_noun,
+)
 from engine.tools.envelope import Anchor, RunSqlOutput, ToolInvocation, TurnAnchors
 from engine.verifier.models import DraftAnswer, PlausibilityFinding
 
@@ -63,7 +68,11 @@ def check_anchor(
     established = f"the question refers to that {kind}; turn {turn}'s evidence established `{shown}`"
 
     if about:
-        if _norm(about) in names:
+        # The router may spell the about with its kind noun in front —
+        # "invoice 440" for an anchor {440, INV-00426} (MT-KEY, 0/5 on
+        # exactly this). One article and one synonym of the kind come
+        # off, then equality with one anchor name (Fix Pass, R2).
+        if _norm(strip_kind_noun(about, kind, catalog)) in names:
             return None
         return PlausibilityFinding(
             check=CHECK, severity="warn",
