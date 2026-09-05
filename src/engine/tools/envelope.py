@@ -140,6 +140,15 @@ class TurnAnchors(BaseModel):
     turn: int = 0
     entities: list[Anchor] = []
     keys: list[KnownKey] = []
+    # A turn whose verdict carried the anchor check's warn (Fix Pass)
+    # established nothing: entities is empty and the prior anchor
+    # survives on the history. The kind it drifted on and the
+    # contradiction the warn printed are kept, so the transcript names
+    # the correction and a following kind-less "it" is read against
+    # the surviving anchor until an unwarned answer establishes a new
+    # entity. Defaults, so a legacy checkpoint loads with neither.
+    contradicted_kind: str = ""
+    contradiction: str = ""
 
 
 class TurnContext(BaseModel):

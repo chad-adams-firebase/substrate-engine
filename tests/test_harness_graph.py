@@ -802,3 +802,93 @@ def test_the_verify_node_hands_the_verifier_the_history_and_the_declaration(tool
     (prior,) = second_call["context"].prior
     assert prior.turn == 1 and prior.entities[0].value == name
     assert second_call["context"].about == "line_note"
+
+
+# --- Fix Pass: a warned turn establishes nothing, and only an answer
+# --- establishes an entity ---------------------------------------------
+
+ANCHOR_DETAIL = (
+    "the question refers to that rule; turn 1's evidence established "
+    "`line_note`, and this answer filters on `findings.rule_name = 'new_supplier'`"
+)
+DRIFT_CALL = tool_call("run_sql", {"question": "How many findings has the rule 'new_supplier' produced?"})
+DRIFT_SQL = LLMResponse(
+    content="```sql\nSELECT COUNT(*) AS n FROM findings f WHERE f.rule_name = 'new_supplier'\n```",
+    model="scripted",
+)
+
+
+def anchor_warn_result():
+    from engine.verifier.models import AttemptRecord, PlausibilityRecord, VerifierResult
+
+    return VerifierResult(
+        disposition="unverified",
+        attempt_record=AttemptRecord(attempt=1, claims=[], unmatched_count=0),
+        plausibility=[PlausibilityRecord(check="anchor.entity_mismatch", severity="warn", detail=ANCHOR_DETAIL)],
+    )
+
+
+def test_a_warned_turn_writes_no_anchors_and_its_transcript_carries_the_correction(tool_pack):
+    """MT-ANCHOR rep 4, the mechanism: turn 2's drift was warned and
+    still became turn 3's anchor. Now the warned turn's record keeps
+    no entity, the prior anchor survives on the history, the next
+    turn's router reads the correction in place of the About line, and
+    the next turn's SQL author is still told turn 1's key."""
+    from engine.config.models import PortName
+    from tests.harness_support import verified_result
+
+    responses = [
+        TOP_RULE_CALL, TOP_RULE_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0}),
+        DRIFT_CALL, DRIFT_SQL,
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "about": "new_supplier"}),
+        tool_call("run_sql", {"question": "How many findings has it produced?"}),
+        LLMResponse(content="```sql\nSELECT COUNT(*) AS n FROM findings f WHERE f.rule_name = 'line_note'\n```", model="scripted"),
+        tool_call("give_answer", {"shape": "table", "evidence_index": 0, "about": "line_note"}),
+    ]
+    verifier = StubVerifier([verified_result(), anchor_warn_result(), verified_result()])
+    session, ports, _ = build_ask_session(tool_pack, responses, verifier=verifier)
+    first = session.ask("Which rule fires most often?")
+    name = first.outcome.body.table.rows[0]["rule_name"]
+    second = session.ask("How many findings has that rule produced?", conversation_id=first.conversation_id)
+    assert second.outcome.kind == "answer" and second.outcome.verification == "unverified"
+    third = session.ask("How many findings has it produced?", conversation_id=first.conversation_id)
+    assert third.outcome.kind == "answer"
+
+    one, two, three = checkpoint_history(session, first.conversation_id)
+    assert [a.value for a in one.anchors.entities] == [name]
+    assert two.anchors.entities == [] and two.anchors.contradicted_kind == "rule"
+    assert two.anchors.contradiction == ANCHOR_DETAIL
+    assert two.answer.startswith(f"[table: Unverified: {ANCHOR_DETAIL}. SELECT COUNT(*)")
+    assert "About: new_supplier" not in two.answer
+    assert three.anchors.contradicted_kind == ""
+    assert [a.value for a in three.anchors.entities if a.column] == ["line_note"]
+
+    calls = ports.get(PortName.LLM).calls
+    router_messages = calls[6]["messages"]  # turn 3's first router step
+    assert any(m.role == "assistant" and m.content.startswith("[table: Unverified: ") for m in router_messages)
+    assert not any("About: new_supplier" in m.content for m in router_messages)
+    grounding = calls[7]["messages"][0].content  # turn 3's SQL author
+    assert f"findings.rule_name = '{name}' (rule, turn 1)" in grounding
+    assert "new_supplier" not in grounding
+    # The Verifier at turn 3 saw the warned record, entity-free.
+    prior = verifier.calls[2]["context"].prior
+    assert [(p.turn, len(p.entities), p.contradicted_kind) for p in prior] == [(1, 1, ""), (2, 0, "rule")]
+
+
+def test_a_refusal_after_a_one_row_query_keeps_its_keys_and_establishes_nothing(tool_pack):
+    top_invoice = LLMResponse(
+        content="```sql\nSELECT i.id AS invoice_id, i.invoice_number AS invoice_number FROM invoices i ORDER BY i.invoice_total DESC LIMIT 1\n```",
+        model="scripted",
+    )
+    responses = [
+        tool_call("run_sql", {"question": "Which invoice has the highest total?"}), top_invoice,
+        tool_call("refuse", {"reason": "The totals column is not exposed.", "what_would_work": "asking for the count"}),
+    ]
+    session, _, _ = build_ask_session(tool_pack, responses)
+    result = session.ask("Which invoice has the highest total?")
+    assert result.outcome.kind == "refuse"
+    (record,) = checkpoint_history(session, result.conversation_id)
+    assert record.anchors.entities == []
+    assert {k.column for k in record.anchors.keys} == {"invoices.id", "invoices.invoice_number"}
+    assert record.answer.startswith("[refused: ")

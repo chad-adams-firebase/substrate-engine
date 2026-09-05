@@ -276,6 +276,8 @@ def harvest_turn_anchors(
     about: str | None = None,
     question_kind: str | None = None,
     turn: int = 0,
+    answered: bool = True,
+    contradiction: tuple[str, str] | None = None,
 ) -> TurnAnchors:
     """What the turn's run_sql evidence established. A kind is
     determinate when its entity is single: every key/name column of
@@ -285,7 +287,16 @@ def harvest_turn_anchors(
     is ambiguous and yields nothing for that kind. Keys are every
     distinct value of every id-like result column plus every id-like
     filter literal. The router's declared about rides along as an
-    Anchor of source "declared"."""
+    Anchor of source "declared".
+
+    Two gates (Fix Pass): only an answer establishes an entity — a
+    refusal, clarify or escalate after a one-row query showed the user
+    nothing, so `answered=False` keeps the keys (the model saw them;
+    the key lint grounds on what was shown) and no entity; and a turn
+    whose verdict carried the anchor check's warn establishes nothing
+    either — `contradiction=(kind, detail)` empties the entities and
+    records both, so the prior anchor survives and the drift never
+    becomes the next turn's anchor."""
     cells: dict[str, dict[str, set[str]]] = {}  # kind -> canonical column -> values
     filters: dict[str, dict[str, set[str]]] = {}
     keys: dict[tuple[str, str], None] = {}
@@ -349,10 +360,15 @@ def harvest_turn_anchors(
                 source="declared",
             )
         )
+    if not answered or contradiction is not None:
+        entities = []
+    contradicted_kind, detail = contradiction or ("", "")
     return TurnAnchors(
         turn=turn,
         entities=entities,
         keys=[KnownKey(column=column, value=value) for column, value in keys],
+        contradicted_kind=contradicted_kind,
+        contradiction=detail,
     )
 
 

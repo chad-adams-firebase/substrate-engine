@@ -445,6 +445,35 @@ def test_the_sessions_turn_20_is_exposed_by_both_key_lints_and_grounded_by_turn_
     assert grounded.counts() == {"lint.ungrounded_key": 0}
 
 
+def test_a_warned_turns_drift_and_a_refusals_evidence_never_become_the_anchor():
+    """Fix Pass R1(a), replayed: turn 6 established line_note; a "that
+    rule" turn filtered new_supplier and was warned; a refusal ran the
+    same statement. Neither establishes anything, so a later "that rule"
+    answered about line_note is silent — before the pass, the warned
+    turn's filter was the most recent anchor and the correct answer
+    would have been flagged."""
+    from engine.harness.outcomes import AnswerOutcome, MarkdownAnswer, RefuseOutcome
+    from tests.test_tool_entities import T6, T9
+
+    stats, dictionary, dictionary_map = _pack_substrates()
+    correct = AnswerOutcome(
+        body=MarkdownAnswer(text="The line_note rule flags a line that carries a note.", about="line_note"),
+        verification="verified",
+    )
+    record = _conversation("SESSION", [
+        ("Which rule fires most often?", _table_outcome(T6), [T6]),
+        ("How many findings has that rule produced?", _table_outcome(T9, about="new_supplier"), [T9]),
+        ("Show me that rule's source", RefuseOutcome(reason="no node"), [T9]),
+        ("What does that rule check?", correct, []),
+    ])
+    report = expose(
+        [record], stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(), checks=["anchor.entity_mismatch"],
+    )
+    assert [(h.turn_index, h.check) for h in report.hits] == [(1, "anchor.entity_mismatch")]
+    assert "this answer says it is about `new_supplier`" in report.hits[0].detail
+
+
 @pytest.mark.skipif(not POST_CLOSE.is_file(), reason="the committed report is absent")
 def test_the_post_close_report_is_clean_under_the_backlog_pass_checks():
     """The baseline the Backlog Pass was measured against before it

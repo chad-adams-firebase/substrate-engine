@@ -304,3 +304,30 @@ def test_a_table_turn_names_what_its_evidence_established_in_the_transcript():
     assert transcript_text(named, TurnAnchors()) == "[table: About: line_note. Reading: substantive. SELECT 1]"
     prose = AnswerOutcome(body=MarkdownAnswer(text="It checks notes.", about="line_note"), verification="verified")
     assert transcript_text(prose, anchors) == "It checks notes."
+
+
+def test_a_warned_turns_transcript_carries_the_contradiction_not_the_drift():
+    """Fix Pass R1(a): the Verifier's detail takes the About sentence's
+    slot on a table and leads a prose entry, so the router reads the
+    correction; the declared About — the drift — is never rendered.
+    Non-answers are unchanged."""
+    from engine.harness.outcomes import AnswerOutcome, MarkdownAnswer, RefuseOutcome, TableAnswer
+    from engine.harness.state import transcript_text
+    from engine.tools.envelope import Table, TurnAnchors
+
+    detail = "the question refers to that rule; turn 1's evidence established `line_note`, and this answer never names it"
+    warned = TurnAnchors(turn=2, contradicted_kind="rule", contradiction=detail)
+    table = Table(columns=["n"], rows=[{"n": 197}], total_row_count=1)
+    counted = AnswerOutcome(
+        body=TableAnswer(table=table, caption="SELECT 1", reading="substantive", about="new_supplier"),
+        verification="unverified",
+    )
+    assert transcript_text(counted, warned) == f"[table: Unverified: {detail}. Reading: substantive. SELECT 1]"
+    assert "new_supplier" not in transcript_text(counted, warned)
+    prose = AnswerOutcome(body=MarkdownAnswer(text="The rule `new_supplier` flags new suppliers.", about="new_supplier"),
+                          verification="unverified")
+    assert transcript_text(prose, warned) == f"[unverified: {detail}] The rule `new_supplier` flags new suppliers."
+    refused = RefuseOutcome(reason="No CKG node for that rule.")
+    assert transcript_text(refused, warned) == "[refused: No CKG node for that rule.]"
+    # An unwarned turn is byte-identical to before.
+    assert transcript_text(counted, TurnAnchors(turn=2)) == "[table: About: new_supplier. Reading: substantive. SELECT 1]"

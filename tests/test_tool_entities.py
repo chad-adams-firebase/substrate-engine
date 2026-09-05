@@ -254,6 +254,23 @@ def test_a_declared_about_is_stored_without_its_kind_noun(catalog):
     assert anchors.entities == [Anchor(kind="", column="", value="invoice 440", source="declared")]
 
 
+def test_only_an_answer_establishes_an_entity_and_a_warned_turn_establishes_nothing(catalog):
+    """Fix Pass R1: a refusal after a one-row query keeps its keys (the
+    model saw them) and no entity (the user saw nothing); a turn whose
+    verdict carried the anchor warn keeps its keys, drops its entities
+    and its declared about, and records the contradiction."""
+    refused = harvest_turn_anchors([T19], catalog, about="INV-00002", question_kind="invoice", turn=19, answered=False)
+    assert refused.entities == [] and refused.contradicted_kind == "" and refused.contradiction == ""
+    assert KnownKey(column="invoices.invoice_number", value="INV-00002") in refused.keys
+    detail = "the question refers to that rule; turn 6's evidence established `line_note`, and this answer never names it"
+    warned = harvest_turn_anchors([T9], catalog, about="new_supplier", question_kind="rule", turn=9,
+                                  contradiction=("rule", detail))
+    assert warned.entities == []
+    assert (warned.contradicted_kind, warned.contradiction) == ("rule", detail)
+    # The unwarned answer is as before: the filter anchors the rule.
+    assert [a.value for a in harvest_turn_anchors([T9], catalog, turn=9).entities] == ["new_supplier"]
+
+
 @pytest.mark.parametrize(
     ("question", "kind"),
     [

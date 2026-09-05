@@ -66,6 +66,7 @@ from engine.ports.types import Message
 from engine.tools.entities import EntityCatalog, anaphor_kind, harvest_turn_anchors
 from engine.tools.envelope import TurnAnchors, TurnContext
 from engine.tools.registry import ToolRegistry
+from engine.verifier.anchor import CHECK as ANCHOR_CHECK
 from engine.verifier.models import DraftAnswer, VerifyContext
 from engine.verifier.verdict import finalize as finalize_verdict
 from engine.verifier.verdict import render_feedback
@@ -600,18 +601,28 @@ def build_graph(deps: GraphDeps, checkpointer=None):
         # evidence with the pack's entity kinds, the router's declared
         # about beside it, and kept on the history for the transcript,
         # the next turn's grounding, and the Verifier's anchor check.
+        # A warned turn establishes nothing (Fix Pass): MT-ANCHOR rep 4
+        # warned at turn 2 and the drift still became turn 3's anchor,
+        # because the harvest read the evidence unconditionally. The
+        # verdict's anchor finding empties the entities and rides into
+        # the transcript instead; a non-answer establishes nothing too.
         about = outcome.body.about if isinstance(outcome, AnswerOutcome) else None
-        anchors = (
-            harvest_turn_anchors(
+        warned = next(
+            (record for record in state.verifier_plausibility if record.check == ANCHOR_CHECK),
+            None,
+        )
+        anchors = TurnAnchors(turn=state.turn)
+        if deps.catalog is not None:
+            kind = anaphor_kind(state.question, deps.catalog)
+            anchors = harvest_turn_anchors(
                 state.evidence,
                 deps.catalog,
                 about=about or None,
-                question_kind=anaphor_kind(state.question, deps.catalog),
+                question_kind=kind,
                 turn=state.turn,
+                answered=isinstance(outcome, AnswerOutcome),
+                contradiction=(kind or "", warned.detail) if warned is not None else None,
             )
-            if deps.catalog is not None
-            else TurnAnchors(turn=state.turn)
-        )
         return {
             "outcome": outcome,
             "history": state.history

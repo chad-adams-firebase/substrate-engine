@@ -94,14 +94,24 @@ def transcript_text(outcome: TurnOutcome, anchors: TurnAnchors | None = None) ->
     caption — the SQL that produced it, which names the window, the
     grouping and the columns a follow-up resolves against — never its
     other cells; prose contributes its text, which names what it is
-    about; the other outcomes contribute their message text."""
+    about; the other outcomes contribute their message text. A warned
+    turn's entry carries the contradiction the Verifier printed, in the
+    About sentence's slot (Fix Pass): the router reads the correction
+    — "turn 1's evidence established `line_note`" — and never the
+    declared About, which is the drift itself."""
+    contradiction = anchors.contradiction if anchors is not None else ""
     if isinstance(outcome, AnswerOutcome):
         if isinstance(outcome.body, TableAnswer):
-            about = anchors_text(anchors) or about_line(outcome.body)
+            if contradiction:
+                about = f"Unverified: {contradiction}."
+            else:
+                about = anchors_text(anchors) or about_line(outcome.body)
             line = reading_line(outcome.body)
             caption = outcome.body.caption or "result set"
             prefix = " ".join(part for part in (about, line) if part)
             return f"[table: {prefix + ' ' if prefix else ''}{caption}]"
+        if contradiction:
+            return f"[unverified: {contradiction}] {outcome.body.text}"
         return outcome.body.text
     if isinstance(outcome, RefuseOutcome):
         return f"[refused: {outcome.reason}]"

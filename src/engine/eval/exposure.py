@@ -372,6 +372,7 @@ def expose(
             seen_this_turn.extend(harvest_turn_anchors([invocation], catalog).keys)
 
         about: str | None = None
+        finding = None
         if isinstance(turn.outcome, AnswerOutcome) and turn.question:
             body = turn.outcome.body
             about = body.about or None
@@ -391,12 +392,18 @@ def expose(
             if finding is not None:
                 hit(turn, -1, finding.check, finding.severity, finding.detail, "")
 
+        # The harness's bookkeeping, replayed (Fix Pass): a warned turn
+        # and a non-answer establish nothing, so the replay's prior
+        # anchors are the ones a live conversation would have carried.
+        kind = anaphor_kind(turn.question, catalog) if turn.question else None
         anchors = harvest_turn_anchors(
             list(turn.invocations),
             catalog,
             about=about,
-            question_kind=anaphor_kind(turn.question, catalog) if turn.question else None,
+            question_kind=kind,
             turn=turn.engine_turn or turn.turn_index,
+            answered=isinstance(turn.outcome, AnswerOutcome),
+            contradiction=(kind or "", finding.detail) if finding is not None else None,
         )
         thread.prior.append(anchors)
         thread.keys.extend(anchors.keys)
