@@ -5,11 +5,18 @@ asked for "that invoice's history" and ran
 another invoice's history, verified, because nothing read comments and
 nothing knew which literals the conversation had seen.
 
-lint_placeholders — a comment that admits the value is invented
-("replace", "placeholder", "actual …"), or a bind shape standing where
-a value belongs (`:invoice_id`, `?`, `$1`, `{{…}}`, `<id>`). A HARD
-challenge: run_sql blocks on it every time it fires, with no license
-to resend unchanged, because the comment is the model's own confession.
+lint_placeholders — a comment that confesses the value is invented
+("replace", "placeholder", "todo") beside a literal the statement
+compares against, or a bind shape standing where a value belongs
+(`:invoice_id`, `?`, `$1`, `{{…}}`, `<id>`). A HARD challenge: run_sql
+blocks on it every time it fires, with no license to resend unchanged,
+because the comment is the model's own confession. The Fix Pass
+narrowed the vocabulary to confessions and gated it on a bound
+literal: "the specific invoice the user asked about" and "actual
+receipt time, not scored_at" are how a model narrates, not how it
+confesses, and the ungrounded-key lint owns the invented-literal case
+those words were proxying for. A bind shape is its own confession and
+needs no literal.
 
 lint_ungrounded_keys — an equality or IN predicate binding an id-like
 column (a dictionary primary or foreign key, or a map-declared key
@@ -30,10 +37,21 @@ from engine.tools.sql_scopes import STRING_LITERAL
 if TYPE_CHECKING:  # entities imports this module; the lint takes its catalog by duck type
     from engine.tools.entities import EntityCatalog
 
-# The vocabulary of a model telling itself a value is invented.
+# The vocabulary of a model confessing a value is invented — never the
+# ambient words (specific, actual, assumed, sample, example) it narrates
+# with: those hard-blocked grounded statements in the static relay's F1.
 _ADMISSION = re.compile(
-    r"\b(?:replace|placeholder|substitute|fill\s+in|todo|dummy|hypothetical|"
-    r"assum\w*|actual|desired|appropriate|specific|sample|example)\b",
+    r"\b(?:replace|placeholder|substitute|fill\s+in|todo|dummy|hypothetical)\b",
+    re.IGNORECASE,
+)
+# A literal bound in a comparison — what a confession can be about. Read
+# on the comment-stripped, literal-blanked statement: an operator (or IN,
+# LIKE, BETWEEN), an optional type keyword, then a blanked string or a
+# number. A statement comparing nothing to a literal has no value to
+# confess, so a comment on it is narration.
+_COMPARES_LITERAL = re.compile(
+    r"(?:=|<>|!=|<=|>=|<|>|\bin\s*\(|\blike\b|\bbetween\b)\s*"
+    r"(?:(?:date|timestamp|time|interval)\s+)?(?:''|\d)",
     re.IGNORECASE,
 )
 # Bind shapes where a value belongs. `::` is a cast, never a bind; `<`
@@ -106,16 +124,16 @@ def lint_placeholders(sql: str, *, comment_source: str | None = None) -> str | N
     statement and a confession on the first line is still a confession."""
     _, comments = split_comments(comment_source if comment_source is not None else sql)
     stripped, _ = split_comments(sql)
+    blanked = STRING_LITERAL.sub("''", stripped)
     reasons: list[str] = []
     admitted = next((c for c in comments if _ADMISSION.search(c)), None)
-    if admitted is not None:
+    if admitted is not None and _COMPARES_LITERAL.search(blanked):
         reasons.append(
             f"Placeholder check: the comment `{_comment_body(admitted)}` says "
             "this value was not taken from the conversation. Remove the "
             "comment and use a value the conversation established, or ask "
             "the user which one is meant."
         )
-    blanked = STRING_LITERAL.sub("''", stripped)
     shape = next(
         (m.group(0) for pattern in _BIND_SHAPES for m in [pattern.search(blanked)] if m),
         None,

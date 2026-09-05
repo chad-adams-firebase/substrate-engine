@@ -91,6 +91,39 @@ def test_a_block_comment_admission_fires_too():
     assert reason is not None and "use the actual id" in reason
 
 
+def test_a_confession_fires_only_beside_a_literal_it_could_be_about():
+    """Fix Pass (the static relay's F1): the vocabulary is confessions
+    only, and a confession needs a literal bound in a comparison. The
+    two recorded F1 probes — a grounded literal narrated as "specific",
+    a literal-free statement narrated as "actual" — are silent; a real
+    confession fires beside `= 7`, on a threshold, on a typed date, and
+    stays silent when the statement compares nothing to a literal."""
+    for sql in (
+        "SELECT 1 FROM invoices i WHERE i.invoice_number = 'INV-00426' "
+        "-- the specific invoice the user asked about",
+        "SELECT ih.at AS received_at FROM invoice_history ih -- actual receipt time, not scored_at",
+        "SELECT 1 FROM invoices WHERE id = 7 -- actual receipt time, not scored_at",
+        "SELECT 1 FROM invoices WHERE id = 7 -- assuming the sample invoice is the desired example",
+        "SELECT COUNT(*) AS n FROM invoices -- todo: use the real id",
+        "SELECT COUNT(*) AS n FROM invoices i JOIN suppliers s ON s.id = i.supplier_id -- placeholder join",
+    ):
+        assert lint_placeholders(sql) is None, sql
+    for sql, comment in (
+        ("SELECT 1 FROM invoices WHERE id = 7 -- todo: use the real id", "todo: use the real id"),
+        ("SELECT 1 FROM invoices WHERE invoice_number = 'INV-00001' -- dummy number", "dummy number"),
+        ("SELECT 1 FROM invoices WHERE invoice_total > 100 -- placeholder threshold", "placeholder threshold"),
+        ("SELECT 1 FROM invoices WHERE received_at >= DATE '2026-05-23' -- todo: confirm the window",
+         "todo: confirm the window"),
+        ("SELECT 1 FROM invoices WHERE id IN (1, 2) -- substitute the real ids", "substitute the real ids"),
+        ("SELECT 1 FROM invoices WHERE received_at BETWEEN '2026-05-23' AND '2026-05-30' -- hypothetical week",
+         "hypothetical week"),
+    ):
+        reason = lint_placeholders(sql)
+        assert reason is not None and f"the comment `{comment}` says" in reason, sql
+    # Turn 20's recorded confession: `Replace` beside `= 123` still fires.
+    assert lint_placeholders(T20_PLACEHOLDER_ATTEMPT) is not None
+
+
 def test_every_bind_shape_fires():
     for shape, sql in (
         (":invoice_id", "SELECT 1 FROM t WHERE id = :invoice_id"),
