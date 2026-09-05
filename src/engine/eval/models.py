@@ -137,6 +137,15 @@ class _AssertionBase(BaseModel):
     # exit-4 reps; a clarify body has no gold token to carry). None
     # applies at every exit, as before.
     at_exit: list[int] | None = None
+    # Stand down on a turn whose verdict carries a plausibility record
+    # with this check name — the row's way to say "wrong content is
+    # legal only when the check spoke" (Rider Pass, MT-ANCHOR: a drift
+    # the anchor check caught ships [UNVERIFIED] with the warn, and
+    # the row must pass it, while the same drift at exit 2 WITHOUT the
+    # warn is the check going silent and must fail). Read only at
+    # exit != 0, by construction: at exit 0 every assertion applies and
+    # the breach detector runs, whatever the record carries.
+    unless_finding: str | None = None
 
 
 class NonEmptyAssertion(_AssertionBase):

@@ -737,6 +737,12 @@ def _grade_rep(
                 and turn.exit_equiv not in assertion.at_exit
             ):
                 continue
+            if (
+                assertion.unless_finding is not None
+                and turn.exit_equiv != 0
+                and _has_finding(turn, assertion.unless_finding)
+            ):
+                continue  # the check spoke: the row admits what it caught
             passed, detail = evaluate(assertion, view, gold)
             if passed:
                 continue
@@ -775,6 +781,16 @@ def _grade_rep(
     if not reached:
         return "not-reached", failures
     return ("failed" if failures else "passed"), failures
+
+
+def _has_finding(turn: TurnRecord, check: str) -> bool:
+    """Whether the turn's verdict carries a plausibility record of the
+    named check (Rider Pass): the data every report already keeps under
+    turns[i].verdict.plausibility, read by unless_finding."""
+    verdict = turn.verdict
+    if verdict is None:
+        return False
+    return any(record.check == check for record in verdict.plausibility)
 
 
 def _alarm_worthy(assertion: Assertion, view: _TurnView, gold) -> bool:

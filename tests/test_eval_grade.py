@@ -1420,3 +1420,72 @@ def test_summary_contains_needs_exactly_one_source():
     with pytest.raises(ValueError):
         SummaryContainsAssertion(pattern="x", from_gold_field="y")
     assert SummaryContainsAssertion(from_gold_field=["a", "b"]).fields() == ["a", "b"]
+
+
+# --- Rider Pass: an assertion stands down when the check spoke -----------
+
+ROW_CAUGHT = """\
+- id: CAUGHT
+  provenance: scripted
+  category: data
+  question: "How many findings has it produced?"
+  gold: gold/g.py
+  expected_gold: {value: 146}
+  expect:
+    exit: [0, 2]
+    assertions:
+      - {kind: numeric_from_gold, field: value, unless_finding: anchor.entity_mismatch}
+"""
+
+
+def _warned_verdict(check: str = "anchor.entity_mismatch") -> VerifierVerdict:
+    from engine.verifier.models import AttemptRecord, PlausibilityRecord
+
+    return VerifierVerdict(
+        disposition="unverified",
+        mode="prose",
+        attempts=[AttemptRecord(attempt=1, claims=[], unmatched_count=0)],
+        plausibility=[
+            PlausibilityRecord(
+                check=check,
+                severity="warn",
+                detail="the question's pronoun follows turn 2's anchor warning",
+            )
+        ],
+        judge_calls=0,
+    )
+
+
+def test_unless_finding_waives_content_only_when_the_check_spoke(tmp_path):
+    """Rider Pass (MT-ANCHOR): a drift the anchor check caught ships
+    [UNVERIFIED] with the warn and the row passes it; the same wrong
+    count at exit 2 without that warn is the check going silent and
+    fails the rep; at exit 0 the assertion applies whatever the record
+    carries, and the breach detector still runs; a right answer at
+    exit 2 needs no waiver."""
+    bank, header, world, pack = make_env(tmp_path, ROW_CAUGHT)
+
+    caught = make_record(
+        "CAUGHT", 1, make_turn("197 so far.", exit_equiv=2, verdict=_warned_verdict())
+    )
+    result = grade(bank, header, [caught], world, pack_root=pack)
+    assert result.rows[0].status == "ok" and result.breaches == []
+
+    silent = make_record(
+        "CAUGHT", 2,
+        make_turn("197 so far.", exit_equiv=2, verdict=_warned_verdict("run_sql.empty_result")),
+    )
+    result = grade(bank, header, [silent], world, pack_root=pack)
+    assert result.rows[0].status == "fail"
+    assert result.rows[0].failure_classes == ["numeric_from_gold"]
+    assert result.breaches == []
+
+    verified = make_record(
+        "CAUGHT", 3, make_turn("197 so far.", exit_equiv=0, verdict=_warned_verdict())
+    )
+    result = grade(bank, header, [verified], world, pack_root=pack)
+    assert [b.assertion for b in result.breaches] == ["numeric_from_gold"]
+
+    right = make_record("CAUGHT", 4, make_turn("146 so far.", exit_equiv=2))
+    result = grade(bank, header, [right], world, pack_root=pack)
+    assert result.rows[0].status == "ok" and result.breaches == []
