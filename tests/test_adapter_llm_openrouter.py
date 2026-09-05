@@ -7,12 +7,14 @@ import json
 
 import httpx2
 import pytest
+from openai import DEFAULT_TIMEOUT, APIConnectionError
 
 from engine.adapters.llm_openrouter import (
     API_KEY_ENV_VAR,
     OpenRouterLLM,
     OpenRouterSettings,
 )
+from engine.ports.llm import LLMTimeoutError
 from engine.ports.types import Message, ToolCall, ToolSpec
 
 BASE_URL = "https://example.test/api/v1"
@@ -235,3 +237,75 @@ def test_a_spoken_tool_call_keeps_its_content(adapter, captured):
     sent = captured["body"]["messages"][0]
     assert sent["content"] == "Let me check."
     assert sent["tool_calls"][0]["id"] == "call-1"
+
+
+# --- Timeouts (Migration Readiness) ------------------------------------
+
+
+def _failing_adapter(monkeypatch, exc_type, **settings):
+    """An adapter whose transport raises exc_type on every request, with
+    the SDK's own retries off so the failure reaches the engine at once."""
+    monkeypatch.setenv(API_KEY_ENV_VAR, "test-key")
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        raise exc_type("transport failure", request=request)
+
+    return OpenRouterLLM(
+        OpenRouterSettings(base_url=BASE_URL, model="m", max_retries=0, **settings),
+        http_client=httpx2.Client(transport=httpx2.MockTransport(handler)),
+    )
+
+
+def test_a_timeout_surviving_the_sdk_retries_is_the_ports_error(monkeypatch):
+    """The eval runner retries a rep on the port's error, never on the
+    SDK's: the adapter owns the translation, and names the model."""
+    llm = _failing_adapter(monkeypatch, httpx2.ReadTimeout)
+
+    with pytest.raises(LLMTimeoutError, match="m: "):
+        llm.complete([Message(role="user", content="Hi.")])
+
+
+def test_only_timeouts_are_translated(monkeypatch):
+    """A refused connection is not a timeout: it propagates as the
+    SDK's own error, so nothing upstream mistakes it for one."""
+    llm = _failing_adapter(monkeypatch, httpx2.ConnectError)
+
+    with pytest.raises(APIConnectionError):
+        llm.complete([Message(role="user", content="Hi.")])
+
+
+def test_unset_timeouts_keep_the_sdk_defaults(monkeypatch):
+    """The client must never receive None for its timeout — the SDK
+    reads None as "no timeout at all". Unset means the SDK default
+    (read 600 s, connect 5 s) and the SDK's two retries."""
+    monkeypatch.setenv(API_KEY_ENV_VAR, "test-key")
+    client = OpenRouterLLM(OpenRouterSettings(base_url=BASE_URL, model="m"))._connect()
+
+    assert client.timeout == DEFAULT_TIMEOUT
+    assert client.timeout.read == 600 and client.timeout.connect == 5.0
+    assert client.max_retries == 2
+
+
+def test_timeouts_are_set_by_phase(monkeypatch):
+    """The failures on record were connect-phase (about 16 s of wall,
+    zero completed calls): the two phases are separate knobs, and one
+    set alone leaves the other at the SDK default."""
+    monkeypatch.setenv(API_KEY_ENV_VAR, "test-key")
+    both = OpenRouterLLM(
+        OpenRouterSettings(
+            base_url=BASE_URL, model="m",
+            read_timeout_seconds=30, connect_timeout_seconds=3, max_retries=1,
+        )
+    )._connect()
+    assert both.timeout == httpx2.Timeout(30.0, connect=3.0)
+    assert both.max_retries == 1
+
+    read_only = OpenRouterLLM(
+        OpenRouterSettings(base_url=BASE_URL, model="m", read_timeout_seconds=30)
+    )._connect()
+    assert read_only.timeout == httpx2.Timeout(30.0, connect=5.0)
+
+    connect_only = OpenRouterLLM(
+        OpenRouterSettings(base_url=BASE_URL, model="m", connect_timeout_seconds=3)
+    )._connect()
+    assert connect_only.timeout == httpx2.Timeout(600.0, connect=3.0)
