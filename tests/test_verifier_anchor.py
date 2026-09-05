@@ -376,8 +376,9 @@ def test_read_anchor_reports_how_the_answer_was_confirmed(catalog):
 def test_the_default_about_is_one_value_the_anchor_carries_and_replays_silent(catalog):
     """Ruling: the injected About always equals a value the anchor
     actually carries — never a paraphrase, never a join of two values —
-    so re-checking it as a declared about is silent, where the joined
-    form would warn."""
+    so re-checking it as a declared about is silent. The join is the
+    transcript's rendering, which the declared arm reads (Rider 2) and
+    the engine never writes."""
     question = "What was that invoice's history?"
     history = sql_turn(
         "SELECT ih.from_status, ih.to_status FROM invoice_history ih WHERE ih.invoice_id = 440 ORDER BY ih.at",
@@ -416,7 +417,6 @@ def test_the_default_about_is_one_value_the_anchor_carries_and_replays_silent(ca
     ):
         assert any(reading_.default_about == a.value for a in reading_.anchors)
         assert run(catalog, question=q, about=reading_.default_about, prior=prior) is None
-    assert run(catalog, question=question, about="440 / INV-00426", prior=[MT_KEY_TURN_1]) is not None
 
 
 def test_the_prose_confirmation_needs_a_whole_word(catalog):
@@ -476,3 +476,48 @@ def test_through_the_verifier_the_default_rides_only_on_a_clean_undeclared_confi
     )
     assert windowed.disposition == "verified" and windowed.about_default == "line_note"
     assert llm.calls == []
+
+
+# --- Rider 2: the join-echo ------------------------------------------------
+
+# The pack's three-column kind: a supplier's id and code are keys, its
+# name a name column — all three surface in one row of evidence.
+RVX_TURN_1 = TurnAnchors(turn=1, entities=[
+    Anchor(kind="supplier", column="suppliers.id", value="22", source="cell"),
+    Anchor(kind="supplier", column="suppliers.code", value="RVX01", source="cell"),
+    Anchor(kind="supplier", column="suppliers.name", value="Ravenswood Extrusion", source="cell"),
+])
+
+
+def test_a_declared_about_may_echo_the_transcripts_join(catalog):
+    """Rider 2 (MT-KEY 0/5 with the engine correct, again): turn 1's
+    transcript renders a two-column anchor as `About: invoice 440 /
+    INV-00426.` and the router echoes it verbatim. The declared arm
+    reads the join: every component, stripped and normalized on its
+    own, must be one of the anchor's names — a stranger, another kind's
+    value, a list, a dangling separator (`440 /` after the strip's
+    trim) or a doubled one (an empty component is no name) warn as
+    before. It confirms as a declaration, so no default is stamped; the
+    pack's three-column kind reads the same way."""
+    question = "What was that invoice's history?"
+    for about in (
+        "invoice 440 / INV-00426", "440 / INV-00426", "the invoice 440 / INV-00426",
+        "INV-00426 / 440", "440 / 440", "`invoice 440 / INV-00426`",
+        "invoice 440", "INV-00426", "440",
+    ):
+        assert run(catalog, question=question, about=about, prior=[MT_KEY_TURN_1]) is None, about
+    for about in (
+        "440 / INV-00427", "invoice 441 / INV-00426", "440 / ", "440 /  / INV-00426",
+        "440 / RVX01", "440 / INV-00426 / 441", "440 and INV-00426",
+    ):
+        finding = run(catalog, question=question, about=about, prior=[MT_KEY_TURN_1])
+        assert finding is not None and finding.detail.endswith(f"about `{about}`"), about
+    echoed = read(catalog, question=question, about="invoice 440 / INV-00426", prior=[MT_KEY_TURN_1])
+    assert (echoed.confirmed_by, echoed.default_about, echoed.finding) == ("declared", "", None)
+    question = "What was that supplier's total again?"
+    for about in (
+        "supplier 22 / RVX01 / Ravenswood Extrusion", "RVX01 / Ravenswood Extrusion",
+        "vendor Ravenswood Extrusion", "22",
+    ):
+        assert run(catalog, question=question, about=about, prior=[RVX_TURN_1]) is None, about
+    assert run(catalog, question=question, about="22 / RVX01 / ALDERGATE1", prior=[RVX_TURN_1]) is not None

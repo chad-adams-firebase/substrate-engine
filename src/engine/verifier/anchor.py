@@ -38,6 +38,20 @@ silent but confirms nothing; a substring hit ("ava" in "available")
 stays silent, as before, but confirms nothing either. MT-ABOUT's
 turn 2 declared its About 3/5 with the content right 5/5: the check
 had already read `rate_variance` in the prose every time.
+
+The join-echo (Rider 2): a table turn's transcript renders a
+multi-column anchor joined — `About: invoice 440 / INV-00426.` — and
+the router echoes that spelling verbatim as its declared about
+(MT-KEY, 0/5 on exactly this, every rep). The declared arm reads the
+join it never writes: after the kind noun comes off, the whole
+remainder is compared first, then — when it splits on " / " — every
+component on its own; a stranger or an empty component warns as
+before. The engine still writes only one bare anchor value as an
+About (the Rider Pass ruling stands): the join is the transcript's
+rendering of several columns, not a value any column carries. Second
+instance of the engine teaching a spelling its checker rejected — the
+kind noun was the first; a third is a design pass on the render/match
+split, not another patch.
 """
 
 import re
@@ -143,13 +157,42 @@ def _confirming_value(
 ) -> str | None:
     """The anchor value the prose names as a whole word — a name column's
     value before a key's when both appear, then column order — or None
-    when only a substring matched. One value, never a join: a joined
-    About would re-check as a warn."""
+    when only a substring matched. One value, never a join: the join is
+    the transcript's rendering of several columns, not a value any
+    column carries — the declared arm reads it (Rider 2), the engine
+    never writes it."""
     matched = [a for a in anchors if _whole_word(_norm(a.value), text)]
     if not matched:
         return None
     matched.sort(key=lambda a: (catalog.is_id_like(a.column), a.column))
     return matched[0].value
+
+
+_JOIN = " / "  # the transcript's separator between a multi-column anchor's values (anchors_text)
+
+
+def _declared_matches(about: str, kind: str, names: set[str], catalog: EntityCatalog) -> bool:
+    """Whether the router's declared about names the anchor. One article
+    and one synonym of the kind come off, then equality with one anchor
+    name (Fix Pass, R2) — byte-identical for everything that matched
+    before. Failing that, the transcript's own spelling of a
+    multi-column anchor, its values joined by " / ", which the router
+    echoes (Rider 2): every component, stripped and normalized on its
+    own, must be one of the anchor's names. A component that is no name
+    warns as before — another value (`440 / INV-00427`), another kind's
+    (`440 / RVX01`), or what a dangling or doubled separator leaves:
+    `440 /` after the strip's trailing trim, or an empty string, and no
+    anchor carries an empty name. The engine never writes the join as an
+    About (the one injected value is bare, a value the anchor carries);
+    it only reads it, because the transcript legitimately emits it on
+    every multi-column anchor."""
+    stripped = strip_kind_noun(about, kind, catalog)
+    if _norm(stripped) in names:
+        return True
+    components = stripped.split(_JOIN)
+    if len(components) < 2:
+        return False
+    return all(_norm(strip_kind_noun(component, kind, catalog)) in names for component in components)
 
 
 def read_anchor(
@@ -197,10 +240,11 @@ def read_anchor(
 
     if about:
         # The router may spell the about with its kind noun in front —
-        # "invoice 440" for an anchor {440, INV-00426} (MT-KEY, 0/5 on
-        # exactly this). One article and one synonym of the kind come
-        # off, then equality with one anchor name (Fix Pass, R2).
-        if _norm(strip_kind_noun(about, kind, catalog)) in names:
+        # "invoice 440" (Fix Pass, R2) — or as the transcript rendered a
+        # multi-column anchor, "invoice 440 / INV-00426" (Rider 2):
+        # MT-KEY was 0/5 on each in turn. A match confirms as a
+        # declaration: no default is stamped, whichever spelling it wore.
+        if _declared_matches(about, kind, names, catalog):
             return reading(confirmed_by="declared")
         return warn(f"and this answer says it is about `{about}`")
 

@@ -23,6 +23,7 @@ POST_DURATION = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-02-post-d
 POST_BLOCK4 = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-block4.jsonl"
 POST_CLOSE = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-close.jsonl"
 POST_BACKLOG = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-backlog.jsonl"
+POST_RIDER = ROOT / "evals" / "invoiceguard" / "reports" / "2026-09-04-post-rider.jsonl"
 PACK = ROOT / "packs" / "invoiceguard"
 
 EMPTY_MAP = DictionaryMap(
@@ -578,4 +579,42 @@ def test_the_post_close_report_is_clean_under_the_backlog_pass_checks():
         "lint.placeholder": 0,
         "lint.ungrounded_key": 0,
         "anchor.entity_mismatch": 0,
+    }
+
+
+@pytest.mark.skipif(not POST_RIDER.is_file(), reason="the committed report is absent")
+def test_the_post_rider_report_reads_the_join_echo_and_keeps_the_drift_warns():
+    """Rider 2's evidence, pinned: 265 executed statements; ten anchor
+    hits before the pass — MT-KEY's turn 2 in five reps, the router
+    echoing turn 1's transcript `invoice 440 / INV-00426` and the
+    declared arm rejecting the join; MT-ANCHOR's turn 2 in five reps,
+    prose that never names line_note — and five after: the five drifts,
+    byte-identical. Both lints at zero, as before."""
+    import json
+
+    from engine.eval.grade import pack_world_manifests
+    from engine.eval.models import RunRecord, RunReportHeader
+
+    stats, dictionary, dictionary_map = _pack_substrates()
+    lines = POST_RIDER.read_text(encoding="utf-8").splitlines()
+    header = RunReportHeader.model_validate(json.loads(lines[0]))
+    check_world(header, pack_world_manifests(PACK))
+    records = [RunRecord.model_validate(json.loads(line)) for line in lines[1:] if line.strip()]
+    report = expose(
+        records, stats=stats, dictionary=dictionary, dictionary_map=dictionary_map,
+        settings=PlausibilitySettings(),
+        checks=["lint.placeholder", "lint.ungrounded_key", "anchor.entity_mismatch"],
+    )
+    assert report.statements == 265
+    assert report.counts() == {
+        "lint.placeholder": 0,
+        "lint.ungrounded_key": 0,
+        "anchor.entity_mismatch": 5,
+    }
+    assert [(hit.row_id, hit.rep, hit.turn_index, hit.invocation_index) for hit in report.hits] == [
+        ("MT-ANCHOR", rep, 1, -1) for rep in (1, 2, 3, 4, 5)
+    ]
+    assert {hit.detail for hit in report.hits} == {
+        "the question refers to that rule; turn 1's evidence established `line_note`, "
+        "and this answer never names it"
     }
