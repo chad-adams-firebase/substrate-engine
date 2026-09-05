@@ -1264,3 +1264,232 @@ MT-ABOUT; any `Placeholder check` in any trail; any `[unverified:` or
 kind noun (legal now — note where); an in-window kind-less turn
 downgraded on prose that omitted the name (the residue above); nudges
 rising above the run's ~15.
+
+## Rider Pass (2026-09-04, after the post-fix-pass run)
+
+The post-fix-pass run (`2026-09-04-post-fixpass`, engine `96c26d2`,
+bank `0c699d410c4024bb`, committed `2645205` beside its FAIL grade)
+closed the breach class. The recorded breach shape was reproduced live
+and **caught**: MT-ANCHOR rep 5 warned at turn 2 and turn 3's `197`
+shipped [UNVERIFIED] with the window warn ("the question's pronoun
+follows turn 2's anchor warning"). The transcript correction produced
+a **recovery**: rep 4 warned at turn 2 and turn 3 counted `line_note`,
+505, at exit 0. True wrong-but-verified across the run's 340 reps:
+**zero**. The residue was three small items and one diagnosis, planned
+against `2645205`, built in six commits (`433848d` `9673f05` `edbfa85`
+`07ad889` `c624256` and this one), 1022 → 1034 tests, bank 68 rows,
+hash `0c699d410c4024bb` → `51135d86460f665b`, `--check-gold` PASS. No
+model pin change; no full run in the pass — the developer's run grades
+it. Read from the report and the live code, not from a relay:
+
+- **MT-KEY rep 1 — the alarm's third false cry.** The INVARIANT line
+  read `MT-KEY rep 1 turn 0 [unsupported]: gold name 'INV-00426'
+  absent`. The answer was `{invoice_id: 440, invoice_total: 43117.71}`
+  — this rep's SQL selected `id AS invoice_id, invoice_total`, an id is
+  a legal way to identify an invoice, and turn 2 pulled the correct
+  history off that id (`ih.invoice_id = 440`, five transitions on
+  2026-03-20, verified, about `invoice 440`). The row's
+  `name_from_gold: invoice_number` was narrower than the space of
+  correct answers — a bank defect. The alarm has still never missed a
+  wolf. **Ruling, recorded: the general grading gate — "name absent
+  but gold numeric matched → non-breach" — is declined.** A
+  numeric-match gate would someday mask a wrong entity wearing a
+  coincidentally right number; the escalation rule stays paranoid and
+  per-instance fixes stay in the bank. Fix: the gold script returns
+  the id as a string beside the number (executed: `440`), the
+  assertion reads either — `field: [invoice_number, invoice_id]`,
+  U-WHO's multi-field form — with `forbid_bare_ids: false`, since the
+  bare-id refusal exists for U-WHO's person names and an id is the
+  point here. Graded offline against the recorded run: all five reps'
+  turn 1 pass the new assertion.
+- **MT-ANCHOR 3/5 — both misses the fix working.** Rep 4: exit 2 at
+  turn 2 with the anchor warn, then the recovery. Rep 5: exit 2 at
+  turn 2 with the warn, then `197` at exit 2 with the window warn — the
+  caught drift. The assertions predated the machinery: turn 2's About
+  and drift assertions had no way to admit a warned wrong answer, and
+  turn 3's `exit: [0]` could not admit the caught shape. No assertion
+  could read the verdict's findings, though every report keeps them
+  under `turns[i].verdict.plausibility`. One grader knob,
+  `unless_finding: <check>` on the assertion base (`eval/models.py`,
+  `grade.py`), skips an assertion on a turn at exit ≠ 0 whose verdict
+  carries that check — at exit 0 every assertion applies and the
+  breach detector runs whatever the record carries, by construction
+  and not by the Verifier's ladder. New shape: turn 2's About regex and
+  `not_contains: new_supplier` stand down only where
+  `anchor.entity_mismatch` spoke (a wrong About at exit 2 *without*
+  the warn is the check going silent and fails the rep; at exit 0 it
+  breaches, as before); turn 3 is `exit: [0, 2]` with the same waiver
+  on `fire_count` — `197` at exit 0 stays the contradicted breach
+  sentinel verbatim, `197` at exit 2 with the warn passes, `197` at
+  exit 2 without it fails, and a correct 505 at exit 2 passes (ruled:
+  the same exit-2 semantics as turn 2, one knob rather than a second
+  positive `finding_present` kind). The row's note carries the
+  encoding in one line: *wrong-count-verified breaches;
+  wrong-count-caught passes.* A defaulted schema field, so the knob
+  alone moves no hash; the row edits do.
+- **MT-ABOUT 3/5 — content 15/15, the About stochastic.** Reps 2, 3
+  and 5 declared `about: "rule rate_variance"` (the kind-noun spelling
+  R2 legalized); reps 1 and 4 declared nothing, and the row's About
+  regex failed them. The plan's brief proposed defaulting the About
+  from the turn's harvested evidence anchors. **Finding, from the
+  replayed trails: the harvest yields nothing there.**
+  `harvest_turn_anchors` reads `run_sql` evidence only, and MT-ABOUT's
+  turn 2 gathers `app_primer`, `search_business_docs` or the
+  dictionary, two or three CKG hops and `read_source` — no SQL — in
+  5/5 reps; the recorded evidence replayed through the live harvest
+  and catalog gives zero entity anchors every time. What confirmed
+  those turns was the anchor check's prose arm, reading
+  `rate_variance` against turn 1's filter anchor
+  (`findings.rule_name = 'rate_variance'`). The harvest design would
+  have fired on MT-KEY t2, MT-ANCHOR t3 and MT4 t4 — all of which the
+  router already declares — and never on the row that motivated it.
+  **Ruling: the default is anchor-confirmed.** The check's reading is
+  now returned whole (`verifier/anchor.py::read_anchor`, with
+  `check_anchor` the finding-only wrapper the ladder and the replay
+  read): the finding if an arm contradicted, else which arm confirmed
+  — the router's declaration, a filter on the anchor's key, its name in
+  the prose — and for the filter and prose arms the one anchor value
+  it matched. `VerifierResult.about_default` carries that value when
+  the router declared none and nothing contradicted; the harness
+  verify node stamps it on the answer body, exactly where a
+  declaration sits, and emits `about defaulted to \`x\` — the anchor
+  check confirmed it` so a report can tell the two apart. Sequence:
+  draft stamps the router's about → verify runs the check with
+  `about=None` → on a warn, no default; the outcome ships [UNVERIFIED]
+  with no About, finalize harvests nothing and the transcript carries
+  the contradiction — every line of the Fix Pass path unchanged → on a
+  confirmation, the body is stamped before the outcome exists →
+  finalize reads `outcome.body.about` as it reads a declaration,
+  stores it stripped as a `declared` anchor, and the transcript
+  renders it as one. Only on the answer branch: a Verifier refusal and
+  the N7 content-free refusal wear no About (an insufficiency draft
+  that names the anchor passes the prose arm, so that gate is
+  load-bearing and test-pinned), and a redraft is verified again
+  first, so the About is the final attempt's. **Why nothing gets
+  quieter:** the injected About exists only on turns the same check
+  passed silently before, and states what that check read; a table
+  that filtered on nothing is silent *and unconfirmed*, so it gets no
+  About; an [UNVERIFIED] for other reasons carries it as a declared
+  about would.
+- **The seam review's four tightenings, credited.** A read-only design
+  review of the seam before any code changed four things in the plan,
+  each tightening and none loosening: (1) the injected value is the
+  *confirming* value — the anchor's spelling of the column the filter
+  matched, or the anchor value the prose named — never the check's
+  `" / "` join of two values, which `_norm` matches to no name and
+  would replay as a warn under exposure; (2) bare, not kind-prefixed:
+  the bare value is exactly what the anchor carries and compares
+  like-with-like by construction, with no round-trip through R2's
+  stripping (the bank patterns make the noun optional, so nothing
+  downstream cares; in the window case the kind is the warned kind and
+  a synonym choice would have been arbitrary); (3) the prose arm's
+  *confirmation* needs a whole-word match — a substring hit ("ava"
+  inside "available", "440" inside "1440") kept the check silent
+  before and still does, but writes no About: an injected false claim
+  is exactly what the non-quieter argument promises cannot happen; (4)
+  injection only in the final answer branch, so N7's content-free
+  refusal cannot wear an About. Pinned: the injected About always
+  equals a value the anchor actually carries — never a paraphrase,
+  never a join — and re-checks silent as a declared about
+  (`tests/test_verifier_anchor.py`).
+- **The step-3 protocol violation, diagnosed.** Every rep of MT-ABOUT
+  carried one nudge at turn 2: rep 1 at step 3, after
+  `lookup_data_dictionary`; reps 2–5 at step 6, after `read_source` —
+  so "step 3" was rep 1's position, not a constant. The shape is the
+  router writing the answer as text ("The `rate_variance` rule
+  identifies invoice lines where the billed unit rate exceeds the
+  contracted rate…") instead of calling `give_answer`; `parse_route`
+  raises the "Respond by calling one of the provided tools" nudge, the
+  step is lost, and the next step answers correctly. It is the whole
+  run's nudge count: all 20 nudges have this shape — MT-ABOUT 5, B2 5
+  (after `read_source`, 5/5 reps), PLAY-R3 3 (after the dictionary),
+  PLAY-R6 3 (after `app_capabilities`), R1 2 (a refusal written as
+  prose at step 1), MT3 1, B1 1 (after the primer). Cause: the loop
+  contract's "when the evidence answers the question, call
+  give_answer" plus a whole primer, definition, document or source in
+  the tool message reads to the pinned model as "now explain it", and
+  the "Protocol, strictly" paragraph does not hold at that step. The
+  contained fix is prompt-local — one sentence in the loop contract:
+  *an explanation is still an answer: when the primer, a definition, a
+  document or the source you have read explains what was asked, call
+  give_answer with shape='prose' — never write the explanation here;
+  the drafter writes it from the evidence you gathered* — **ruled in
+  by the developer and landed as `c624256`**, pinned in the router
+  prompt test. Model-facing for every row; the full bank run is its
+  instrument.
+- **Two process notes.** Plan mode exited before the plan was
+  submitted; approval was taken by question, with the go/no-go on the
+  sentence as its own ruling, and no code landed before it. And the
+  harvest finding was made by replaying the recorded evidence
+  payloads through the live harvest and `referent_kind` (a scratchpad
+  probe, not committed) before the design was chosen — the brief's
+  premise was checked against the instrument rather than assumed.
+
+Regression argument for the About default, row by row, from the
+replayed recorded trails and the code paths: single-turn rows have no
+prior anchor and no reading (byte-identical); MT1/MT2's "those" names
+no kind and no pronoun; MT3's turn 2 ("the rule that flags it") is
+kind-less with the window closed; MT4's turn 4 declared its About in
+the recorded run (undeclared, the filter arm on `suppliers.name` or
+`suppliers.code` would confirm, and the table transcript's evidence
+anchors already win); MT-KEY's turn 2 declared `invoice 440` in 5/5
+reps (undeclared, `ih.invoice_id = 440` confirms only when turn 1
+projected the id, giving `About: 440.`, silent under R2, and the
+day-regex sentinel never meets a date in an About); MT-ANCHOR's warned
+turn 2 injects nothing and its refusal reps have no answer body; its
+turn 3 declared in every rep; MT-ABOUT's turn 2 reps 1 and 4 now wear
+`About: rate_variance.` from the prose arm and pass the row's regex
+and drift `not_contains`, reps 2/3/5 untouched; its turn 3 ("it"
+outside a window — turn 2's record carries no column-bearing anchor
+and no `contradicted_kind`, so the window closed at turn 1) has no
+reading; W1's multi-row turns establish nothing and "the table above"
+names no kind.
+
+Recorded, not built:
+
+- A declared about on a non-anaphoric turn is stored with kind `""`
+  and its noun unstripped (MT-ABOUT turn 3, reps 2/4/5:
+  `('', '', 'rule rate_variance', 'declared')`) — inert, since
+  `_anchor_of` never matches kind `""`.
+- The table-shape nudge ("selected evidence is not table-shaped")
+  costs a step but is not counted by the runner's `"protocol
+  violation"` substring — five uncounted in this run beside the twenty.
+- The anchor check's filter arm reads every invocation, not the
+  selected `evidence_index`, so an About can name a filter from an
+  invocation other than the one shown — pre-existing for declarations.
+- A prose that names both the anchor and another entity was silent
+  and is now silent with an About naming the anchor — the About is
+  exactly as strong as the prose arm's reading, no stronger.
+- A later `_anchor_of` resolves to the injected declared anchor's turn
+  when that turn's evidence carried no column of the kind, so a later
+  warn may say "turn 2's evidence established" for the same value — as
+  with a router declaration today.
+- The exposure replay cannot model injection: it reads recorded
+  abouts. That is the honest limit of the instrument, and why no
+  exposure replay was run for this pass — rule 4 covers new
+  plausibility bounds and lints, this rider adds neither, and the
+  About default's effect exists only in generation. `check_anchor` is
+  behavior-identical, so the pinned exposure baselines stand
+  (`tests/test_eval_exposure.py`, green).
+
+Predictions for the re-run (the first under bank `51135d86460f665b`):
+
+| row | mechanism | prediction |
+|---|---|---|
+| MT-KEY | either identifier satisfies turn 1; turn 2 unchanged | 5/5 |
+| MT-ANCHOR | the assertions admit the designed outcomes: recovery at exit 0, caught drift at exit 2 with the warn, refusal at exit 3 | 5/5 |
+| MT-ABOUT | content was 15/15; the About is declared or defaulted on every confirmed turn 2 | ≥ 4/5, predicted 5/5 |
+| U-WHO | unchanged | 5/5 |
+| MT1–MT4, W1, every single-turn row | no reading, or a declared about on every recorded turn | hold |
+| INVARIANT | no content path weakened; an About is only ever the check's own confirmation | ok, zero occurrences |
+| nudges | 20/20 of the run's nudges were the prose-reply class the sentence names | well below 15 |
+
+Watch-for: any About line whose entity disagrees with its turn's SQL
+filter or prose — the relay should **count the `about defaulted`
+events** in the run and check each against its turn; any `about
+defaulted` on a turn that is neither kind-bearing nor in a window; any
+`anchor.entity_mismatch` outside MT-KEY, MT-ANCHOR and MT-ABOUT;
+`197@0` anywhere; and, as a live check on the sentence, an earlier
+`give_answer(shape='prose')` — before the source or the document was
+read — surfacing as a content miss on B2, MT-ABOUT's turn 2 or MT3's
+turn 2.
