@@ -254,3 +254,31 @@ def test_dictionary_map_entity_column_must_exist(fixture_pack, snapshot_duckdb):
         "entity 'invoice'" in d and "invoices.invoice_numbr" in d
         for d in check.details
     )
+
+
+def test_a_failing_report_still_fits_one_screen():
+    """Zero egress at work: the report comes back as a photograph, so a
+    check with a long list of details shows a bounded prefix and a
+    count, never a scrolling wall."""
+    from engine.validate.conformance import CheckResult, ValidationReport
+    from engine.validate.report import MAX_DETAILS
+
+    report = ValidationReport(
+        pack_name="p",
+        checks=[
+            CheckResult(name="all good", status="PASS"),
+            CheckResult(
+                name="many wrong",
+                status="FAIL",
+                details=[f"row {i} is wrong" for i in range(MAX_DETAILS + 4)],
+            ),
+        ],
+    )
+    text = render(report)
+    lines = text.splitlines()
+    assert lines.count("       - row 0 is wrong") == 1
+    assert f"       - row {MAX_DETAILS - 1} is wrong" in lines
+    assert f"       - row {MAX_DETAILS} is wrong" not in lines
+    assert "       … and 4 more (fix the first, re-run)" in lines
+    assert lines[-1] == "RESULT: FAIL"
+    assert len(lines) <= 2 + 2 + MAX_DETAILS + 1 + 2
